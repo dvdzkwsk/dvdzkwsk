@@ -1,10 +1,10 @@
-import * as css from "./App.css"
-import {PhotoGallery} from "./PhotoGallery"
+import "./App.css"
+import {ImageGallery} from "./ImageGallery"
 
 export const App = () => {
 	return (
-		<div className={css.root}>
-			<PhotoGallery />
+		<div className="App">
+			<ImageGallery />
 		</div>
 	)
 }

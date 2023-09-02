@@ -1,0 +1,28 @@
+.ImageGallery {
+	max-width: 1000px;
+	margin: 0 auto;
+}
+
+.ImageGallery-List {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ImageGallery-ListItem {
+	display: block;
+	aspect-ratio: 1 / 1;
+	background: rgb(235, 235, 235);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.ImageGallery img {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}

@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"forceConsistentCasingInFileNames": true,
+		"importHelpers": true,
+		"isolatedModules": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "preact",
+		"lib": ["ES2019", "DOM"],
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"outDir": "dist",
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"strict": true,
+		"target": "ES2020",
+		"useDefineForClassFields": true
+	}
+}

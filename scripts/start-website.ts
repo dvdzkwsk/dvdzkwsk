@@ -1,7 +1,7 @@
 import * as esbuild from "esbuild"
 import {config} from "../config"
 
-const main = async () => {
+async function main() {
 	const esbuildConfig = {...config.website.esbuild}
 	esbuildConfig.minify = false
 	esbuildConfig.splitting = true

@@ -1,11 +1,23 @@
 import * as fs from "fs"
-import * as path from "path"
 import * as esbuild from "esbuild"
 import {config} from "../config"
 
-const main = async () => {
-	await fs.promises.rm("dist/website", {force: true, recursive: true})
+async function main() {
+	await cleanOutputDir()
+	const esbuildConfig = createProductionESBuildConfig()
 
+	const result = await esbuild.build(esbuildConfig)
+	console.log(await esbuild.analyzeMetafile(result.metafile!))
+
+	await copyStaticFiles()
+	await updateHashedAssetPaths(result)
+}
+
+async function cleanOutputDir() {
+	await fs.promises.rm("dist/website", {force: true, recursive: true})
+}
+
+function createProductionESBuildConfig(): esbuild.BuildOptions {
 	const esbuildConfig = {...config.website.esbuild}
 	esbuildConfig.minify ??= true
 	esbuildConfig.metafile = true
@@ -14,14 +26,16 @@ const main = async () => {
 	esbuildConfig.define!["process.env.NODE_ENV"] = JSON.stringify(
 		process.env.NODE_ENV || "production",
 	)
+	return esbuildConfig
+}
 
-	const result = await esbuild.build(esbuildConfig)
+async function copyStaticFiles() {
 	await fs.promises.cp("./website/public", "./dist/website", {
 		recursive: true,
 	})
+}
 
-	// update asset paths
-
+async function updateHashedAssetPaths(result: esbuild.BuildResult) {
 	const outputs = Object.entries(result.metafile!.outputs).map((o) => {
 		return {
 			outputFile: o[0],
@@ -31,7 +45,6 @@ const main = async () => {
 	const mainJS = outputs.find((o) => {
 		return o.entryPoint?.endsWith("src/main.tsx")
 	})!
-	console.log(outputs)
 
 	const htmlFiles = ["dist/website/index.html"]
 	for (const htmlFile of htmlFiles) {
@@ -46,11 +59,6 @@ const main = async () => {
 		)
 		fs.writeFileSync(htmlFile, html, "utf8")
 	}
-
-	const text = await esbuild.analyzeMetafile(result.metafile!, {
-		verbose: false,
-	})
-	console.log(text)
 }
 
 main()

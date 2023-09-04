@@ -18,7 +18,7 @@ export const ImageGallery = () => {
 }
 
 const Image = ({name}: {name: string}) => {
-	const src = `https://storage.cloud.google.com/dvdzkwsk-media/images/${name}`
+	const src = `https://cdn.zuko.me/images/${name}`
 	return (
 		<li className="ImageGallery-ListItem">
 			<img src={src} />

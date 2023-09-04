@@ -5,6 +5,7 @@ node_modules
 logs
 .env
 .vscode
+secrets
 
 # generated files
 .cache

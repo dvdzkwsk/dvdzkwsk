@@ -3,16 +3,16 @@ import {vanillaExtractPlugin} from "@vanilla-extract/esbuild-plugin"
 import type {BuildOptions} from "esbuild"
 
 interface Config {
-	flags: {
-		dryRun: boolean
-	}
 	gcloud: {
 		projectId: string
+		keyFilename: string
+		serviceAccount: string
+		buckets: {
+			cdn: string
+			website: string
+		}
 	}
 	website: {
-		gcloud: {
-			bucket: string
-		}
 		esbuild: BuildOptions
 	}
 }
@@ -20,16 +20,16 @@ interface Config {
 function createConfig(): Config {
 	loadEnvFile()
 	const config: Config = {
-		flags: {
-			dryRun: false,
-		},
 		gcloud: {
 			projectId: env("GCLOUD_PROJECT_ID")!,
+			keyFilename: "secrets/gcloud.keyfile.json",
+			serviceAccount: env("GCLOUD_SERVICE_ACCOUNT")!,
+			buckets: {
+				cdn: "cdn.zuko.me",
+				website: "dev.zuko.me",
+			},
 		},
 		website: {
-			gcloud: {
-				bucket: "dev.zuko.me",
-			},
 			esbuild: {
 				entryPoints: {
 					main: "./website/src/main.tsx",
@@ -56,10 +56,6 @@ function createConfig(): Config {
 		config.website.esbuild.minify = true
 	}
 
-	if (process.argv.includes("--dry")) {
-		config.flags.dryRun = true
-	}
-
 	validateConfig(config)
 	return config
 }
@@ -75,6 +71,9 @@ function env(key: string): string | null {
 function validateConfig(config: Config) {
 	if (!config?.gcloud?.projectId) {
 		console.warn("Warn: missing config.gcloud.projectId")
+	}
+	if (!config?.gcloud?.serviceAccount) {
+		console.warn("Warn: missing config.gcloud.serviceAccount")
 	}
 }
 

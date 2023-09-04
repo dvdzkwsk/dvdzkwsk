@@ -1,3 +1,4 @@
+import {ensureGCPInfra} from "./_infra"
 import {
 	buildWebsite,
 	deployWebsite,
@@ -7,27 +8,35 @@ import {
 
 async function main(rawArgs: string[]) {
 	const [cmd, ...args] = rawArgs
-	switch (cmd) {
-		case "website":
-			await website(args)
-			break
+	try {
+		switch (cmd) {
+			case "infra":
+				await infra(args)
+				break
+			case "website":
+				await website(args)
+				break
+		}
+	} catch (e) {
+		console.error(e)
+		process.exit(1)
 	}
+}
+
+async function infra(args: string[]) {
+	await ensureGCPInfra()
 }
 
 async function website(args: string[]) {
 	switch (args[0]) {
 		case "build":
-			await buildWebsite()
-			break
+			return buildWebsite()
 		case "deploy":
-			await deployWebsite()
-			break
+			return deployWebsite()
 		case "serve":
-			await serveWebsite()
-			break
+			return serveWebsite()
 		case "start":
-			await startWebsite()
-			break
+			return startWebsite()
 	}
 }
 

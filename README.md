@@ -1,6 +1,9 @@
 # dvdzkwsk
 
 ```sh
+# ensure GCP infra is setup
+yarn infra ensure
+
 # start the website dev server
 yarn website start
 

@@ -5,8 +5,8 @@
 	"main": "README.md",
 	"license": "UNLICENSED",
 	"scripts": {
-		"cli": "ts-node -T ./scripts/cli.ts",
-		"website": "ts-node -T ./scripts/cli.ts website"
+		"cli": "ts-node -T ./cli/main.ts",
+		"website": "ts-node -T ./cli/main.ts website"
 	},
 	"dependencies": {
 		"@google-cloud/storage": "^7.0.1",

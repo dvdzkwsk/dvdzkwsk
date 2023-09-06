@@ -1,6 +1,21 @@
 import {Bucket, Storage} from "@google-cloud/storage"
-import {config} from "../config"
-import {shell} from "./_share"
+import {config} from "../../config"
+import {shell} from "./../_share"
+import {Command} from "../main"
+
+export function getInfraCommand(): Command {
+	return {
+		name: "infra",
+		commands: [
+			{
+				name: "ensure",
+				run() {
+					return ensureGCPInfra()
+				},
+			},
+		],
+	}
+}
 
 const storage = new Storage({
 	projectId: config.gcloud.projectId,

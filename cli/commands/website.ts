@@ -3,10 +3,43 @@ import * as path from "path"
 import express from "express"
 import compression from "compression"
 import * as esbuild from "esbuild"
-import {config} from "../config"
-import {shell} from "./_share"
+import {config} from "../../config"
+import {Command} from "../main"
+import {shell} from "../_share"
 
 const DIST = path.join(process.cwd(), "dist/website")
+
+export function getWebsiteCommand(): Command {
+	return {
+		name: "website",
+		commands: [
+			{
+				name: "build",
+				run() {
+					return buildWebsite()
+				},
+			},
+			{
+				name: "deploy",
+				run() {
+					return deployWebsite()
+				},
+			},
+			{
+				name: "serve",
+				run() {
+					return serveWebsite()
+				},
+			},
+			{
+				name: "start",
+				run() {
+					return startWebsite()
+				},
+			},
+		],
+	}
+}
 
 export async function startWebsite() {
 	const esbuildConfig = {...config.website.esbuild}

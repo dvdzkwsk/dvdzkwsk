@@ -1,11 +1,11 @@
 {
 	"compilerOptions": {
 		"forceConsistentCasingInFileNames": true,
-		"importHelpers": true,
+		"importHelpers": false,
 		"isolatedModules": true,
 		"jsx": "react-jsx",
 		"jsxImportSource": "preact",
-		"lib": ["ES2019", "DOM"],
+		"lib": ["ESNext", "DOM"],
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"outDir": "dist",

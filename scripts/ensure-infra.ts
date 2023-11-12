@@ -1,22 +1,44 @@
 import {Bucket, Storage} from "@google-cloud/storage"
-import {config} from "../config"
-import {shell} from "./_util"
+import {getEnv, shell} from "./_util.js"
 
-const storage = new Storage({
-	projectId: config.gcloud.projectId,
-	keyFilename: config.gcloud.keyFilename,
-})
+interface GCPConfig {
+	projectId: string
+	keyFilename: string
+	serviceAccount: string
+	buckets: {
+		cdn: string
+		website: string
+	}
+}
 
-const buckets = {
-	cdn: storage.bucket(config.gcloud.buckets.cdn),
-	website: storage.bucket(config.gcloud.buckets.website),
+function getGCPConfig(): GCPConfig {
+	const config: GCPConfig = {
+		projectId: getEnv("GCLOUD_PROJECT_ID")!,
+		keyFilename: "secrets/gcloud.keyfile.json",
+		serviceAccount: getEnv("GCLOUD_SERVICE_ACCOUNT")!,
+		buckets: {
+			cdn: "cdn.zuko.me",
+			website: "dev.zuko.me",
+		},
+	}
+	return config
 }
 
 export async function ensureGCPInfra() {
-	assertValidGCPConfig()
+	const config = getGCPConfig()
+
+	const storage = new Storage({
+		projectId: config.projectId,
+		keyFilename: config.keyFilename,
+	})
+
+	const buckets = {
+		cdn: storage.bucket(config.buckets.cdn),
+		website: storage.bucket(config.buckets.website),
+	}
 
 	// setup service account
-	await ensureServiceAccount()
+	await ensureServiceAccount(config)
 
 	// setup cdn bucket
 	await ensureBucketExists(buckets.cdn)
@@ -24,26 +46,24 @@ export async function ensureGCPInfra() {
 	// setup website bucket
 	await ensureBucketExists(buckets.website)
 	await shell(
-		`gsutil iam ch allUsers:objectViewer gs://${config.gcloud.buckets.website}`,
+		`gsutil iam ch allUsers:objectViewer gs://${config.buckets.website}`,
 	)
 	await shell(
-		`gsutil web set -m index.html -e 404.html gs://${config.gcloud.buckets.website}`,
+		`gsutil web set -m index.html -e 404.html gs://${config.buckets.website}`,
 	)
 }
 
-async function ensureServiceAccount() {
+async function ensureServiceAccount(config: GCPConfig) {
 	// ensure service account exists
-	await shell(
-		`gcloud iam service-accounts create ${config.gcloud.serviceAccount}`,
-	)
+	await shell(`gcloud iam service-accounts create ${config.serviceAccount}`)
 
 	// assign roles
 	const roles = ["roles/storage.admin"]
 	for (const role of roles) {
 		await shell(
 			[
-				`gcloud projects add-iam-policy-binding ${config.gcloud.projectId}`,
-				`--member='serviceAccount:${config.gcloud.serviceAccount}@${config.gcloud.projectId}.iam.gserviceaccount.com'`,
+				`gcloud projects add-iam-policy-binding ${config.projectId}`,
+				`--member='serviceAccount:${config.serviceAccount}@${config.projectId}.iam.gserviceaccount.com'`,
 				`--role=${role}`,
 			].join(" "),
 		)
@@ -66,17 +86,5 @@ async function bucketExists(bucket: Bucket): Promise<boolean> {
 		return res[0] === true
 	} catch (e) {
 		return false
-	}
-}
-
-function assertValidGCPConfig() {
-	if (
-		!config.gcloud.projectId ||
-		!config.gcloud.serviceAccount ||
-		!config.gcloud.keyFilename ||
-		!config.gcloud.buckets.cdn ||
-		!config.gcloud.buckets.website
-	) {
-		throw new Error("Invalid GCP config")
 	}
 }

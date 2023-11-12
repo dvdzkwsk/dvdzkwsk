@@ -2,6 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
 import {vanillaExtractPlugin} from "@vanilla-extract/esbuild-plugin"
+import {shell} from "./_util.js"
 
 type BuildMode = "development" | "production"
 
@@ -9,7 +10,9 @@ async function main(args: string[]) {
 	const cwd = args.find((arg) => !arg.startsWith("-")) || process.cwd()
 	const options = getDefaultBuildOptions(cwd)
 
-	if (process.argv.includes("--dev")) {
+	if (process.argv.includes("--ssr")) {
+		import(path.resolve(cwd, "src/main.ssr.ts"))
+	} else if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
 		await startDevServer(cwd, options)
 	} else {
@@ -20,18 +23,18 @@ async function main(args: string[]) {
 
 function getDefaultBuildOptions(cwd: string) {
 	const entryPoints: string[] = []
-	if (fs.existsSync(path.join(cwd, "src/main.ts"))) {
-		entryPoints.push(path.join(cwd, "src/main.ts"))
-	} else if (fs.existsSync(path.join(cwd, "src/main.tsx"))) {
-		entryPoints.push(path.join(cwd, "src/main.tsx"))
+	if (fs.existsSync(path.resolve(cwd, "src/main.ts"))) {
+		entryPoints.push(path.resolve(cwd, "src/main.ts"))
+	} else if (fs.existsSync(path.resolve(cwd, "src/main.tsx"))) {
+		entryPoints.push(path.resolve(cwd, "src/main.tsx"))
 	}
-	if (fs.existsSync(path.join(cwd, "src/main.css"))) {
-		entryPoints.push(path.join(cwd, "src/main.ts"))
+	if (fs.existsSync(path.resolve(cwd, "src/main.css"))) {
+		entryPoints.push(path.resolve(cwd, "src/main.css"))
 	}
 
 	const options: esbuild.BuildOptions = {
 		entryPoints,
-		outdir: path.join(cwd, "dist/assets"),
+		outdir: path.resolve(cwd, "dist/assets"),
 		bundle: true,
 		format: "esm",
 		platform: "browser",
@@ -45,11 +48,11 @@ function getDefaultBuildOptions(cwd: string) {
 }
 
 async function startDevServer(cwd: string, options: esbuild.BuildOptions) {
-	options.outdir = path.join(cwd, "public/assets")
+	options.outdir = path.resolve(cwd, "public/assets")
 	const context = await esbuild.context(options)
 
 	const serveOptions: esbuild.ServeOptions = {
-		servedir: path.join(cwd, "public"),
+		servedir: path.resolve(cwd, "public"),
 		port: 3000,
 	}
 	const server = await context.serve(serveOptions)
@@ -57,7 +60,7 @@ async function startDevServer(cwd: string, options: esbuild.BuildOptions) {
 }
 
 async function buildToDisk(cwd: string, options: esbuild.BuildOptions) {
-	await fs.promises.rm(path.join(cwd, "dist"), {
+	await fs.promises.rm(path.resolve(cwd, "dist"), {
 		force: true,
 		recursive: true,
 	})
@@ -67,9 +70,13 @@ async function buildToDisk(cwd: string, options: esbuild.BuildOptions) {
 		console.info(await esbuild.analyzeMetafile(result.metafile))
 	}
 
-	await fs.promises.cp(path.join(cwd, "public"), path.join(cwd, "dist"), {
-		recursive: true,
-	})
+	await fs.promises.cp(
+		path.resolve(cwd, "public"),
+		path.resolve(cwd, "dist"),
+		{
+			recursive: true,
+		},
+	)
 	await updateHashedAssetPaths(cwd, result)
 }
 
@@ -124,16 +131,18 @@ async function updateHashedAssetPaths(
 
 	const htmlFiles = ["dist/index.html"]
 	for (const htmlFile of htmlFiles) {
-		let html = fs.readFileSync(path.join(cwd, htmlFile), "utf8")
+		let html = fs.readFileSync(path.resolve(cwd, htmlFile), "utf8")
 		html = html.replace(
 			"/assets/main.js",
 			mainJS.outputFile.replace("dist/website", ""),
 		)
-		html = html.replace(
-			"/assets/main.css",
-			mainCSSOutputFile.replace("dist/website", ""),
-		)
-		fs.writeFileSync(path.join(cwd, htmlFile), html, "utf8")
+		if (mainCSSOutputFile) {
+			html = html.replace(
+				"/assets/main.css",
+				mainCSSOutputFile.replace("dist/website", ""),
+			)
+		}
+		fs.writeFileSync(path.resolve(cwd, htmlFile), html, "utf8")
 	}
 }
 

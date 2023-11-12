@@ -1,9 +1,9 @@
 # dvdzkwsk
 
 ```sh
-# start the website dev server
-npx run build-web-app website --dev
+# build my personal website for production
+npm run build-website
 
-# build the website for production
-npx run build-web-app website
+# start the website dev server
+npm run build-website --dev
 ```

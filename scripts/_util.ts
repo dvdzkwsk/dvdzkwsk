@@ -1,4 +1,23 @@
+import * as fs from "fs"
 import * as cp from "child_process"
+
+export async function loadEnvFile() {
+	try {
+		const env = fs.readFileSync(".env", "utf8")
+		for (const kv of env.split("\n")) {
+			const [key, value] = kv.split("=")
+			process.env[key] = value
+		}
+	} catch (e) {}
+}
+
+export function getEnv(key: string): string | null {
+	const value = process.env[key]
+	if (!value) {
+		console.warn("Warn: missing environment variable: %s", key)
+	}
+	return value ?? null
+}
 
 export async function shell(script: string): Promise<{
 	code: number

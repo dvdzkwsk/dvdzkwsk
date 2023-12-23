@@ -2,7 +2,7 @@
 *.log
 node_modules
 .rpt2_cache
-logs
+.logs
 .env
 secrets
 

@@ -1,6 +1,9 @@
 import {Bucket, Storage} from "@google-cloud/storage"
 import {isMainModule, loadEnv, shell} from "./_util.js"
 import {GCPConfig, getGCPConfig} from "./_gcp.js"
+import {createLogger} from "@dvdzkwsk/logger"
+
+const logger = createLogger("EnsureInfra")
 
 async function main() {
 	await loadEnv()
@@ -10,6 +13,11 @@ async function main() {
 
 export async function ensureGCPInfra(config: GCPConfig) {
 	if (process.argv.includes("--skip-infra")) {
+		logger.logWithLevel(
+			"debug",
+			"ensureGCPInfra",
+			'skipping infra check becasue "--skip-infra" was used',
+		)
 		return
 	}
 	const storage = new Storage({
@@ -25,6 +33,11 @@ export async function ensureGCPInfra(config: GCPConfig) {
 	await ensureServiceAccount(config)
 
 	// setup dvdzkwsk bucket
+	logger.logWithLevel(
+		"debug",
+		"ensureServiceAccount",
+		"ensuring service account exists...",
+	)
 	await ensureBucketExists(buckets.dvdzkwsk)
 	await shell(
 		`gsutil iam ch allUsers:objectViewer gs://${config.buckets.dvdzkwsk}`,
@@ -35,10 +48,18 @@ export async function ensureGCPInfra(config: GCPConfig) {
 }
 
 async function ensureServiceAccount(config: GCPConfig) {
-	// ensure service account exists
+	logger.logWithLevel(
+		"debug",
+		"ensureServiceAccount",
+		"ensuring service account exists...",
+	)
 	await shell(`gcloud iam service-accounts create ${config.serviceAccount}`)
 
-	// assign roles
+	logger.logWithLevel(
+		"debug",
+		"ensureServiceAccount",
+		"ensuring service account has required roles...",
+	)
 	const roles = ["roles/storage.admin"]
 	for (const role of roles) {
 		await shell(
@@ -52,12 +73,31 @@ async function ensureServiceAccount(config: GCPConfig) {
 }
 
 async function ensureBucketExists(bucket: Bucket) {
-	console.log("Ensure bucket exists: %s", bucket.name)
+	logger.logWithLevel(
+		"debug",
+		"ensureBucketExists",
+		"ensuring bucket exists...",
+		{
+			bucket: bucket.name,
+		},
+	)
 	if (await bucketExists(bucket)) {
-		console.log("Bucket already exists: %s", bucket.name)
+		logger.logWithLevel(
+			"debug",
+			"ensureBucketExists",
+			"bucket already exists",
+			{
+				bucket: bucket.name,
+			},
+		)
 		return
 	}
-	console.log("Create bucket: %s", bucket.name)
+	logger.logWithLevel(
+		"debug",
+		"ensureBucketExists",
+		"bucket doesn't exist, creating it...",
+		{bucket: bucket.name},
+	)
 	await bucket.create()
 }
 

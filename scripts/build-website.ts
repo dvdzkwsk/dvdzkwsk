@@ -1,6 +1,9 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
+import {createLogger} from "@dvdzkwsk/logger"
+
+const logger = createLogger("BuildWebsite")
 
 type BuildMode = "development" | "production"
 
@@ -76,7 +79,11 @@ async function startDevServer(cwd: string, options: BuildOptions) {
 		port: 3000,
 	}
 	const server = await context.serve(serveOptions)
-	console.info("server running at http://localhost:%s", server.port)
+	logger.logWithLevel(
+		"info",
+		"startDevServer",
+		`server running at http://localhost:${server.port}`,
+	)
 }
 
 async function buildToDisk(cwd: string, options: BuildOptions) {
@@ -87,7 +94,9 @@ async function buildToDisk(cwd: string, options: BuildOptions) {
 
 	const result = await esbuild.build(options.esbuild)
 	if (result.metafile) {
-		console.info(await esbuild.analyzeMetafile(result.metafile))
+		logger.logWithLevel("info", "buildToDisk", "finished esbuild", {
+			metaFile: await esbuild.analyzeMetafile(result.metafile),
+		})
 	}
 
 	await fs.promises.cp(
@@ -101,6 +110,7 @@ async function buildToDisk(cwd: string, options: BuildOptions) {
 }
 
 function setBuildMode(options: BuildOptions, mode: BuildMode) {
+	logger.logWithLevel("debug", "setBuildMode", "set build mode", {mode})
 	switch (mode) {
 		case "development":
 			options.esbuild.minify = false

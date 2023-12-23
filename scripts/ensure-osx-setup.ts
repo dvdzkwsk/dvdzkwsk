@@ -28,7 +28,7 @@ async function ensureDotFilesLinked(options: Options) {
 			if (stat.isSymbolicLink()) {
 				const linksTo = fs.readlinkSync(dst)
 				if (linksTo === src) {
-					logger.log(
+					logger.logWithLevel(
 						"debug",
 						"ensureDotFilesLinked",
 						"dotfile already linked",
@@ -37,14 +37,14 @@ async function ensureDotFilesLinked(options: Options) {
 				}
 				continue
 			}
-			logger.log(
+			logger.logWithLevel(
 				"warn",
 				"ensureDotFilesLinked",
 				"dotfile already exists at destination and is not a symlink.",
 				{from: src, to: dst},
 			)
 			if (options.force) {
-				logger.log(
+				logger.logWithLevel(
 					"debug",
 					"ensureDotFilesLinked",
 					"removing file at destination so it can be re-created as a symlink.",
@@ -57,12 +57,17 @@ async function ensureDotFilesLinked(options: Options) {
 		}
 		try {
 			fs.symlinkSync(src, dst, "file")
-			logger.log("debug", "ensureDotFilesLinked", "created symlink", {
-				from: src,
-				to: dst,
-			})
+			logger.logWithLevel(
+				"debug",
+				"ensureDotFilesLinked",
+				"created symlink",
+				{
+					from: src,
+					to: dst,
+				},
+			)
 		} catch (e) {
-			logger.log(
+			logger.logWithLevel(
 				"error",
 				"ensureDotFilesLinked",
 				"failed to create symlink",

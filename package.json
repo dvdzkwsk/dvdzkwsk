@@ -6,8 +6,8 @@
 	"license": "UNLICENSED",
 	"type": "module",
 	"scripts": {
-		"build-sandbox": "tsx ./scripts/build-web-app.ts sandbox",
-		"build-website": "tsx ./scripts/build-web-app.ts website"
+		"build-website": "tsx ./scripts/build-website.ts website",
+		"deploy-website": "tsx ./scripts/deploy-website.ts website"
 	},
 	"devDependencies": {
 		"@google-cloud/storage": "^7.0.1",

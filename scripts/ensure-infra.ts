@@ -1,32 +1,14 @@
 import {Bucket, Storage} from "@google-cloud/storage"
-import {getEnv, shell} from "./_util.js"
+import {getEnv, loadEnv, shell} from "./_util.js"
+import {GCPConfig, getGCPConfig} from "./_gcp.js"
 
-interface GCPConfig {
-	projectId: string
-	keyFilename: string
-	serviceAccount: string
-	buckets: {
-		cdn: string
-		website: string
-	}
-}
-
-function getGCPConfig(): GCPConfig {
-	const config: GCPConfig = {
-		projectId: getEnv("GCLOUD_PROJECT_ID")!,
-		keyFilename: "secrets/gcloud.keyfile.json",
-		serviceAccount: getEnv("GCLOUD_SERVICE_ACCOUNT")!,
-		buckets: {
-			cdn: "cdn.zuko.me",
-			website: "dev.zuko.me",
-		},
-	}
-	return config
-}
-
-export async function ensureGCPInfra() {
+async function main() {
+	await loadEnv()
 	const config = getGCPConfig()
+	await ensureGCPInfra(config)
+}
 
+export async function ensureGCPInfra(config: GCPConfig) {
 	const storage = new Storage({
 		projectId: config.projectId,
 		keyFilename: config.keyFilename,
@@ -88,3 +70,5 @@ async function bucketExists(bucket: Bucket): Promise<boolean> {
 		return false
 	}
 }
+
+main()

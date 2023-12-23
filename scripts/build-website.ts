@@ -5,7 +5,12 @@ import * as esbuild from "esbuild"
 type BuildMode = "development" | "production"
 
 async function main(args: string[]) {
-	const cwd = args.find((arg) => !arg.startsWith("-")) || process.cwd()
+	let cwd: string = args.find((arg) => !arg.startsWith("-"))!
+	if (cwd) {
+		cwd = path.resolve(process.cwd(), cwd)
+	} else {
+		process.cwd()
+	}
 	const options = getDefaultBuildOptions(cwd)
 
 	if (process.argv.includes("--ssr")) {
@@ -26,6 +31,7 @@ interface BuildOptions {
 function getDefaultBuildOptions(cwd: string) {
 	const options: BuildOptions = {
 		esbuild: {
+			absWorkingDir: cwd,
 			entryPoints: getEntrypoints(cwd),
 			outdir: path.resolve(cwd, "dist/assets"),
 			bundle: true,
@@ -149,12 +155,12 @@ async function updateHashedAssetPaths(
 		let html = fs.readFileSync(path.resolve(cwd, htmlFile), "utf8")
 		html = html.replace(
 			"/assets/main.js",
-			mainJS.outputFile.replace("dist/website", ""),
+			mainJS.outputFile.replace("dist/assets", "/assets"),
 		)
 		if (mainCSSOutputFile) {
 			html = html.replace(
 				"/assets/main.css",
-				mainCSSOutputFile.replace("dist/website", ""),
+				mainCSSOutputFile.replace("dist/assets", "/assets"),
 			)
 		}
 		fs.writeFileSync(path.resolve(cwd, htmlFile), html, "utf8")

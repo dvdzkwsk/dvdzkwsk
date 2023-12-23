@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import * as cp from "child_process"
 
-export async function loadEnvFile() {
+export async function loadEnv() {
 	try {
 		const env = fs.readFileSync(".env", "utf8")
 		for (const kv of env.split("\n")) {

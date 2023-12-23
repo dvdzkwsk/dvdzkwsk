@@ -1,16 +1,16 @@
 import * as os from "os"
 import * as fs from "fs"
 import * as path from "path"
-import {isMainModule} from "./_util.js"
-import {createLogger} from "@dvdzkwsk/logger"
+import {execScript} from "./_util.js"
+import {newLogger} from "@dvdzkwsk/logger"
 
-const logger = createLogger("EnsureOSXSetup")
+const logger = newLogger("EnsureOSXSetup")
 
 interface Options {
 	force: boolean
 }
 
-async function main() {
+async function ensureOSXSetup() {
 	const options: Options = {
 		force: process.argv.includes("--force"),
 	}
@@ -28,8 +28,7 @@ async function ensureDotFilesLinked(options: Options) {
 			if (stat.isSymbolicLink()) {
 				const linksTo = fs.readlinkSync(dst)
 				if (linksTo === src) {
-					logger.logWithLevel(
-						"debug",
+					logger.debug(
 						"ensureDotFilesLinked",
 						"dotfile already linked",
 						{from: src, to: dst},
@@ -37,15 +36,13 @@ async function ensureDotFilesLinked(options: Options) {
 				}
 				continue
 			}
-			logger.logWithLevel(
-				"warn",
+			logger.warn(
 				"ensureDotFilesLinked",
 				"dotfile already exists at destination and is not a symlink.",
 				{from: src, to: dst},
 			)
 			if (options.force) {
-				logger.logWithLevel(
-					"debug",
+				logger.debug(
 					"ensureDotFilesLinked",
 					"removing file at destination so it can be re-created as a symlink.",
 					{from: src, to: dst},
@@ -57,30 +54,18 @@ async function ensureDotFilesLinked(options: Options) {
 		}
 		try {
 			fs.symlinkSync(src, dst, "file")
-			logger.logWithLevel(
-				"debug",
-				"ensureDotFilesLinked",
-				"created symlink",
-				{
-					from: src,
-					to: dst,
-				},
-			)
+			logger.debug("ensureDotFilesLinked", "created symlink", {
+				from: src,
+				to: dst,
+			})
 		} catch (e) {
-			logger.logWithLevel(
-				"error",
-				"ensureDotFilesLinked",
-				"failed to create symlink",
-				{
-					from: src,
-					to: dst,
-					error: e,
-				},
-			)
+			logger.error("ensureDotFilesLinked", "failed to create symlink", {
+				from: src,
+				to: dst,
+				error: e,
+			})
 		}
 	}
 }
 
-if (isMainModule(import.meta)) {
-	main()
-}
+execScript(import.meta, ensureOSXSetup)

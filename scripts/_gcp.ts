@@ -1,4 +1,4 @@
-import {getEnv} from "./_util.js"
+import {getEnvVar} from "./_util.js"
 
 const EXPECTED_BUCKETS = ["dvdzkwsk"] as const
 
@@ -13,11 +13,11 @@ export interface GCPConfig {
 
 export function getGCPConfig(): GCPConfig {
 	const config: GCPConfig = {
-		projectId: getEnv("GCLOUD_PROJECT_ID")!,
+		projectId: getEnvVar("GCLOUD_PROJECT_ID")!,
 		keyFilename: "secrets/gcloud.keyfile.json",
-		serviceAccount: getEnv("GCLOUD_SERVICE_ACCOUNT")!,
+		serviceAccount: getEnvVar("GCLOUD_SERVICE_ACCOUNT")!,
 		buckets: Object.fromEntries(
-			getEnv("GCLOUD_BUCKETS")!
+			getEnvVar("GCLOUD_BUCKETS")!
 				.split(",")
 				.map((entry) => entry.split(":")),
 		),

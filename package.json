@@ -13,7 +13,6 @@
 	],
 	"scripts": {
 		"start": "npm run dvdzkwsk -- --dev",
-		"dvdzkwsk": "tsx ./scripts/build-website.ts dvdzkwsk",
 		"build-website": "tsx ./scripts/build-website.ts",
 		"deploy-website": "tsx ./scripts/deploy-website.ts"
 	},

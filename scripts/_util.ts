@@ -2,8 +2,9 @@ import * as fs from "fs"
 import * as cp from "child_process"
 import * as url from "url"
 import * as path from "path"
+import {configureTransports, newConsoleTransport} from "@dvdzkwsk/logger"
 
-export async function loadEnv() {
+async function loadEnvFile() {
 	try {
 		const env = fs.readFileSync(".env", "utf8")
 		for (const kv of env.split("\n")) {
@@ -13,7 +14,7 @@ export async function loadEnv() {
 	} catch (e) {}
 }
 
-export function getEnv(key: string): string | null {
+export function getEnvVar(key: string): string | null {
 	const value = process.env[key]
 	if (!value) {
 		console.warn("Warn: missing environment variable: %s", key)
@@ -54,6 +55,18 @@ export async function shell(script: string): Promise<{
 	})
 }
 
-export function isMainModule(importMeta: any) {
+function isMainModule(importMeta: ImportMeta) {
 	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
+}
+
+export async function execScript(importMeta: ImportMeta, fn: () => unknown) {
+	if (isMainModule(importMeta)) {
+		configureTransports([
+			newConsoleTransport({
+				verbose: process.argv.includes("--verbose"),
+			}),
+		])
+		await loadEnvFile()
+		await fn()
+	}
 }

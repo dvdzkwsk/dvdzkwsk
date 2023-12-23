@@ -1,13 +1,15 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
-import {createLogger} from "@dvdzkwsk/logger"
+import {newLogger} from "@dvdzkwsk/logger"
+import {execScript} from "./_util.js"
 
-const logger = createLogger("BuildWebsite")
+const logger = newLogger("BuildWebsite")
 
 type BuildMode = "development" | "production"
 
-async function main(args: string[]) {
+async function buildWebsite() {
+	const args = process.argv.slice(2)
 	let cwd: string = args.find((arg) => !arg.startsWith("-"))!
 	if (cwd) {
 		cwd = path.resolve(process.cwd(), cwd)
@@ -79,8 +81,7 @@ async function startDevServer(cwd: string, options: BuildOptions) {
 		port: 3000,
 	}
 	const server = await context.serve(serveOptions)
-	logger.logWithLevel(
-		"info",
+	logger.info(
 		"startDevServer",
 		`server running at http://localhost:${server.port}`,
 	)
@@ -94,7 +95,7 @@ async function buildToDisk(cwd: string, options: BuildOptions) {
 
 	const result = await esbuild.build(options.esbuild)
 	if (result.metafile) {
-		logger.logWithLevel("info", "buildToDisk", "finished esbuild", {
+		logger.info("buildToDisk", "finished esbuild", {
 			metaFile: await esbuild.analyzeMetafile(result.metafile),
 		})
 	}
@@ -110,7 +111,7 @@ async function buildToDisk(cwd: string, options: BuildOptions) {
 }
 
 function setBuildMode(options: BuildOptions, mode: BuildMode) {
-	logger.logWithLevel("debug", "setBuildMode", "set build mode", {mode})
+	logger.debug("setBuildMode", "set build mode", {mode})
 	switch (mode) {
 		case "development":
 			options.esbuild.minify = false
@@ -177,4 +178,4 @@ async function updateHashedAssetPaths(
 	}
 }
 
-main(process.argv.slice(2))
+execScript(import.meta, buildWebsite)

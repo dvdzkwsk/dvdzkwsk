@@ -1,15 +1,13 @@
 import * as fs from "fs"
 import * as path from "path"
-import {isMainModule, loadEnv, shell} from "./_util.js"
+import {execScript, shell} from "./_util.js"
 import {getGCPConfig} from "./_gcp.js"
 import {ensureGCPInfra} from "./ensure-infra.js"
-import {createLogger} from "@dvdzkwsk/logger"
+import {newLogger} from "@dvdzkwsk/logger"
 
-const logger = createLogger("DeployWebsite")
+const logger = newLogger("DeployWebsite")
 
-async function main() {
-	await loadEnv()
-
+async function buildWebsite() {
 	const config = await getGCPConfig()
 	await ensureGCPInfra(config)
 
@@ -19,8 +17,7 @@ async function main() {
 
 async function syncFolderToBucket(folderToSync: string, bucket: string) {
 	if (!fs.existsSync(folderToSync)) {
-		logger.logWithLevel(
-			"error",
+		logger.error(
 			"syncFolderToBucket",
 			"No dist directory to deploy. Did you forget to build the website?",
 			{
@@ -39,6 +36,4 @@ async function syncFolderToBucket(folderToSync: string, bucket: string) {
 	)
 }
 
-if (isMainModule(import.meta)) {
-	main()
-}
+execScript(import.meta, buildWebsite)

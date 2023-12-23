@@ -8,7 +8,7 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 
 async function main() {
 	const template = fs.readFileSync(
-		path.join(__dirname, "../public/index.html"),
+		path.join(__dirname, "../dist/index.html"),
 		"utf8",
 	)
 	const app = renderToString(<App />)
@@ -16,7 +16,8 @@ async function main() {
 		'<div id="root"></div>',
 		`<div id="root">${app}</div>`,
 	)
-	console.log(html)
+	const dst = path.join(__dirname, "../dist/index.html")
+	await fs.promises.writeFile(dst, html, "utf8")
 }
 
 main()

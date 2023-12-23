@@ -13,16 +13,15 @@ async function main(args: string[]) {
 	}
 	const options = getDefaultBuildOptions(cwd)
 
-	if (process.argv.includes("--ssr")) {
-		process.env.SSR = true as any
-		import(path.resolve(cwd, "src/main.tsx"))
-	} else if (process.argv.includes("--dev")) {
+	if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
 		await startDevServer(cwd, options)
 	} else {
 		setBuildMode(options, "production")
 		await buildToDisk(cwd, options)
 	}
+	process.env.SSR = true as any
+	import(path.resolve(cwd, "src/main.ssr.tsx"))
 }
 
 interface BuildOptions {
@@ -151,6 +150,7 @@ async function updateHashedAssetPaths(
 		})?.outputFile!
 
 	const htmlFiles = ["dist/index.html"]
+
 	for (const htmlFile of htmlFiles) {
 		let html = fs.readFileSync(path.resolve(cwd, htmlFile), "utf8")
 		html = html.replace(

@@ -1,0 +1,5 @@
+{
+	"name": "@dvdzkwsk/logger",
+	"type": "module",
+	"exports": "./src/index.ts"
+}

@@ -5,6 +5,9 @@
 	"main": "README.md",
 	"license": "UNLICENSED",
 	"type": "module",
+	"workspaces": [
+		"./packages/*"
+	],
 	"scripts": {
 		"start": "npm run dvdzkwsk -- --dev",
 		"dvdzkwsk": "tsx ./scripts/build-website.ts dvdzkwsk",

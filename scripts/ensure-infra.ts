@@ -9,6 +9,9 @@ async function main() {
 }
 
 export async function ensureGCPInfra(config: GCPConfig) {
+	if (process.argv.includes("--skip-infra")) {
+		return
+	}
 	const storage = new Storage({
 		projectId: config.projectId,
 		keyFilename: config.keyFilename,

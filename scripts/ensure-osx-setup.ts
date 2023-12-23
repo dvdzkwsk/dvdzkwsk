@@ -2,6 +2,9 @@ import * as os from "os"
 import * as fs from "fs"
 import * as path from "path"
 import {isMainModule} from "./_util.js"
+import {createLogger} from "@dvdzkwsk/logger"
+
+const logger = createLogger("EnsureOSXSetup")
 
 interface Options {
 	force: boolean
@@ -25,7 +28,7 @@ async function ensureDotFilesLinked(options: Options) {
 			if (stat.isSymbolicLink()) {
 				const linksTo = fs.readlinkSync(dst)
 				if (linksTo === src) {
-					logWithLevel(
+					logger.log(
 						"debug",
 						"ensureDotFilesLinked",
 						"dotfile already linked",
@@ -34,14 +37,14 @@ async function ensureDotFilesLinked(options: Options) {
 				}
 				continue
 			}
-			logWithLevel(
+			logger.log(
 				"warn",
 				"ensureDotFilesLinked",
 				"dotfile already exists at destination and is not a symlink.",
 				{from: src, to: dst},
 			)
 			if (options.force) {
-				logWithLevel(
+				logger.log(
 					"debug",
 					"ensureDotFilesLinked",
 					"removing file at destination so it can be re-created as a symlink.",
@@ -54,12 +57,12 @@ async function ensureDotFilesLinked(options: Options) {
 		}
 		try {
 			fs.symlinkSync(src, dst, "file")
-			logWithLevel("debug", "ensureDotFilesLinked", "created symlink", {
+			logger.log("debug", "ensureDotFilesLinked", "created symlink", {
 				from: src,
 				to: dst,
 			})
 		} catch (e) {
-			logWithLevel(
+			logger.log(
 				"error",
 				"ensureDotFilesLinked",
 				"failed to create symlink",
@@ -71,16 +74,6 @@ async function ensureDotFilesLinked(options: Options) {
 			)
 		}
 	}
-}
-
-type LogLevel = "debug" | "warn" | "error"
-function logWithLevel(
-	level: LogLevel,
-	subcontext: string,
-	message: string,
-	aux: any,
-) {
-	console[level](subcontext, message, aux)
 }
 
 if (isMainModule(import.meta)) {

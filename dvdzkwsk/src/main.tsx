@@ -6,8 +6,4 @@ function main() {
 	render(<App />, root)
 }
 
-if (process.env.SSR) {
-	import("./main.ssr.js")
-} else {
-	main()
-}
+main()

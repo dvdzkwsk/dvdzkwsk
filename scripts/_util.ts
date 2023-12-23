@@ -57,3 +57,23 @@ export async function shell(script: string): Promise<{
 export function isMainModule(importMeta: any) {
 	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
 }
+
+type LogLevel = "debug" | "warn" | "error"
+
+interface LogMessage {}
+
+/** structured logger */
+export function slog(
+	level: LogLevel,
+	subcontext: string,
+	message: string,
+	aux: any,
+) {
+	const log = {
+		level,
+		subcontext,
+		message,
+		aux,
+	}
+	console[log.level](subcontext, message, aux)
+}

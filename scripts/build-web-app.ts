@@ -1,7 +1,6 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
-import {vanillaExtractPlugin} from "@vanilla-extract/esbuild-plugin"
 
 type BuildMode = "development" | "production"
 
@@ -34,7 +33,7 @@ function getDefaultBuildOptions(cwd: string) {
 			platform: "browser",
 			target: "esnext",
 			pure: [],
-			plugins: [vanillaExtractPlugin() as any],
+			plugins: [],
 			sourcemap: "linked",
 			define: {
 				"process.env.SSR": JSON.stringify(false),

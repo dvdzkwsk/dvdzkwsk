@@ -1,17 +1,21 @@
-import {Flex} from "./Layout.js"
+import {Box} from "./Primitives.js"
 
 export const App = () => {
 	return (
-		<main>
-			<Flex gap={16}>
-				<RecentlyLearnedGuitarSongs />
-				<RecentlyRead />
-			</Flex>
+		<main className="app">
+			<Box gap={16}>
+				<h2>Recently Learned on Guitar</h2>
+				<RecentGuitarSongs />
+				<h2>Recently Read</h2>
+				<RecentBooks />
+				<h2>Recently Watched</h2>
+				<RecentMovies />
+			</Box>
 		</main>
 	)
 }
 
-const RecentlyLearnedGuitarSongs = () => {
+const RecentGuitarSongs = () => {
 	return (
 		<ol>
 			<LearnedSong artist="The National" title="About Today" />
@@ -30,7 +34,7 @@ const LearnedSong = ({artist, title}: {artist: string; title: string}) => {
 	)
 }
 
-const RecentlyRead = () => {
+const RecentBooks = () => {
 	return (
 		<ol>
 			<Book title="The Three-Body Problem" />
@@ -44,5 +48,18 @@ const RecentlyRead = () => {
 }
 
 const Book = ({title}: {title: string}) => {
+	return <li>{title}</li>
+}
+
+const RecentMovies = () => {
+	return (
+		<ol>
+			<Movie title="Godzilla Minus One" />
+			<Movie title="Interstellar" />
+		</ol>
+	)
+}
+
+const Movie = ({title}: {title: string}) => {
 	return <li>{title}</li>
 }

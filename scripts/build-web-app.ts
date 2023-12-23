@@ -2,7 +2,6 @@ import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
 import {vanillaExtractPlugin} from "@vanilla-extract/esbuild-plugin"
-import {shell} from "./_util.js"
 
 type BuildMode = "development" | "production"
 
@@ -11,7 +10,8 @@ async function main(args: string[]) {
 	const options = getDefaultBuildOptions(cwd)
 
 	if (process.argv.includes("--ssr")) {
-		import(path.resolve(cwd, "src/main.ssr.ts"))
+		process.env.SSR = true as any
+		import(path.resolve(cwd, "src/main.tsx"))
 	} else if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
 		await startDevServer(cwd, options)
@@ -21,8 +21,37 @@ async function main(args: string[]) {
 	}
 }
 
+interface BuildOptions {
+	esbuild: esbuild.BuildOptions
+}
 function getDefaultBuildOptions(cwd: string) {
+	const options: BuildOptions = {
+		esbuild: {
+			entryPoints: getEntrypoints(cwd),
+			outdir: path.resolve(cwd, "dist/assets"),
+			bundle: true,
+			format: "esm",
+			platform: "browser",
+			target: "esnext",
+			pure: [],
+			plugins: [vanillaExtractPlugin() as any],
+			sourcemap: "linked",
+			define: {
+				"process.env.SSR": JSON.stringify(false),
+			},
+		},
+	}
+	return options
+}
+
+function getEntrypoints(cwd: string): string[] {
 	const entryPoints: string[] = []
+
+	const htmlEntry = path.resolve(cwd, "src/index.html")
+	if (fs.existsSync(htmlEntry)) {
+		// TODO
+	}
+
 	if (fs.existsSync(path.resolve(cwd, "src/main.ts"))) {
 		entryPoints.push(path.resolve(cwd, "src/main.ts"))
 	} else if (fs.existsSync(path.resolve(cwd, "src/main.tsx"))) {
@@ -31,25 +60,12 @@ function getDefaultBuildOptions(cwd: string) {
 	if (fs.existsSync(path.resolve(cwd, "src/main.css"))) {
 		entryPoints.push(path.resolve(cwd, "src/main.css"))
 	}
-
-	const options: esbuild.BuildOptions = {
-		entryPoints,
-		outdir: path.resolve(cwd, "dist/assets"),
-		bundle: true,
-		format: "esm",
-		platform: "browser",
-		target: "esnext",
-		pure: [],
-		plugins: [vanillaExtractPlugin() as any],
-		sourcemap: "linked",
-		define: {},
-	}
-	return options
+	return entryPoints
 }
 
-async function startDevServer(cwd: string, options: esbuild.BuildOptions) {
-	options.outdir = path.resolve(cwd, "public/assets")
-	const context = await esbuild.context(options)
+async function startDevServer(cwd: string, options: BuildOptions) {
+	options.esbuild.outdir = path.resolve(cwd, "public/assets")
+	const context = await esbuild.context(options.esbuild)
 
 	const serveOptions: esbuild.ServeOptions = {
 		servedir: path.resolve(cwd, "public"),
@@ -59,13 +75,13 @@ async function startDevServer(cwd: string, options: esbuild.BuildOptions) {
 	console.info("server running at http://localhost:%s", server.port)
 }
 
-async function buildToDisk(cwd: string, options: esbuild.BuildOptions) {
+async function buildToDisk(cwd: string, options: BuildOptions) {
 	await fs.promises.rm(path.resolve(cwd, "dist"), {
 		force: true,
 		recursive: true,
 	})
 
-	const result = await esbuild.build(options)
+	const result = await esbuild.build(options.esbuild)
 	if (result.metafile) {
 		console.info(await esbuild.analyzeMetafile(result.metafile))
 	}
@@ -80,27 +96,27 @@ async function buildToDisk(cwd: string, options: esbuild.BuildOptions) {
 	await updateHashedAssetPaths(cwd, result)
 }
 
-function setBuildMode(options: esbuild.BuildOptions, mode: BuildMode) {
+function setBuildMode(options: BuildOptions, mode: BuildMode) {
 	switch (mode) {
 		case "development":
-			options.minify = false
-			options.splitting = true
-			options.write = false
-			options.assetNames = "[name]"
-			options.entryNames = "[name]"
-			options.define = {
-				...options.define,
+			options.esbuild.minify = false
+			options.esbuild.splitting = true
+			options.esbuild.write = false
+			options.esbuild.assetNames = "[name]"
+			options.esbuild.entryNames = "[name]"
+			options.esbuild.define = {
+				...options.esbuild.define,
 				["process.env.NODE_ENV"]: JSON.stringify("development"),
 			}
 			break
 		case "production":
-			options.minify = true
-			options.splitting = true
-			options.metafile = true
-			options.assetNames = "[name]-[hash]"
-			options.entryNames = "[name]-[hash]"
-			options.define = {
-				...options.define,
+			options.esbuild.minify = true
+			options.esbuild.splitting = true
+			options.esbuild.metafile = true
+			options.esbuild.assetNames = "[name]-[hash]"
+			options.esbuild.entryNames = "[name]-[hash]"
+			options.esbuild.define = {
+				...options.esbuild.define,
 				["process.env.NODE_ENV"]: JSON.stringify("production"),
 			}
 			break

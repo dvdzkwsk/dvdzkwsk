@@ -6,8 +6,10 @@
 	"license": "UNLICENSED",
 	"type": "module",
 	"scripts": {
-		"build-website": "tsx ./scripts/build-website.ts website",
-		"deploy-website": "tsx ./scripts/deploy-website.ts website"
+		"start": "npm run dvdzkwsk -- --dev",
+		"dvdzkwsk": "tsx ./scripts/build-website.ts dvdzkwsk",
+		"build-website": "tsx ./scripts/build-website.ts",
+		"deploy-website": "tsx ./scripts/deploy-website.ts"
 	},
 	"devDependencies": {
 		"@google-cloud/storage": "^7.0.1",

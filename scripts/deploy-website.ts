@@ -1,29 +1,26 @@
 import * as fs from "fs"
 import * as path from "path"
-import {loadEnv, shell} from "./_util.js"
+import {isMainModule, loadEnv, shell} from "./_util.js"
 import {GCPConfig, getGCPConfig} from "./_gcp.js"
+import {ensureGCPInfra} from "./ensure-infra.js"
 
 async function main() {
 	await loadEnv()
 
+	const folderToSync = path.resolve(process.cwd(), "dvdzkwsk/dist")
 	const config = await getGCPConfig()
-	await deployWebsite(config, {
-		dist: path.resolve(process.cwd(), "website/dist"),
-	})
-}
-
-async function deployWebsite(config: GCPConfig, options: {dist: string}) {
-	if (!fs.existsSync(options.dist)) {
+	await ensureGCPInfra(config)
+	if (!fs.existsSync(folderToSync)) {
 		console.error(
 			"Website hasn't been built, expected '%s' to exist",
-			options.dist,
+			folderToSync,
 		)
 		process.exit(1)
 	}
-	await syncFolderToBucket(config, options)
+	await syncFolderToBucket(folderToSync, config.buckets.dvdzkwsk)
 }
 
-async function syncFolderToBucket(config: GCPConfig, options: {dist: string}) {
+async function syncFolderToBucket(folderToSync: string, bucket: string) {
 	const flags: string[] = [
 		// Delete extra files under dst_url not found under src_url.
 		"-d",
@@ -31,10 +28,10 @@ async function syncFolderToBucket(config: GCPConfig, options: {dist: string}) {
 		"-r",
 	]
 	await shell(
-		`gsutil rsync ${flags.join(" ")} ${options.dist} gs://${
-			config.buckets.website
-		}`,
+		`gsutil rsync ${flags.join(" ")} ${folderToSync} gs://${bucket}`,
 	)
 }
 
-main()
+if (isMainModule(import.meta)) {
+	main()
+}

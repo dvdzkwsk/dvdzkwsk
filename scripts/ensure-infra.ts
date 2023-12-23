@@ -1,11 +1,11 @@
 import {Bucket, Storage} from "@google-cloud/storage"
-import {loadEnv, shell} from "./_util.js"
+import {isMainModule, loadEnv, shell} from "./_util.js"
 import {GCPConfig, getGCPConfig} from "./_gcp.js"
 
 async function main() {
 	await loadEnv()
-	const config = getGCPConfig()
-	await ensureGCPInfra(config)
+	const gcpConfig = getGCPConfig()
+	await ensureGCPInfra(gcpConfig)
 }
 
 export async function ensureGCPInfra(config: GCPConfig) {
@@ -15,23 +15,19 @@ export async function ensureGCPInfra(config: GCPConfig) {
 	})
 
 	const buckets = {
-		cdn: storage.bucket(config.buckets.cdn),
-		website: storage.bucket(config.buckets.website),
+		dvdzkwsk: storage.bucket(config.buckets.dvdzkwsk),
 	}
 
 	// setup service account
 	await ensureServiceAccount(config)
 
-	// setup cdn bucket
-	await ensureBucketExists(buckets.cdn)
-
-	// setup website bucket
-	await ensureBucketExists(buckets.website)
+	// setup dvdzkwsk bucket
+	await ensureBucketExists(buckets.dvdzkwsk)
 	await shell(
-		`gsutil iam ch allUsers:objectViewer gs://${config.buckets.website}`,
+		`gsutil iam ch allUsers:objectViewer gs://${config.buckets.dvdzkwsk}`,
 	)
 	await shell(
-		`gsutil web set -m index.html -e 404.html gs://${config.buckets.website}`,
+		`gsutil web set -m index.html -e 404.html gs://${config.buckets.dvdzkwsk}`,
 	)
 }
 
@@ -71,4 +67,6 @@ async function bucketExists(bucket: Bucket): Promise<boolean> {
 	}
 }
 
-main()
+if (isMainModule(import.meta)) {
+	main()
+}

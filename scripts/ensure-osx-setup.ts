@@ -1,6 +1,7 @@
 import * as os from "os"
 import * as fs from "fs"
 import * as path from "path"
+import {isMainModule} from "./_util.js"
 
 interface Options {
 	force: boolean
@@ -82,4 +83,6 @@ function logWithLevel(
 	console[level](subcontext, message, aux)
 }
 
-main()
+if (isMainModule(import.meta)) {
+	main()
+}

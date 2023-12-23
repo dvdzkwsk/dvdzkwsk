@@ -1,5 +1,7 @@
 import * as fs from "fs"
 import * as cp from "child_process"
+import * as url from "url"
+import * as path from "path"
 
 export async function loadEnv() {
 	try {
@@ -50,4 +52,8 @@ export async function shell(script: string): Promise<{
 			resolve({stdout, stderr, code: code || 1})
 		})
 	})
+}
+
+export function isMainModule(importMeta: any) {
+	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
 }

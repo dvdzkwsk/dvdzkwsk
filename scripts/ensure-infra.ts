@@ -1,5 +1,5 @@
 import {Bucket, Storage} from "@google-cloud/storage"
-import {getEnv, loadEnv, shell} from "./_util.js"
+import {loadEnv, shell} from "./_util.js"
 import {GCPConfig, getGCPConfig} from "./_gcp.js"
 
 async function main() {

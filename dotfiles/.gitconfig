@@ -1,0 +1,38 @@
+[user]
+	name = David Zukowski
+	# https://stackoverflow.com/questions/43378060/meaning-of-the-github-message-push-declined-due-to-email-privacy-restrictions
+	email = 6439050+davezuko@users.noreply.github.com
+	username = davezuko
+[core]
+	excludesfile = ~/.gitignore
+	pager = diff-so-fancy | less --tabs=4 -RFX
+[color]
+	ui = auto
+[hub]
+	protocol = ssh
+[push]
+	default = current
+[url "ssh://git@github.com/"]
+	insteadOf = https://github.com/
+[commit]
+	gpgsign = false
+[init]
+	defaultBranch = master
+[pull]
+	ff = only
+[alias]
+	am = commit --amend
+	bd = !git branch -D \"$(git branch -l | fzf -m)\"
+	cf = !git checkout \"$(git branch -l | fzf | sed 's/ //g')\"
+	co = checkout
+	cs = commit --all --amend --no-edit
+	dc = diff --cached
+	l = !git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+	last = !git log -1 HEAD
+	po = push origin
+	rb = rebase
+	rc = rebase --continue
+	ri = rebase --interactive
+	roh = !git reset --hard origin/\"$(git rev-parse --abbrev-ref HEAD)\"
+	st = status
+	up = !git fetch && git pull

@@ -42,6 +42,9 @@ export function useBoxStyles<T extends HTMLElementTagName>(
 			case "flex":
 				style.display = "flex"
 				break
+			case "gap":
+				style.gap = props.gap
+				break
 			default:
 				// @ts-expect-error
 				other[key] = props[key]

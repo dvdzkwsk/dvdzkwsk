@@ -1,65 +1,111 @@
 import {Box} from "./Primitives.js"
 
+const GUITAR_LOG = [
+	{
+		artist: "The National",
+		title: "About Today",
+	},
+
+	{
+		artist: "Noah Kahan",
+		title: "Stick Season",
+	},
+
+	{
+		artist: "Radiohead",
+		title: "Karma Police",
+	},
+
+	{
+		artist: "Radiohead",
+		title: "Fake Plastic Trees",
+	},
+]
+
+const READING_LOG = [
+	{
+		author: "Liu Cixin",
+		title: "The Three-Body Problem",
+	},
+	{
+		author: "Robert Mason",
+		title: "Chickenhawk",
+	},
+	{
+		author: "Philip K. Dick",
+		title: "Do Androids Dream of Electric Sheep?",
+	},
+	{
+		author: "Ben Rich and Leo Janos",
+		title: "Skunk Works",
+	},
+	{
+		author: "David Kushner",
+		title: "Masters of Doom",
+	},
+	{
+		author: "Micahel Durant",
+		title: "In the Company of Heroes",
+	},
+]
+
+const MOVIE_LOG = [
+	{
+		director: "Takashi Yamazaki",
+		title: "Godzilla Minus One",
+	},
+	{
+		director: "Christopher Nolan",
+		title: "Interstellar",
+	},
+]
+
 export const App = () => {
 	return (
 		<main className="app">
-			<Box gap={16}>
-				<h2>Recently Learned on Guitar</h2>
-				<RecentGuitarSongs />
-				<h2>Recently Read</h2>
-				<RecentBooks />
-				<h2>Recently Watched</h2>
-				<RecentMovies />
+			<Box flex gap={16}>
+				<section style={{flex: "1 0"}}>
+					<h3>Recent Stuff</h3>
+					<ol>
+						{GUITAR_LOG.map((item) => {
+							return (
+								<ListItem
+									key={item.title}
+									text={`Learned "${item.title}"`}
+									subtext={`by ${item.artist}`}
+								/>
+							)
+						})}
+						{READING_LOG.map((item) => {
+							return (
+								<ListItem
+									key={item.title}
+									text={`Read "${item.title}"`}
+									subtext={`by ${item.author}`}
+								/>
+							)
+						})}
+						{MOVIE_LOG.map((item) => {
+							return (
+								<ListItem
+									key={item.title}
+									text={`Watched "${item.title}"`}
+									subtext={`by ${item.director}`}
+								/>
+							)
+						})}
+					</ol>
+				</section>
 			</Box>
 		</main>
 	)
 }
 
-const RecentGuitarSongs = () => {
+const ListItem = ({text, subtext}: {text: string; subtext: string}) => {
 	return (
-		<ol>
-			<LearnedSong artist="The National" title="About Today" />
-			<LearnedSong artist="Noah Kahan" title="Stick Season" />
-			<LearnedSong artist="Radiohead" title="Karma Police" />
-			<LearnedSong artist="Radiohead" title="Fake Plastic Trees" />
-		</ol>
-	)
-}
-
-const LearnedSong = ({artist, title}: {artist: string; title: string}) => {
-	return (
-		<li>
-			{artist} - {title}
+		<li className="li-with-drop">
+			{text}
+			<span className="drop">{subtext}</span>
 		</li>
 	)
-}
-
-const RecentBooks = () => {
-	return (
-		<ol>
-			<Book title="The Three-Body Problem" />
-			<Book title="Chickenhawk" />
-			<Book title="Do Androids Dream of Electric Sheep?" />
-			<Book title="Skunk Works" />
-			<Book title="Masters of Doom" />
-			<Book title="In the Company of Heroes" />
-		</ol>
-	)
-}
-
-const Book = ({title}: {title: string}) => {
-	return <li>{title}</li>
-}
-
-const RecentMovies = () => {
-	return (
-		<ol>
-			<Movie title="Godzilla Minus One" />
-			<Movie title="Interstellar" />
-		</ol>
-	)
-}
-
-const Movie = ({title}: {title: string}) => {
-	return <li>{title}</li>
 }

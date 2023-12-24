@@ -2,11 +2,20 @@ import {ACTIVE_TRANSPORTS} from "./LoggerTransport.js"
 
 export type LogLevel = "debug" | "info" | "warn" | "error"
 
-export interface Logger {
-	debug: (subcontext: string, message: string, aux?: LogMessageAux) => void
-	info: (subcontext: string, message: string, aux?: LogMessageAux) => void
-	warn: (subcontext: string, message: string, aux?: LogMessageAux) => void
-	error: (subcontext: string, message: string, aux?: LogMessageAux) => void
+export type LoggerWithLevels = {
+	[key in LogLevel]: (
+		subcontext: string,
+		message: string,
+		aux?: LogMessageAux,
+	) => void
+}
+
+export type Logger = LoggerWithLevels & {
+	newError: (
+		subcontext: string,
+		message: string,
+		aux?: LogMessageAux,
+	) => Error
 }
 
 export interface LogMessage {
@@ -43,6 +52,11 @@ class LoggerImpl implements Logger {
 
 	error(subcontext: string, message: string, aux?: LogMessageAux) {
 		this._logWithLevel("error", subcontext, message, aux)
+	}
+
+	newError(subcontext: string, message: string, aux?: LogMessageAux) {
+		this._logWithLevel("error", subcontext, message, aux)
+		return new Error(message)
 	}
 
 	private _logWithLevel(

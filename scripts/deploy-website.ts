@@ -7,7 +7,7 @@ import {newLogger} from "@dvdzkwsk/logger"
 
 const logger = newLogger("DeployWebsite")
 
-async function buildWebsite() {
+async function deployWebsite() {
 	const config = await getGCPConfig()
 	await ensureGCPInfra(config)
 
@@ -36,4 +36,4 @@ async function syncFolderToBucket(folderToSync: string, bucket: string) {
 	)
 }
 
-execScript(import.meta, buildWebsite)
+execScript(import.meta, deployWebsite)

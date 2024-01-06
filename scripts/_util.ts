@@ -2,12 +2,20 @@ import * as fs from "fs"
 import * as cp from "child_process"
 import * as url from "url"
 import * as path from "path"
+import * as assert from "assert"
 import {configureTransports, newConsoleTransport} from "@dvdzkwsk/logger"
 
 async function loadEnvFile() {
 	try {
 		const env = fs.readFileSync(".env", "utf8")
-		for (const kv of env.split("\n")) {
+		for (let kv of env.split("\n")) {
+			kv = kv.trim()
+			if (!kv) {
+				continue
+			}
+			if (kv.startsWith("#")) {
+				continue
+			}
 			const [key, value] = kv.split("=")
 			process.env[key] = value
 		}
@@ -64,5 +72,14 @@ export async function execScript(importMeta: ImportMeta, fn: () => unknown) {
 		configureTransports([newConsoleTransport({verbose: true})])
 		await loadEnvFile()
 		await fn()
+	}
+}
+
+export function deepEqual(a: unknown, b: unknown): boolean {
+	try {
+		assert.deepStrictEqual(a, b)
+		return true
+	} catch (e) {
+		return false
 	}
 }

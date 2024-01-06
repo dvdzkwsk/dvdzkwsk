@@ -1,44 +1,44 @@
 import * as url from "url"
 import * as path from "path"
+import {newLogger} from "@dvdzkwsk/logger"
 import {getEnvVar} from "./_util.js"
-import {Bucket} from "@google-cloud/storage"
+
+const logger = newLogger("Config")
 
 export interface GCPConfig {
 	projectId: string
 	keyFilename: string
 	serviceAccount: string
-	buckets: {
-		[key: string]: string
-	}
 }
 
 export function getGCPConfig(): GCPConfig {
 	const config: GCPConfig = {
-		projectId: getEnvVar("GCLOUD_PROJECT_ID")!,
-		keyFilename: "secrets/gcloud.keyfile.json",
-		serviceAccount: getEnvVar("GCLOUD_SERVICE_ACCOUNT")!,
-		buckets: Object.fromEntries(
-			getEnvVar("GCLOUD_BUCKETS")!
-				.split(",")
-				.map((entry) => entry.split(":")),
-		),
+		projectId: getEnvVar("GCP_PROJECT_ID")!,
+		keyFilename: "secrets/gcp.keyfile.json",
+		serviceAccount: getEnvVar("GCP_SERVICE_ACCOUNT")!,
 	}
 	return config
 }
 
 export interface CloudflareConfig {
 	apiToken: string
+	domain: string
+	zoneId: string
 }
 export function getCloudflareConfig(): CloudflareConfig {
 	const config: CloudflareConfig = {
 		apiToken: getEnvVar("CLOUDFLARE_API_TOKEN")!,
+		zoneId: getEnvVar("CLOUDFLARE_API_TOKEN")!,
+		domain: "", // must be set later
 	}
 	return config
 }
 
 export interface WebsiteConfig {
 	dir: string
-	gcpBucket: string | null
+	domain: string
+	gcpBucket: string
+	cloudflareZoneId: string
 }
 export function getWebsiteConfig(): WebsiteConfig {
 	const dirname = path.dirname(url.fileURLToPath(import.meta.url))
@@ -46,7 +46,9 @@ export function getWebsiteConfig(): WebsiteConfig {
 
 	const config: WebsiteConfig = {
 		dir: "",
-		gcpBucket: null,
+		domain: "",
+		gcpBucket: "",
+		cloudflareZoneId: "",
 	}
 
 	const target = process.argv.slice(2).find((arg) => !arg.startsWith("-"))
@@ -61,7 +63,9 @@ export function getWebsiteConfig(): WebsiteConfig {
 
 	switch (path.basename(config.dir)) {
 		case "website":
-			config.gcpBucket = getGCPConfig().buckets.dvdzkwsk
+			config.domain = getEnvVar("WEBSITE_DOMAIN")!
+			config.gcpBucket = getEnvVar("WEBSITE_GCP_BUCKET")!
+			config.cloudflareZoneId = getEnvVar("WEBSITE_CLOUDFLARE_ZONE_ID")!
 			break
 	}
 	return config

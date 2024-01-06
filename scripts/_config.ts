@@ -1,13 +1,14 @@
+import * as url from "url"
+import * as path from "path"
 import {getEnvVar} from "./_util.js"
-
-const EXPECTED_GCP_BUCKETS = ["dvdzkwsk"] as const
+import {Bucket} from "@google-cloud/storage"
 
 export interface GCPConfig {
 	projectId: string
 	keyFilename: string
 	serviceAccount: string
 	buckets: {
-		[key in (typeof EXPECTED_GCP_BUCKETS)[number]]: string
+		[key: string]: string
 	}
 }
 
@@ -22,13 +23,6 @@ export function getGCPConfig(): GCPConfig {
 				.map((entry) => entry.split(":")),
 		),
 	}
-
-	for (const bucket of EXPECTED_GCP_BUCKETS) {
-		if (!config.buckets[bucket]) {
-			throw new Error(`Missing bucket in .env: "${bucket}"`)
-		}
-	}
-
 	return config
 }
 
@@ -38,6 +32,37 @@ export interface CloudflareConfig {
 export function getCloudflareConfig(): CloudflareConfig {
 	const config: CloudflareConfig = {
 		apiToken: getEnvVar("CLOUDFLARE_API_TOKEN")!,
+	}
+	return config
+}
+
+export interface WebsiteConfig {
+	dir: string
+	gcpBucket: string | null
+}
+export function getWebsiteConfig(): WebsiteConfig {
+	const dirname = path.dirname(url.fileURLToPath(import.meta.url))
+	const repoRoot = path.join(dirname, "..")
+
+	const config: WebsiteConfig = {
+		dir: "",
+		gcpBucket: null,
+	}
+
+	const target = process.argv.slice(2).find((arg) => !arg.startsWith("-"))
+	if (target) {
+		config.dir = path.join(process.cwd(), target)
+	}
+
+	// default to building my website
+	if (!config.dir) {
+		config.dir = path.join(repoRoot, "website")
+	}
+
+	switch (path.basename(config.dir)) {
+		case "website":
+			config.gcpBucket = getGCPConfig().buckets.dvdzkwsk
+			break
 	}
 	return config
 }

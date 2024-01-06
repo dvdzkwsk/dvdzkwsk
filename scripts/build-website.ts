@@ -4,39 +4,23 @@ import * as path from "path"
 import * as esbuild from "esbuild"
 import {newLogger} from "@dvdzkwsk/logger"
 import {execScript} from "./_util.js"
-
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
+import {WebsiteConfig, getWebsiteConfig} from "./_config.js"
 
 const logger = newLogger("BuildWebsite")
 
 type BuildMode = "development" | "production"
 
-async function buildWebsite() {
-	const args = process.argv.slice(2)
-
-	let cwd = process.cwd()
-	const loc = args.find((arg) => !arg.startsWith("-"))
-	if (loc) {
-		cwd = path.resolve(process.cwd(), loc)
-	}
-	if (cwd === path.join(__dirname, "..")) {
-		logger.error(
-			"buildWebsite",
-			"you must specify a directory to build, e.g.:\n    npx tsx ./scripts/build-website dvdzkwsk",
-		)
-		process.exit(1)
-	}
-
-	const options = getDefaultBuildOptions(cwd)
+export async function buildWebsite(config: WebsiteConfig = getWebsiteConfig()) {
+	const options = getDefaultBuildOptions(config.dir)
 	if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
-		await startDevServer(cwd, options)
+		await startDevServer(config.dir, options)
 	} else {
 		setBuildMode(options, "production")
-		await buildToDisk(cwd, options)
+		await buildToDisk(config.dir, options)
 	}
 	process.env.SSR = true as any
-	import(path.resolve(cwd, "src/main.ssr.tsx"))
+	import(path.resolve(config.dir, "src/main.ssr.tsx"))
 }
 
 interface BuildOptions {

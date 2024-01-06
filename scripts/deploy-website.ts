@@ -6,23 +6,33 @@ import {execScript, shell} from "./_util.js"
 import {
 	CloudflareConfig,
 	GCPConfig,
+	WebsiteConfig,
 	getCloudflareConfig,
 	getGCPConfig,
+	getWebsiteConfig,
 } from "./_config.js"
+import {buildWebsite} from "./build-website.js"
 
 const logger = newLogger("DeployWebsite")
 
 async function deployWebsite() {
-	const config = getGCPConfig()
+	const websiteConfig = getWebsiteConfig()
+	const gcpConfig = getGCPConfig()
 	const cloudflareConfig = getCloudflareConfig()
 
+	if (process.argv.includes("--build")) {
+		await buildWebsite(websiteConfig)
+	}
+
 	if (!process.argv.includes("--skip-infra")) {
-		await ensureGCPInfra(config)
+		await ensureGCPInfra(websiteConfig, gcpConfig)
 		await ensureCloudflareInfra(cloudflareConfig)
 	}
 
-	const folderToSync = path.resolve(process.cwd(), "dvdzkwsk/dist")
-	await syncFolderToBucket(folderToSync, config.buckets.dvdzkwsk)
+	await syncFolderToBucket(
+		path.join(websiteConfig.dir, "dist"),
+		websiteConfig.gcpBucket!,
+	)
 }
 
 async function syncFolderToBucket(folderToSync: string, bucket: string) {
@@ -46,35 +56,23 @@ async function syncFolderToBucket(folderToSync: string, bucket: string) {
 	)
 }
 
-async function ensureGCPInfra(config: GCPConfig) {
-	if (process.argv.includes("--skip-infra")) {
-		logger.debug(
-			"ensureGCPInfra",
-			'skipping infra check becasue "--skip-infra" was used',
-		)
-		return
+async function ensureGCPInfra(
+	websiteConfig: WebsiteConfig,
+	gcpConfig: GCPConfig,
+) {
+	if (!websiteConfig.gcpBucket) {
+		throw logger.newError("ensureGCPInfra", "no gcp bucket configured")
 	}
 	const storage = new Storage({
-		projectId: config.projectId,
-		keyFilename: config.keyFilename,
+		projectId: gcpConfig.projectId,
+		keyFilename: gcpConfig.keyFilename,
 	})
+	const bucket = storage.bucket(websiteConfig.gcpBucket!)
 
-	const buckets = {
-		dvdzkwsk: storage.bucket(config.buckets.dvdzkwsk),
-	}
-
-	// setup service account
-	await ensureServiceAccount(config)
-
-	// setup dvdzkwsk bucket
-	logger.debug("ensureServiceAccount", "ensuring service account exists...")
-	await ensureBucketExists(buckets.dvdzkwsk)
-	await shell(
-		`gsutil iam ch allUsers:objectViewer gs://${config.buckets.dvdzkwsk}`,
-	)
-	await shell(
-		`gsutil web set -m index.html -e 404.html gs://${config.buckets.dvdzkwsk}`,
-	)
+	await ensureServiceAccount(gcpConfig)
+	await ensureBucketExists(bucket)
+	await shell(`gsutil iam ch allUsers:objectViewer gs://${bucket.name}`)
+	await shell(`gsutil web set -m index.html -e 404.html gs://${bucket.name}`)
 }
 
 async function ensureServiceAccount(config: GCPConfig) {

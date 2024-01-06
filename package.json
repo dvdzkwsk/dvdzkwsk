@@ -12,9 +12,7 @@
 		"./packages/*"
 	],
 	"scripts": {
-		"start": "npm run dvdzkwsk -- --dev",
-		"build-website": "tsx ./scripts/build-website.ts",
-		"deploy-website": "tsx ./scripts/deploy-website.ts"
+		"start": "echo \"See README.md\""
 	},
 	"devDependencies": {
 		"@google-cloud/storage": "^7.0.1",
@@ -26,5 +24,9 @@
 		"prettier": "^3.0.0",
 		"tsx": "^4.1.1",
 		"typescript": "^5.0.4"
+	},
+	"dependencies": {
+		"@types/node-fetch": "^2.6.10",
+		"node-fetch": "^3.3.2"
 	}
 }

@@ -1,8 +1,11 @@
 import * as fs from "fs"
+import * as url from "url"
 import * as path from "path"
 import * as esbuild from "esbuild"
 import {newLogger} from "@dvdzkwsk/logger"
 import {execScript} from "./_util.js"
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 
 const logger = newLogger("BuildWebsite")
 
@@ -16,8 +19,15 @@ async function buildWebsite() {
 	if (loc) {
 		cwd = path.resolve(process.cwd(), loc)
 	}
-	const options = getDefaultBuildOptions(cwd)
+	if (cwd === path.join(__dirname, "..")) {
+		logger.error(
+			"buildWebsite",
+			"you must specify a directory to build, e.g.:\n    npx tsx ./scripts/build-website dvdzkwsk",
+		)
+		process.exit(1)
+	}
 
+	const options = getDefaultBuildOptions(cwd)
 	if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
 		await startDevServer(cwd, options)

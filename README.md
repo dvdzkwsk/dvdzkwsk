@@ -2,11 +2,11 @@
 
 ```sh
 # build my personal website for production
-npm run build-website
+npx tsx ./scripts/build-website
 
 # start the website dev server
-npm run build-website --dev
+npx tsx ./scripts/build-website --dev
 
 # build and deploy my website to production
-npm run build-website dvdzkwsk && npm run deploy-website dvdzkwsk
+npx tsx ./scripts/build-website dvdzkwsk && npm npx tsx ./scripts/deploy-website dvdzkwsk
 ```

@@ -61,11 +61,7 @@ function isMainModule(importMeta: ImportMeta) {
 
 export async function execScript(importMeta: ImportMeta, fn: () => unknown) {
 	if (isMainModule(importMeta)) {
-		configureTransports([
-			newConsoleTransport({
-				verbose: process.argv.includes("--verbose"),
-			}),
-		])
+		configureTransports([newConsoleTransport({verbose: true})])
 		await loadEnvFile()
 		await fn()
 	}

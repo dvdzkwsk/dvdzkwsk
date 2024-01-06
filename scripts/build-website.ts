@@ -10,11 +10,11 @@ type BuildMode = "development" | "production"
 
 async function buildWebsite() {
 	const args = process.argv.slice(2)
-	let cwd: string = args.find((arg) => !arg.startsWith("-"))!
-	if (cwd) {
-		cwd = path.resolve(process.cwd(), cwd)
-	} else {
-		process.cwd()
+
+	let cwd = process.cwd()
+	const loc = args.find((arg) => !arg.startsWith("-"))
+	if (loc) {
+		cwd = path.resolve(process.cwd(), loc)
 	}
 	const options = getDefaultBuildOptions(cwd)
 
@@ -95,9 +95,12 @@ async function buildToDisk(cwd: string, options: BuildOptions) {
 
 	const result = await esbuild.build(options.esbuild)
 	if (result.metafile) {
-		logger.info("buildToDisk", "finished esbuild", {
-			metaFile: await esbuild.analyzeMetafile(result.metafile),
-		})
+		logger.info("buildToDisk", "finished esbuild")
+		logger.debug(
+			"buildToDisk",
+			"analyze esbuild metafile\n" +
+				(await esbuild.analyzeMetafile(result.metafile)),
+		)
 	}
 
 	await fs.promises.cp(

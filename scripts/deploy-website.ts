@@ -52,12 +52,8 @@ async function syncFolderToBucket(folderToSync: string, bucket: string) {
 		process.exit(1)
 	}
 
-	const flags: string[] = []
-	flags.push("-r") // -r indicates a recursive copy.
 	await shell(
-		`gsutil -m -h "Cache-Control:no-cache" cp ${flags.join(
-			" ",
-		)} ${folderToSync}/* gs://${bucket}`,
+		`gsutil -m -h "Cache-Control:no-cache" rsync -r ${folderToSync} gs://${bucket}`,
 	)
 }
 

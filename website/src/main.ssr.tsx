@@ -22,7 +22,7 @@ async function main() {
 async function buildRoute(route: Route, templateHtml: string) {
 	const dst = route.path.endsWith("/")
 		? path.join(__dirname, "../dist", route.path + "index.html")
-		: path.join(__dirname, "../dist", route.path, "index.html")
+		: path.join(__dirname, "../dist", route.path + ".html")
 
 	logger.debug("buildRoute", "building route", {route, dst})
 

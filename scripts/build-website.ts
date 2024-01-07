@@ -80,6 +80,7 @@ async function startDevServer(cwd: string, options: BuildOptions) {
 	const serveOptions: esbuild.ServeOptions = {
 		servedir: path.resolve(cwd, "public"),
 		port: 3000,
+		fallback: path.resolve(cwd, "public/index.html"),
 	}
 	const server = await context.serve(serveOptions)
 	logger.info(

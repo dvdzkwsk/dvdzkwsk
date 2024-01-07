@@ -41,12 +41,15 @@ function getDefaultBuildOptions(cwd: string) {
 			platform: "browser",
 			target: "esnext",
 			pure: [],
-			plugins: [createEsbuildBlogPlugin(cwd)],
+			plugins: [],
 			sourcemap: "linked",
 			define: {
 				"process.env.SSR": JSON.stringify(false),
 			},
 		},
+	}
+	if (!!false) {
+		options.esbuild.plugins?.push(createEsbuildBlogPlugin(cwd))
 	}
 	return options
 }

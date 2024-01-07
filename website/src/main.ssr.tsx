@@ -1,10 +1,10 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as url from "url"
+import {createMemoryHistory} from "history"
 import {renderToString} from "preact-render-to-string"
 import {Logger} from "@dvdzkwsk/logger"
-import {App} from "./App.js"
-import {loadBlogPosts} from "../../scripts/_blog.js"
+import {App, Route, getRoutes} from "./App.js"
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const logger = new Logger("SSR")
@@ -14,18 +14,9 @@ async function main() {
 		path.join(__dirname, "../dist/index.html"),
 		"utf8",
 	)
-
-	const posts = await loadBlogPosts(path.join(__dirname, "../blog"))
-	;(globalThis as any).BLOG_POSTS = posts
-
-	await buildRoute({path: "/"}, templateHtml)
-	for (const post of posts) {
-		await buildRoute({path: `/blog/${post.meta.slug}`}, templateHtml)
+	for (const route of getRoutes()) {
+		await buildRoute(route, templateHtml)
 	}
-}
-
-interface Route {
-	path: string
 }
 
 async function buildRoute(route: Route, templateHtml: string) {
@@ -35,7 +26,10 @@ async function buildRoute(route: Route, templateHtml: string) {
 
 	logger.debug("buildRoute", "building route", {route, dst})
 
-	const app = renderToString(<App />)
+	const history = createMemoryHistory()
+	history.replace(route.path)
+	const app = renderToString(<App history={history} />)
+
 	let html = templateHtml.replace(
 		'<div id="root"></div>',
 		`<div id="root">${app}</div>`,

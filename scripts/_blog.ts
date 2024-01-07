@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as marked from "marked"
-import type {BlogPost} from "../website/blog/index.js"
+import type {BlogPost} from "../website/src/blog/index.js"
 
 export async function loadBlogPosts(dir: string): Promise<BlogPost[]> {
 	if (!fs.existsSync(dir)) {

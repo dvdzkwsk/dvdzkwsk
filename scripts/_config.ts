@@ -1,9 +1,9 @@
 import * as url from "url"
 import * as path from "path"
-import {newLogger} from "@dvdzkwsk/logger"
+import {Logger} from "@dvdzkwsk/logger"
 import {getEnvVar} from "./_util.js"
 
-const logger = newLogger("Config")
+const logger = new Logger("Config")
 
 export interface GCPConfig {
 	projectId: string

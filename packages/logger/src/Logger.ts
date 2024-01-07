@@ -10,14 +10,6 @@ export type LoggerWithLevels = {
 	) => void
 }
 
-export type Logger = LoggerWithLevels & {
-	newError: (
-		subcontext: string,
-		message: string,
-		aux?: LogMessageAux,
-	) => Error
-}
-
 export interface LogMessage {
 	timestamp: Date
 	level: LogLevel
@@ -31,7 +23,7 @@ export interface LogMessageAux {
 	[key: string]: unknown
 }
 
-class LoggerImpl implements Logger {
+export class Logger implements LoggerWithLevels {
 	context: string
 
 	constructor(context: string) {
@@ -77,8 +69,4 @@ class LoggerImpl implements Logger {
 			transport.log(logMessage)
 		}
 	}
-}
-
-export function newLogger(context: string): Logger {
-	return new LoggerImpl(context)
 }

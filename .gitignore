@@ -10,3 +10,4 @@ secrets
 .cache
 dist
 tsconfig.tsbuildinfo
+blog/*.ts

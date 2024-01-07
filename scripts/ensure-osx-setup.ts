@@ -2,9 +2,9 @@ import * as os from "os"
 import * as fs from "fs"
 import * as path from "path"
 import {execScript} from "./_util.js"
-import {newLogger} from "@dvdzkwsk/logger"
+import {Logger} from "@dvdzkwsk/logger"
 
-const logger = newLogger("EnsureOSXSetup")
+const logger = new Logger("EnsureOSXSetup")
 
 interface Options {
 	force: boolean

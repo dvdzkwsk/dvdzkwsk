@@ -1,6 +1,6 @@
 import * as fs from "fs"
 import * as path from "path"
-import {newLogger} from "@dvdzkwsk/logger"
+import {Logger} from "@dvdzkwsk/logger"
 import {Bucket, Storage} from "@google-cloud/storage"
 import {deepEqual, execScript, shell} from "./_util.js"
 import {
@@ -13,7 +13,7 @@ import {
 } from "./_config.js"
 import {buildWebsite} from "./build-website.js"
 
-const logger = newLogger("DeployWebsite")
+const logger = new Logger("DeployWebsite")
 
 async function deployWebsite() {
 	const websiteConfig = getWebsiteConfig()

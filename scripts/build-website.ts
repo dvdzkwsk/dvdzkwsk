@@ -2,23 +2,27 @@ import * as fs from "fs"
 import * as url from "url"
 import * as path from "path"
 import * as esbuild from "esbuild"
-import {newLogger} from "@dvdzkwsk/logger"
+import {Logger} from "@dvdzkwsk/logger"
 import {execScript} from "./_util.js"
 import {WebsiteConfig, getWebsiteConfig} from "./_config.js"
+import {loadBlogPosts} from "./_blog.js"
 
-const logger = newLogger("BuildWebsite")
+const logger = new Logger("BuildWebsite")
 
 type BuildMode = "development" | "production"
 
 export async function buildWebsite(config: WebsiteConfig = getWebsiteConfig()) {
 	const options = getDefaultBuildOptions(config.dir)
+
 	if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
 		await startDevServer(config.dir, options)
-	} else {
-		setBuildMode(options, "production")
-		await buildToDisk(config.dir, options)
+		return
 	}
+
+	setBuildMode(options, "production")
+	await buildToDisk(config.dir, options)
+
 	process.env.SSR = true as any
 	import(path.resolve(config.dir, "src/main.ssr.tsx"))
 }
@@ -37,7 +41,7 @@ function getDefaultBuildOptions(cwd: string) {
 			platform: "browser",
 			target: "esnext",
 			pure: [],
-			plugins: [],
+			plugins: [createEsbuildBlogPlugin(cwd)],
 			sourcemap: "linked",
 			define: {
 				"process.env.SSR": JSON.stringify(false),
@@ -172,6 +176,39 @@ async function updateHashedAssetPaths(
 			)
 		}
 		fs.writeFileSync(path.resolve(cwd, htmlFile), html, "utf8")
+	}
+}
+
+function createEsbuildBlogPlugin(cwd: string): esbuild.Plugin {
+	return {
+		name: "blog",
+		setup(build) {
+			build.onResolve({filter: /blog\/index\.js$/}, async (args) => {
+				return {
+					path: args.path,
+					namespace: "blog",
+				}
+			})
+			build.onLoad(
+				{filter: /blog\/index\.js$/, namespace: "blog"},
+				async (args) => {
+					const posts = await loadBlogPosts(path.join(cwd, "blog"))
+					let source = ""
+					source += "const $$BLOG_POSTS = ["
+					for (const post of posts) {
+						source += "\t" + JSON.stringify(post) + ",\n"
+					}
+					source += "]"
+					source += "\n"
+					source +=
+						"export function getBlogPosts() { return $$BLOG_POSTS }\n"
+					return {
+						contents: source,
+						loader: "ts",
+					}
+				},
+			)
+		},
 	}
 }
 

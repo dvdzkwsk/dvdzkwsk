@@ -1,4 +1,4 @@
-export {newLogger, type Logger} from "./Logger.js"
+export {Logger} from "./Logger.js"
 export {
 	type LoggerTransport,
 	setLoggerTransports as configureTransports,

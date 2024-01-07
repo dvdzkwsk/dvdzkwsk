@@ -1,7 +1,7 @@
 import * as fs from "fs"
-import * as url from "url"
 import * as path from "path"
 import * as esbuild from "esbuild"
+import htmlMinify from "html-minifier-terser"
 import {Logger} from "@dvdzkwsk/logger"
 import {execScript} from "./_util.js"
 import {WebsiteConfig, getWebsiteConfig} from "./_config.js"
@@ -175,6 +175,10 @@ async function updateHashedAssetPaths(
 				mainCSSOutputFile.replace("dist/assets", "/assets"),
 			)
 		}
+
+		html = await htmlMinify.minify(html, {
+			collapseWhitespace: true,
+		})
 		fs.writeFileSync(path.resolve(cwd, htmlFile), html, "utf8")
 	}
 }

@@ -15,7 +15,11 @@ export const App = ({history}: {history: History}) => {
 }
 
 const PageNotFound = () => {
-	return null
+	return (
+		<PageLayout>
+			<h1>Not Found</h1>
+		</PageLayout>
+	)
 }
 
 export interface Route {
@@ -35,30 +39,55 @@ export function getRoutes(): Route[] {
 	return routes
 }
 
+const PageLayout = ({children}: {children: ComponentChildren}) => {
+	return (
+		<div className="PageLayout">
+			<header className="PageHeader">
+				<nav className="container PageHeader-content">
+					<a href="/" className="PageTitle">
+						David Zukowski
+					</a>
+					<div className="PageHeader-links">
+						<a
+							href="https://github.com/davezuko"
+							rel="noopener noreferrer"
+						>
+							GitHub
+						</a>
+					</div>
+				</nav>
+			</header>
+			<main className="PageMain">
+				<div className="container PageMain-content">{children}</div>
+			</main>
+		</div>
+	)
+}
+
 const Home = () => {
 	const recentBlogPosts = getBlogPosts()
 	return (
-		<main className="app">
+		<PageLayout>
 			{recentBlogPosts.map((post) => {
 				return <BlogPostPreview key={post.title} post={post} />
 			})}
-		</main>
+		</PageLayout>
 	)
 }
 
 const BlogPost = ({post}: {post: BlogPost}) => {
 	return (
-		<main>
+		<PageLayout>
 			<h1>{post.title}</h1>
 			{post.render()}
-		</main>
+		</PageLayout>
 	)
 }
 
 const BlogPostPreview = ({post}: {post: BlogPost}) => {
 	return (
 		<article>
-			<h3>{post.title}</h3>
+			<h2>{post.title}</h2>
 			{post.render()}
 		</article>
 	)

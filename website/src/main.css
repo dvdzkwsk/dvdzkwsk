@@ -1,7 +1,75 @@
 @import "./_normalize.css";
 
-.app {
-	max-width: 600px;
+body {
+	font-family: system-ui, "Helvetica Neue", Helvetica, sans-serif;
+	font-weight: 400;
+	font-size: 1.125rem;
+	line-height: 1.5rem;
+}
+
+p {
+	margin: 0 0 1rem;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	margin: 0.25rem 0 0.5rem;
+	font-weight: 900;
+	line-height: 1.2;
+}
+
+h1 {
+	font-size: 2rem;
+}
+
+.container {
+	max-width: 800px;
 	margin: 0 auto;
 	padding: 0 1rem;
+}
+
+.PageLayout {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	grid-template-areas:
+		"header header  header"
+		"main   main    main";
+}
+
+.PageHeader {
+	grid-area: header;
+}
+
+.PageHeader-content {
+	display: flex;
+	justify-content: space-between;
+	padding-block: 2rem;
+}
+
+.PageTitle {
+	font-weight: 300;
+	text-decoration: none;
+	font-size: 1.5rem;
+	color: #333;
+}
+
+.PageHeader-links {
+	display: flex;
+	gap: 1rem;
+}
+
+.PageHeader-links a {
+	font-weight: 300;
+	text-decoration: none;
+	font-size: 1rem;
+	color: #666;
+}
+
+.PageMain {
+	grid-area: main;
+	margin: 0.75rem 0 0;
 }

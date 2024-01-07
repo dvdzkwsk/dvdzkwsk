@@ -9,14 +9,19 @@ export const About = () => {
 				Washington state. I currently work at{" "}
 				<Link href="https://material.security">Material Security</Link>,
 				where we protect sensitive data in your Google and Outlook
-				accounts even after you've been breached. Before that I was at
-				Microsoft working on the new, faster version of Microsoft Teams.
+				accounts even after you've been breached. Previously I worked at
+				Microsoft on the new, faster version of Microsft Teams. You can
+				see my full work history{" "}
+				<Link href="https://www.linkedin.com/in/david-zukowski-0318a475/">
+					here
+				</Link>
+				.
 			</p>
 			<p>
 				My steadfast companion is Kona, probably the friendliest corgi
 				you'll ever meet. We spend lots of time visiting local parks.
-				Beside that, I enjoy playing guitar, reading, and watching
-				movies.
+				Beside that, I enjoy playing guitar, reading, and being
+				outdoors.
 			</p>
 		</PageLayout>
 	)

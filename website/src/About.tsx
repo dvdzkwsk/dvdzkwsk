@@ -6,10 +6,10 @@ export const About = () => {
 			<h1>About Me</h1>
 			<p>
 				My name is David Zukowski. I'm a software engineer based out of
-				Washington State. I currently work at a startup called{" "}
+				Washington state. I currently work at{" "}
 				<Link href="https://material.security">Material Security</Link>,
 				where we protect sensitive data in your Google and Outlook
-				mailboxes even after you've been breached. Before that I was at
+				accounts even after you've been breached. Before that I was at
 				Microsoft working on the new, faster version of Microsoft Teams.
 			</p>
 			<p>

@@ -28,14 +28,14 @@ async function deployWebsite() {
 	}
 
 	if (!process.argv.includes("--skip-infra")) {
-		await ensureGCPInfra(websiteConfig, gcpConfig)
+		// await ensureGCPInfra(websiteConfig, gcpConfig)
 		await ensureCloudflareInfra(cloudflareConfig)
 	}
 
-	await syncFolderToBucket(
-		path.join(websiteConfig.dir, "dist"),
-		websiteConfig.gcpBucket!,
-	)
+	// await syncFolderToBucket(
+	// 	path.join(websiteConfig.dir, "dist"),
+	// 	websiteConfig.gcpBucket!,
+	// )
 }
 
 async function syncFolderToBucket(folderToSync: string, bucket: string) {
@@ -137,31 +137,10 @@ async function ensureCloudflareInfra(cloudflareConfig: CloudflareConfig) {
 	const ctx: CloudflareAPIContext = {
 		cloudflare: cloudflareConfig,
 	}
-	await ensurePageRules(
-		[
-			{
-				targets: [
-					{
-						target: "url",
-						constraint: {
-							operator: "matches",
-							value: `www.${cloudflareConfig.domain}/*`,
-						},
-					},
-				],
-				actions: [
-					{
-						id: "forwarding_url",
-						value: {
-							url: `https://${cloudflareConfig.domain}/$1`,
-							status_code: 302,
-						},
-					},
-				],
-			},
-		],
-		ctx,
-	)
+	const pageRules: CloudflarePageRule[] = []
+	if (pageRules.length) {
+		await ensurePageRules(pageRules, ctx)
+	}
 }
 
 interface CloudflarePageRule {

@@ -7,7 +7,7 @@ export const Home = () => {
 		<PageLayout>
 			{recentBlogPosts.map((post) => {
 				return (
-					<article key={post.title}>
+					<article key={post.title} style={{marginBottom: "2rem"}}>
 						<h2>{post.title}</h2>
 						{post.render()}
 					</article>

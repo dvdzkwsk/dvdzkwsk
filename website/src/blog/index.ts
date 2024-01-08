@@ -1,5 +1,6 @@
 import {ComponentChildren} from "preact"
 import NewWebsite from "./2024-01-06-new-website.js"
+import NewHabits from "./2024-01-07-new-habits.js"
 
 export interface BlogPost {
 	title: string
@@ -8,7 +9,7 @@ export interface BlogPost {
 }
 
 export function getBlogPosts(): BlogPost[] {
-	return [NewWebsite]
+	return [NewHabits, NewWebsite]
 }
 
 interface CreateBlogPostOptions extends Omit<BlogPost, "slug"> {

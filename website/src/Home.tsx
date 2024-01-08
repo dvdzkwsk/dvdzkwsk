@@ -9,6 +9,13 @@ export const Home = () => {
 				return (
 					<article key={post.title} style={{marginBottom: "2rem"}}>
 						<h2>{post.title}</h2>
+						<p style={{color: "#777"}}>
+							{post.date.toLocaleDateString("en-us", {
+								year: "numeric",
+								month: "long",
+								day: "numeric",
+							})}
+						</p>
 						{post.render()}
 					</article>
 				)

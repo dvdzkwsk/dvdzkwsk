@@ -13,7 +13,7 @@ type BuildMode = "development" | "production"
 export async function buildWebsite(config: WebsiteConfig = getWebsiteConfig()) {
 	const options = getDefaultBuildOptions(config.dir)
 
-	await rebuildBlogIndex(config)
+	await rebuildBlogIndex(config.dir)
 
 	if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")

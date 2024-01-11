@@ -4,7 +4,7 @@ import * as url from "url"
 import {createMemoryHistory} from "history"
 import {renderToString} from "preact-render-to-string"
 import {Logger} from "@dvdzkwsk/logger"
-import {App, Route, getRoutes} from "./App.js"
+import {App, Route, createAppContext, getRoutes} from "./App.js"
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const logger = new Logger("SSR")
@@ -28,12 +28,23 @@ async function buildRoute(route: Route, templateHtml: string) {
 
 	const history = createMemoryHistory()
 	history.replace(route.path)
-	const app = renderToString(<App history={history} />)
 
-	let html = templateHtml.replace(
-		'<div id="root"></div>',
-		`<div id="root">${app}</div>`,
-	)
+	const ctx = createAppContext(history)
+	const app = renderToString(<App context={ctx} />)
+
+	let html = templateHtml
+	html = html.replace('<div id="root"></div>', `<div id="root">${app}</div>`)
+
+	const domain = process.env.WEBSITE_DOMAIN
+	if (domain) {
+		const uri = route.path.replace(/\/$/, "")
+		const href = `https://${domain}${uri}`
+		logger.debug("buildRoute", "write canonical tag", {route, href: uri})
+		html = html.replace(
+			"</head>",
+			`<link rel="canonical" href="${href}" /></head>`,
+		)
+	}
 
 	await fs.promises.mkdir(path.dirname(dst), {recursive: true})
 	await fs.promises.writeFile(dst, html, "utf8")

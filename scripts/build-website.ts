@@ -46,6 +46,9 @@ function getDefaultBuildOptions(cwd: string) {
 			sourcemap: "linked",
 			define: {
 				"process.env.SSR": JSON.stringify(false),
+				"process.env.WEBSITE_DOMAIN": JSON.stringify(
+					process.env.WEBSITE_DOMAIN,
+				),
 			},
 		},
 	}

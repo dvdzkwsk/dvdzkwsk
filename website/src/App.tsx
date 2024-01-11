@@ -1,10 +1,11 @@
 import {History} from "history"
-import {ComponentChildren, JSX} from "preact"
+import {ComponentChildren} from "preact"
 import {useMemo} from "preact/hooks"
-import {BlogPost, getBlogPosts} from "./blog/index.js"
+import {getBlogPosts} from "./blog/index.js"
 import {PageLayout} from "./Layout.js"
 import {About} from "./About.js"
 import {Home} from "./Home.js"
+import {BlogPost} from "./blog/BlogPostUtil.js"
 
 export const App = ({history}: {history: History}) => {
 	const routes = useMemo(getRoutes, [])

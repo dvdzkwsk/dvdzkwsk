@@ -5,7 +5,6 @@ import htmlMinify from "html-minifier-terser"
 import {Logger} from "@dvdzkwsk/logger"
 import {execScript} from "./_util.js"
 import {WebsiteConfig, getWebsiteConfig} from "./_config.js"
-import {loadBlogPosts} from "./_blog.js"
 
 const logger = new Logger("BuildWebsite")
 
@@ -13,6 +12,8 @@ type BuildMode = "development" | "production"
 
 export async function buildWebsite(config: WebsiteConfig = getWebsiteConfig()) {
 	const options = getDefaultBuildOptions(config.dir)
+
+	await rebuildBlogIndex(config)
 
 	if (process.argv.includes("--dev")) {
 		setBuildMode(options, "development")
@@ -48,10 +49,55 @@ function getDefaultBuildOptions(cwd: string) {
 			},
 		},
 	}
-	if (!!false) {
-		options.esbuild.plugins?.push(createEsbuildBlogPlugin(cwd))
-	}
 	return options
+}
+
+async function rebuildBlogIndex(config: WebsiteConfig) {
+	if (!fs.existsSync(path.join(config.dir, "src/blog"))) return
+
+	logger.debug("rebuildBlogIndex", "rebuilding index...")
+
+	const dst = path.join(config.dir, "src/blog/index.registry.ts")
+
+	const files = await fs.promises
+		.readdir(path.join(config.dir, "src/blog"))
+		.then((files) => {
+			return files.filter((file) => file.endsWith(".tsx"))
+		})
+
+	const posts = await Promise.all(
+		files.map(async (file) => {
+			const post = await import(
+				path.join(config.dir, "src/blog", file)
+			).then((m) => m.default)
+
+			return {
+				path: `${file.replace(path.extname(file), ".js")}`,
+				title: post.title,
+				moduleName: post.title.replace(/\s/g, ""),
+			}
+		}),
+	)
+
+	let content = ""
+	content += "// THIS IS A GENERATED FILE. DO NOT EDIT IT DIRECTLY."
+	content += "\n"
+	content += "// See `rebuildBlogIndex` in ./scripts/build-website.ts"
+	content += "\n"
+	for (const post of posts) {
+		content += "\n"
+		content += `import ${post.moduleName} from "./${post.path}"`
+	}
+	content += "\n\n"
+	content += "export default ["
+	for (const post of posts) {
+		content += "\n"
+		content += `\t${post.moduleName},`
+	}
+	content += "\n]\n"
+
+	logger.debug("rebuildBlogIndex", "write index", {dst})
+	await fs.promises.writeFile(dst, content, "utf8")
 }
 
 function getEntrypoints(cwd: string): string[] {
@@ -184,39 +230,6 @@ async function updateHashedAssetPaths(
 			collapseWhitespace: true,
 		})
 		fs.writeFileSync(path.resolve(cwd, htmlFile), html, "utf8")
-	}
-}
-
-function createEsbuildBlogPlugin(cwd: string): esbuild.Plugin {
-	return {
-		name: "blog",
-		setup(build) {
-			build.onResolve({filter: /blog\/index\.js$/}, async (args) => {
-				return {
-					path: args.path,
-					namespace: "blog",
-				}
-			})
-			build.onLoad(
-				{filter: /blog\/index\.js$/, namespace: "blog"},
-				async (args) => {
-					const posts = await loadBlogPosts(path.join(cwd, "blog"))
-					let source = ""
-					source += "const $$BLOG_POSTS = ["
-					for (const post of posts) {
-						source += "\t" + JSON.stringify(post) + ",\n"
-					}
-					source += "]"
-					source += "\n"
-					source +=
-						"export function getBlogPosts() { return $$BLOG_POSTS }\n"
-					return {
-						contents: source,
-						loader: "ts",
-					}
-				},
-			)
-		},
 	}
 }
 

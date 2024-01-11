@@ -1,4 +1,4 @@
-import {createBlogPost} from "./index.js"
+import {createBlogPost} from "./BlogPostUtil.js"
 
 export default createBlogPost({
 	title: "New Website",

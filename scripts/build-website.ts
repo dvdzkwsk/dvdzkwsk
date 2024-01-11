@@ -52,24 +52,24 @@ function getDefaultBuildOptions(cwd: string) {
 	return options
 }
 
-async function rebuildBlogIndex(config: WebsiteConfig) {
-	if (!fs.existsSync(path.join(config.dir, "src/blog"))) return
+export async function rebuildBlogIndex(cwd: string) {
+	if (!fs.existsSync(path.join(cwd, "src/blog"))) return
 
 	logger.debug("rebuildBlogIndex", "rebuilding index...")
 
-	const dst = path.join(config.dir, "src/blog/index.registry.ts")
+	const dst = path.join(cwd, "src/blog/index.registry.ts")
 
 	const files = await fs.promises
-		.readdir(path.join(config.dir, "src/blog"))
+		.readdir(path.join(cwd, "src/blog"))
 		.then((files) => {
 			return files.filter((file) => file.endsWith(".tsx"))
 		})
 
 	const posts = await Promise.all(
 		files.map(async (file) => {
-			const post = await import(
-				path.join(config.dir, "src/blog", file)
-			).then((m) => m.default)
+			const post = await import(path.join(cwd, "src/blog", file)).then(
+				(m) => m.default,
+			)
 
 			return {
 				path: `${file.replace(path.extname(file), ".js")}`,

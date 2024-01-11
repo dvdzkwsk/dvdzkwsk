@@ -22,7 +22,7 @@ export function createBlogPost(options: CreateBlogPostOptions) {
 	return post
 }
 
-function sluggify(title: string) {
+export function sluggify(title: string) {
 	return title.toLowerCase().replace(/(\s+)/, "-")
 }
 

@@ -15,7 +15,8 @@
 		"start": "npm run start-website",
 		"start-website": "tsx ./scripts/build-website.ts --dev",
 		"build-website": "tsx ./scripts/build-website.ts",
-		"deploy-website": "tsx ./scripts/deploy-website.ts"
+		"deploy-website": "tsx ./scripts/deploy-website.ts",
+		"new-blog-post": "tsx ./scripts/new-blog-post.ts"
 	},
 	"devDependencies": {
 		"@preact/signals": "^1.1.3",

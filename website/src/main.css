@@ -39,17 +39,23 @@ h1 {
 }
 
 h2 {
-	margin: 0.25rem 0 0.25rem;
+	margin: 0.25rem 0 0.125rem;
 }
 
 a {
 	color: inherit;
 	text-decoration: underline;
 	text-decoration-color: var(--accent);
+	text-decoration-skip-ink: auto;
+}
+
+a:has(:is(h1, h2, h3, h4, h5)) {
+	text-decoration: none;
 }
 
 a:hover,
 a:focus-visible {
+	text-decoration: underline;
 	color: var(--accent);
 }
 
@@ -79,20 +85,18 @@ a:focus-visible {
 
 .PageHeader-title {
 	font-weight: 300;
-	text-decoration: none;
+	text-decoration: none !important;
 	font-size: 1.5rem;
 }
 
 .PageHeader-links {
 	display: flex;
 	gap: 1rem;
+	color: var(--fg-muted);
 }
 
-.PageHeader-links a {
-	font-weight: 300;
+.PageHeader-links a:not(:hover) {
 	text-decoration: none;
-	font-size: 1rem;
-	color: var(--fg-muted);
 }
 
 .PageMain {

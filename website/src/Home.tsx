@@ -1,4 +1,4 @@
-import {PageLayout} from "./Layout.js"
+import {Link, PageLayout} from "./Layout.js"
 import {getBlogPosts} from "./blog/index.js"
 
 export const Home = () => {
@@ -8,7 +8,9 @@ export const Home = () => {
 			{recentBlogPosts.map((post) => {
 				return (
 					<article key={post.title} style={{marginBottom: "2rem"}}>
-						<h2>{post.title}</h2>
+						<Link href={`/blog/${post.slug}`}>
+							<h2>{post.title}</h2>
+						</Link>
 						<p style={{color: "var(--fg-muted)"}}>
 							{post.date.toLocaleDateString("en-us", {
 								year: "numeric",

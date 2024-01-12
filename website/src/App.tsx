@@ -1,6 +1,6 @@
 import {History} from "history"
 import {ComponentChildren, createContext, render} from "preact"
-import {useContext, useEffect, useMemo} from "preact/hooks"
+import {useContext, useEffect, useMemo, useState} from "preact/hooks"
 import {getBlogPosts} from "./blog/index.js"
 import {PageLayout} from "./Layout.js"
 import {About} from "./About.js"
@@ -20,7 +20,7 @@ interface PageMetadata {
 	description?: string
 }
 
-const AppContext = createContext<AppContext>(null!)
+export const AppContext = createContext<AppContext>(null!)
 
 export function createAppContext(history: History): AppContext {
 	return {
@@ -38,10 +38,11 @@ export const App = ({context}: {context: AppContext}) => {
 }
 
 const CurrentRoute = () => {
-	const appContext = useContext(AppContext)
+	const {history} = useContext(AppContext)
+	const [, forceUpdate] = useState<any>(null)
 	const routes = useMemo(getRoutes, [])
 	const currentRoute = routes.find((route) => {
-		return appContext.history.location.pathname === route.path
+		return history.location.pathname === route.path
 	})
 	const meta = useMemo(() => {
 		return {
@@ -50,6 +51,10 @@ const CurrentRoute = () => {
 			description: currentRoute?.description,
 		}
 	}, [currentRoute])
+
+	useEffect(() => {
+		history.listen(() => forceUpdate({}))
+	}, [history])
 
 	if (!currentRoute) {
 		return <PageNotFound />

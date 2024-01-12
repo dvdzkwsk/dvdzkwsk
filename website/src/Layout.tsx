@@ -1,13 +1,15 @@
 import {ComponentChildren, JSX} from "preact"
+import {useContext} from "preact/hooks"
+import {AppContext} from "./App.js"
 
 export const PageLayout = ({children}: {children: ComponentChildren}) => {
 	return (
 		<div className="PageLayout">
 			<header className="PageHeader">
 				<nav className="container PageHeader-content">
-					<a href="/" className="PageHeader-title">
+					<Link href="/" className="PageHeader-title">
 						@dvdzkwsk
-					</a>
+					</Link>
 					<div className="PageHeader-links">
 						<Link href="/about">About</Link>
 						<Link href="https://github.com/davezuko">GitHub</Link>
@@ -21,9 +23,23 @@ export const PageLayout = ({children}: {children: ComponentChildren}) => {
 	)
 }
 
-export const Link = (props: JSX.HTMLAttributes<HTMLAnchorElement>) => {
+export const Link = (
+	props: JSX.HTMLAttributes<HTMLAnchorElement> & {href: string},
+) => {
+	const {history} = useContext(AppContext)
+
 	if (typeof props.href === "string" && props.href.startsWith("http")) {
 		return <a {...props} rel="noopener noreferrer" target="_blank" />
 	}
-	return <a {...props} />
+	return (
+		<a
+			{...props}
+			onClick={(e) => {
+				if (!e.ctrlKey && !e.metaKey) {
+					e.preventDefault()
+					history.push(props.href)
+				}
+			}}
+		/>
+	)
 }

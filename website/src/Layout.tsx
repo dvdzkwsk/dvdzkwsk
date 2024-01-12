@@ -6,7 +6,7 @@ export const PageLayout = ({children}: {children: ComponentChildren}) => {
 			<header className="PageHeader">
 				<nav className="container PageHeader-content">
 					<a href="/" className="PageHeader-title">
-						David Zukowski
+						@dvdzkwsk
 					</a>
 					<div className="PageHeader-links">
 						<Link href="/about">About</Link>

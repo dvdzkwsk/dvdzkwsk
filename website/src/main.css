@@ -1,10 +1,21 @@
 @import "./_normalize.css";
 
+:root {
+	--fg: rgb(234, 237, 243);
+	--fg-muted: rgb(175, 176, 178);
+
+	--bg: rgb(30, 30, 30);
+
+	--accent: rgb(255, 107, 1);
+}
+
 body {
+	color: var(--fg);
+	background: var(--bg);
 	font-family: system-ui, "Helvetica Neue", Helvetica, sans-serif;
-	font-weight: 400;
-	font-size: 1.125rem;
-	line-height: 1.5rem;
+	font-weight: 300;
+	font-size: 1rem;
+	line-height: 1.4rem;
 }
 
 p {
@@ -18,18 +29,34 @@ h4,
 h5,
 h6 {
 	margin: 0.25rem 0 0.5rem;
-	font-weight: 900;
+	font-weight: 800;
 	line-height: 1.2;
+	color: var(--accent);
 }
 
 h1 {
 	font-size: 2rem;
 }
 
+h2 {
+	margin: 0.25rem 0 0.25rem;
+}
+
+a {
+	color: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--accent);
+}
+
+a:hover,
+a:focus-visible {
+	color: var(--accent);
+}
+
 .container {
-	max-width: 800px;
+	max-width: 732px;
 	margin: 0 auto;
-	padding: 0 1rem;
+	padding: 0 2rem;
 }
 
 .PageLayout {
@@ -54,7 +81,6 @@ h1 {
 	font-weight: 300;
 	text-decoration: none;
 	font-size: 1.5rem;
-	color: #333;
 }
 
 .PageHeader-links {
@@ -66,7 +92,7 @@ h1 {
 	font-weight: 300;
 	text-decoration: none;
 	font-size: 1rem;
-	color: #666;
+	color: var(--fg-muted);
 }
 
 .PageMain {

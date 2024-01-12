@@ -9,7 +9,7 @@ export const About = () => {
 				Washington state. I currently work at{" "}
 				<Link href="https://material.security">Material Security</Link>,
 				where we protect sensitive data in your Google and Outlook
-				accounts even after if gets compromised. Previously I worked at
+				accounts even if they get compromised. Previously I worked at
 				Microsoft on the new, faster version of Microsft Teams. You can
 				see my full work history{" "}
 				<Link href="https://www.linkedin.com/in/david-zukowski-0318a475/">

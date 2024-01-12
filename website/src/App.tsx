@@ -1,23 +1,28 @@
 import {History} from "history"
-import {ComponentChildren, createContext} from "preact"
+import {ComponentChildren, createContext, render} from "preact"
 import {useContext, useEffect, useMemo} from "preact/hooks"
 import {getBlogPosts} from "./blog/index.js"
 import {PageLayout} from "./Layout.js"
 import {About} from "./About.js"
 import {Home} from "./Home.js"
 import {BlogPost} from "./blog/BlogPostUtil.js"
+import {renderToStaticMarkup} from "preact-render-to-string"
 
 interface AppContext {
 	history: History
-	meta: {
-		uri?: string
-		title?: string
-		description?: string
-	}
+	meta: PageMetadata
+	metaHtml?: string
 }
+
+interface PageMetadata {
+	uri?: string
+	title?: string
+	description?: string
+}
+
 const AppContext = createContext<AppContext>(null!)
 
-export function createAppContext(history: History) {
+export function createAppContext(history: History): AppContext {
 	return {
 		history,
 		meta: {},
@@ -38,33 +43,71 @@ const CurrentRoute = () => {
 	const currentRoute = routes.find((route) => {
 		return appContext.history.location.pathname === route.path
 	})
-	appContext.meta = {
-		uri: currentRoute?.path.replace(/\/$/, ""),
-		title: currentRoute?.title,
-		description: currentRoute?.description,
-	}
-	useEffect(() => {
-		if (process.env.SSR) return
-
-		document.head.querySelector('link[rel="canonical"]')?.remove()
-
-		if (currentRoute && process.env.WEBSITE_DOMAIN) {
-			const canonical = document.createElement("link")
-			canonical.setAttribute("rel", "canonical")
-			canonical.setAttribute(
-				"href",
-				`https://${
-					process.env.WEBSITE_DOMAIN
-				}${currentRoute.path.replace(/\/$/, "")}`,
-			)
-			document.head.appendChild(canonical)
+	const meta = useMemo(() => {
+		return {
+			uri: currentRoute?.path.replace(/\/$/, ""),
+			title: currentRoute?.title,
+			description: currentRoute?.description,
 		}
 	}, [currentRoute])
 
 	if (!currentRoute) {
 		return <PageNotFound />
 	}
-	return <>{currentRoute.render()}</>
+	return (
+		<>
+			<PageMetadata meta={meta} />
+			{currentRoute.render()}
+		</>
+	)
+}
+
+const PageMetadata = ({meta}: {meta: PageMetadata}) => {
+	const appContext = useContext(AppContext)
+	appContext.meta = meta
+
+	const elem = (
+		<>
+			{meta.title && <meta name="title" content={meta.title} />}
+			<meta name="author" content="David Zukowski" />
+			{meta.title && <meta property="og:title" content={meta.title} />}
+			{meta.description && (
+				<meta property="og:description" content={meta.description} />
+			)}
+			{process.env.WEBSITE_DOMAIN && (
+				<meta
+					property="og:url"
+					content={`https://${process.env.WEBSITE_DOMAIN}${meta.uri}`}
+				/>
+			)}
+			{process.env.WEBSITE_DOMAIN && (
+				<link
+					rel="canonical"
+					href={`https://${process.env.WEBSITE_DOMAIN}${meta.uri}`}
+				/>
+			)}
+		</>
+	)
+	if (process.env.SSR) {
+		appContext.metaHtml = renderToStaticMarkup(elem)
+		return null
+	}
+
+	useEffect(() => {
+		// TODO: infer this from what's rendered inside elem
+		document.head.querySelector('link[rel="canonical"]')?.remove()
+		document.head.querySelector('meta[name="title"]')?.remove()
+		document.head.querySelector('meta[name="author"]')?.remove()
+		document.head.querySelector('meta[property="og:title"]')?.remove()
+		document.head.querySelector('meta[property="og:description"]')?.remove()
+		document.head.querySelector('meta[property="og:url"]')?.remove()
+
+		const container = document.createElement("meta")
+		document.head.appendChild(container)
+		render(elem, document.head, container)
+	}, [meta])
+
+	return null
 }
 
 const PageNotFound = () => {
@@ -83,13 +126,23 @@ export interface Route {
 }
 export function getRoutes(): Route[] {
 	const routes: Route[] = [
-		{path: "/", render: () => <Home />},
-		{path: "/about", render: () => <About />},
+		{
+			path: "/",
+			title: "Home",
+			render: () => <Home />,
+		},
+		{
+			path: "/about",
+			title: "About",
+			render: () => <About />,
+		},
 	]
 	const posts = getBlogPosts()
 	for (const post of posts) {
 		routes.push({
 			path: `/blog/${post.slug}`,
+			title: post.title,
+			description: post.description,
 			render: () => <BlogPost post={post} />,
 		})
 	}

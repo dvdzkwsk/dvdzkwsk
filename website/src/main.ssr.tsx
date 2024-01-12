@@ -29,21 +29,14 @@ async function buildRoute(route: Route, templateHtml: string) {
 	const history = createMemoryHistory()
 	history.replace(route.path)
 
-	const ctx = createAppContext(history)
-	const app = renderToString(<App context={ctx} />)
+	const context = createAppContext(history)
+	const app = renderToString(<App context={context} />)
 
 	let html = templateHtml
 	html = html.replace('<div id="root"></div>', `<div id="root">${app}</div>`)
 
-	const domain = process.env.WEBSITE_DOMAIN
-	if (domain) {
-		const uri = route.path.replace(/\/$/, "")
-		const href = `https://${domain}${uri}`
-		logger.debug("buildRoute", "write canonical tag", {route, href: uri})
-		html = html.replace(
-			"</head>",
-			`<link rel="canonical" href="${href}" /></head>`,
-		)
+	if (context.metaHtml) {
+		html = html.replace("</head>", `${context.metaHtml}</head>`)
 	}
 
 	await fs.promises.mkdir(path.dirname(dst), {recursive: true})

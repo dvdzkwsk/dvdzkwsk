@@ -2,11 +2,11 @@ import {Link, PageLayout} from "./Layout.js"
 import {BlogPost} from "./blog/BlogPostUtil.js"
 import {getBlogPosts} from "./blog/index.js"
 
-export const Blog = () => {
+export const Archive = () => {
 	const posts = getBlogPosts()
 	return (
 		<PageLayout>
-			<h1>Blog</h1>
+			<h2>Blog Posts</h2>
 			<ol className="Blog-list">
 				{posts.map((post) => {
 					const yyyy = post.date.getFullYear()

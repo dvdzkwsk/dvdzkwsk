@@ -6,7 +6,7 @@ import {AppContext} from "./App.js"
 import {Home} from "./Home.js"
 import {PageLayout} from "./Layout.js"
 import {getBlogPosts} from "./blog/index.js"
-import {Blog} from "./Blog.js"
+import {Archive} from "./Blog.js"
 import {BlogPost} from "./blog/BlogPostUtil.js"
 
 export function getRoutes(): Route[] {
@@ -22,9 +22,9 @@ export function getRoutes(): Route[] {
 			render: () => <About />,
 		},
 		{
-			path: "/blog",
-			title: "Blog",
-			render: () => <Blog />,
+			path: "/archive",
+			title: "Archive",
+			render: () => <Archive />,
 		},
 	]
 	const posts = getBlogPosts()

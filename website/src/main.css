@@ -7,6 +7,7 @@
 	--bg: rgb(30, 30, 30);
 
 	--accent: rgb(255, 107, 1);
+	--accent-border: rgba(255, 107, 1, 0.6);
 }
 
 body {
@@ -75,12 +76,14 @@ a:focus-visible {
 
 .PageHeader {
 	grid-area: header;
+	margin-bottom: 1rem;
 }
 
 .PageHeader-content {
 	display: flex;
 	justify-content: space-between;
-	padding-block: 2rem;
+	padding: 2rem 0 1rem;
+	border-bottom: 1px solid var(--accent-border);
 }
 
 .PageHeader-title {

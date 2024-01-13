@@ -2,18 +2,22 @@ import {ComponentChildren, createElement} from "preact"
 
 interface TextProps {
 	children: ComponentChildren
+	muted?: boolean
 	headingLevel?: 1 | 2 | 3 | 4 | 5 | 6
+	style?: any
 }
-export const Text = (props: TextProps) => {
-	if (props.headingLevel) {
-		return createElement(`h${props.headingLevel}`, {
-			children: props.children,
-			...(typeof props.children === "string" && {
-				id: sluggify(props.children),
-			}),
+export const Text = ({children, muted, headingLevel, ...rest}: TextProps) => {
+	const props: any = {...rest, style: rest.style ?? {}}
+	if (muted) {
+		props.style.color = "var(--fg-muted)"
+	}
+	if (headingLevel) {
+		return createElement(`h${headingLevel}`, {
+			children: children,
+			...rest,
 		})
 	}
-	return <p>{props.children}</p>
+	return <p {...rest}>{children}</p>
 }
 
 export function sluggify(title: string) {

@@ -39,10 +39,6 @@ h1 {
 	font-size: 2rem;
 }
 
-h2 {
-	margin: 0.25rem 0 0.125rem;
-}
-
 a {
 	color: inherit;
 	text-decoration: underline;
@@ -118,4 +114,11 @@ a:focus-visible {
 
 .Blog-link {
 	text-decoration: none;
+}
+
+ol,
+ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }

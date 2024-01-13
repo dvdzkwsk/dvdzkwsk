@@ -6,9 +6,16 @@ import {AppContext} from "./App.js"
 import {Home} from "./Home.js"
 import {PageLayout} from "./Layout.js"
 import {getBlogPosts} from "./blog/index.js"
-import {Archive} from "./Blog.js"
-import {BlogPost} from "./blog/BlogPostUtil.js"
+import {BlogPostRenderer} from "./Blog.js"
 import {Text} from "./Typography.js"
+import {Archive} from "./Archive.js"
+
+export interface Route {
+	path: string
+	title?: string
+	description?: string
+	render(): ComponentChildren
+}
 
 export function getRoutes(): Route[] {
 	const routes: Route[] = [
@@ -34,7 +41,7 @@ export function getRoutes(): Route[] {
 			path: post.path,
 			title: post.title,
 			description: post.description,
-			render: () => <BlogPost post={post} />,
+			render: () => <BlogPostRenderer post={post} />,
 		})
 	}
 	return routes
@@ -137,22 +144,6 @@ const PageNotFound = () => {
 	return (
 		<PageLayout>
 			<Text>Not Found</Text>
-		</PageLayout>
-	)
-}
-
-export interface Route {
-	path: string
-	title?: string
-	description?: string
-	render(): ComponentChildren
-}
-
-const BlogPost = ({post}: {post: BlogPost}) => {
-	return (
-		<PageLayout>
-			<Text>{post.title}</Text>
-			{post.render()}
 		</PageLayout>
 	)
 }

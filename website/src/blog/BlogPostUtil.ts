@@ -3,7 +3,7 @@ import {ComponentChildren} from "preact"
 export interface BlogPost {
 	title: string
 	description: string
-	slug: string
+	path: string
 	date: Date
 	render(): ComponentChildren
 }
@@ -16,11 +16,12 @@ interface CreateBlogPostOptions {
 	render(): ComponentChildren
 }
 export function createBlogPost(options: CreateBlogPostOptions) {
+	const slug = options.slug || sluggify(options.title)
 	const post: BlogPost = {
 		...options,
 		description: options.description || "",
 		date: yyyymmddToLocalDate(options.date),
-		slug: options.slug || sluggify(options.title),
+		path: `/blog/${slug}`,
 	}
 	return post
 }

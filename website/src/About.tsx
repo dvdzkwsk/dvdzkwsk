@@ -1,10 +1,11 @@
 import {Link, PageLayout} from "./Layout.js"
+import {Text} from "./Typography.js"
 
 export const About = () => {
 	return (
 		<PageLayout>
-			<h1>About Me</h1>
-			<p>
+			<Text headingLevel={1}>About Me</Text>
+			<Text>
 				My name is David Zukowski. I'm a software engineer based out of
 				Washington state. I currently work at{" "}
 				<Link href="https://material.security">Material Security</Link>,
@@ -16,12 +17,12 @@ export const About = () => {
 					here
 				</Link>
 				.
-			</p>
-			<p>
+			</Text>
+			<Text>
 				My steadfast companion is Kona, the friendliest corgi you'll
 				ever meet. We spend lots of time visiting local parks. Beside
 				that, I enjoy playing guitar, reading, and being outdoors.
-			</p>
+			</Text>
 		</PageLayout>
 	)
 }

@@ -8,6 +8,7 @@ import {PageLayout} from "./Layout.js"
 import {getBlogPosts} from "./blog/index.js"
 import {Archive} from "./Blog.js"
 import {BlogPost} from "./blog/BlogPostUtil.js"
+import {Text} from "./Typography.js"
 
 export function getRoutes(): Route[] {
 	const routes: Route[] = [
@@ -30,7 +31,7 @@ export function getRoutes(): Route[] {
 	const posts = getBlogPosts()
 	for (const post of posts) {
 		routes.push({
-			path: `/blog/${post.slug}`,
+			path: post.path,
 			title: post.title,
 			description: post.description,
 			render: () => <BlogPost post={post} />,
@@ -126,7 +127,7 @@ const PageMetadata = ({meta}: {meta: PageMetadata}) => {
 const PageNotFound = () => {
 	return (
 		<PageLayout>
-			<h1>Not Found</h1>
+			<Text>Not Found</Text>
 		</PageLayout>
 	)
 }
@@ -141,7 +142,7 @@ export interface Route {
 const BlogPost = ({post}: {post: BlogPost}) => {
 	return (
 		<PageLayout>
-			<h1>{post.title}</h1>
+			<Text>{post.title}</Text>
 			{post.render()}
 		</PageLayout>
 	)

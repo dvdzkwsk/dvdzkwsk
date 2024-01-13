@@ -1,4 +1,5 @@
 import {Link, PageLayout} from "./Layout.js"
+import {Text} from "./Typography.js"
 import {BlogPost} from "./blog/BlogPostUtil.js"
 import {getBlogPosts} from "./blog/index.js"
 
@@ -6,7 +7,7 @@ export const Archive = () => {
 	const posts = getBlogPosts()
 	return (
 		<PageLayout>
-			<h2>Blog Posts</h2>
+			<Text headingLevel={2}>Blog Posts</Text>
 			<ol className="Blog-list">
 				{posts.map((post) => {
 					const yyyy = post.date.getFullYear()
@@ -17,10 +18,7 @@ export const Archive = () => {
 					const date = `${yyyy}-${mm}-${dd}`
 					return (
 						<li>
-							<Link
-								href={`/blog/${post.slug}`}
-								className="Blog-link"
-							>
+							<Link href={post.path} className="Blog-link">
 								{date} - {post.title}
 							</Link>
 						</li>
@@ -34,8 +32,8 @@ export const Archive = () => {
 export const BlogPostPreview = ({post}: {post: BlogPost}) => {
 	return (
 		<article style={{marginBottom: "2rem"}}>
-			<Link href={`/blog/${post.slug}`}>
-				<h2>{post.title}</h2>
+			<Link href={post.path}>
+				<Text headingLevel={2}>{post.title}</Text>
 			</Link>
 			<p style={{color: "var(--fg-muted)"}}>
 				{post.date.toLocaleDateString("en-us", {

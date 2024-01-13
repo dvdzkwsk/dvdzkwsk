@@ -4,7 +4,8 @@ import * as url from "url"
 import {createMemoryHistory} from "history"
 import {renderToString} from "preact-render-to-string"
 import {Logger} from "@dvdzkwsk/logger"
-import {App, Route, createAppContext, getRoutes} from "./App.js"
+import {App, createAppContext} from "./App.js"
+import {Route, getRoutes} from "./Router.js"
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const logger = new Logger("SSR")

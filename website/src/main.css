@@ -106,3 +106,16 @@ a:focus-visible {
 	grid-area: main;
 	margin: 0.75rem 0 0;
 }
+
+.Blog-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	margin: 0;
+	padding: 0 0 0 1rem;
+	list-style: circle;
+}
+
+.Blog-link {
+	text-decoration: none;
+}

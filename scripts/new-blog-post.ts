@@ -1,8 +1,8 @@
 import * as fs from "fs"
 import * as url from "url"
 import * as path from "path"
-import {sluggify} from "../website/src/blog/BlogPostUtil.js"
 import {rebuildBlogIndex} from "./build-website.js"
+import {sluggify} from "../website/src/lib/TextUtil.js"
 
 async function newBlogPost() {
 	const dirname = path.dirname(url.fileURLToPath(import.meta.url))
@@ -19,7 +19,7 @@ async function newBlogPost() {
 
 	const file = `${yyyy}-${mm}-${dd}-${sluggify(title)}.tsx`
 
-	let content = `import {createBlogPost} from "./BlogPostUtil.js"
+	let content = `import {createBlogPost} from "../Blog.js"
 
 export default createBlogPost({
     title: "${title}",

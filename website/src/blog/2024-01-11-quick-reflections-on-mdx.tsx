@@ -1,5 +1,5 @@
-import {Link} from "../Layout.js"
-import {createBlogPost} from "./BlogPostUtil.js"
+import {Link} from "../lib/LayoutUtil.js"
+import {createBlogPost} from "../Blog.js"
 
 export default createBlogPost({
 	title: "Quick Reflections on MDX",

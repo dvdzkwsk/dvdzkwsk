@@ -103,7 +103,7 @@ a:focus-visible {
 	margin: 0.75rem 0 0;
 }
 
-.Blog-list {
+.Archive-List {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
@@ -112,7 +112,7 @@ a:focus-visible {
 	list-style: circle;
 }
 
-.Blog-link {
+.Archive-Link {
 	text-decoration: none;
 }
 

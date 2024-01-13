@@ -4,10 +4,10 @@ import {useContext, useState, useMemo, useEffect} from "preact/hooks"
 import {About} from "./About.js"
 import {AppContext} from "./App.js"
 import {Home} from "./Home.js"
-import {PageLayout} from "./Layout.js"
+import {PageLayout} from "./lib/LayoutUtil.js"
 import {getBlogPosts} from "./blog/index.js"
 import {BlogPostRenderer} from "./Blog.js"
-import {Text} from "./Typography.js"
+import {Text} from "./lib/TextUtil.js"
 import {Archive} from "./Archive.js"
 
 export interface Route {

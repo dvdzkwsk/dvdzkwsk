@@ -1,6 +1,6 @@
 import {ComponentChildren, JSX} from "preact"
 import {useContext} from "preact/hooks"
-import {AppContext} from "./App.js"
+import {AppContext} from "../App.js"
 
 export const PageLayout = ({children}: {children: ComponentChildren}) => {
 	return (

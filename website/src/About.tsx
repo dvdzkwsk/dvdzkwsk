@@ -1,5 +1,5 @@
-import {Link, PageLayout} from "./Layout.js"
-import {Text} from "./Typography.js"
+import {Link, PageLayout} from "./lib/LayoutUtil.js"
+import {Text} from "./lib/TextUtil.js"
 
 export const About = () => {
 	return (

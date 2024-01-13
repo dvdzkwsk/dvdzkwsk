@@ -26,7 +26,7 @@ export function createBlogPost(options: CreateBlogPostOptions) {
 }
 
 export function sluggify(title: string) {
-	return title.toLowerCase().replace(/(\s+)/g, "-")
+	return title.toLowerCase().replace(/(\s+)/g, "-").replace(/[()]/g, "")
 }
 
 function yyyymmddToLocalDate(isoString: string) {

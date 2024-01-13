@@ -70,7 +70,7 @@ export async function rebuildBlogIndex(cwd: string) {
 		})
 
 	const posts = await Promise.all(
-		files.map(async (file) => {
+		files.map(async (file, idx) => {
 			const post = await import(path.join(cwd, "src/blog", file)).then(
 				(m) => m.default,
 			)
@@ -78,7 +78,7 @@ export async function rebuildBlogIndex(cwd: string) {
 			return {
 				path: `${file.replace(path.extname(file), ".js")}`,
 				title: post.title,
-				moduleName: post.title.replace(/\s/g, ""),
+				moduleName: post.title.replace(/[\s()]/g, ""),
 			}
 		}),
 	)

@@ -12,7 +12,7 @@ export const PageLayout = ({children}: {children: ComponentChildren}) => {
 					</Link>
 					<div className="PageHeader-links">
 						<Link href="/about">About</Link>
-						<Link href="https://github.com/davezuko">GitHub</Link>
+						<Link href="https://github.com/dvdzkwsk">GitHub</Link>
 					</div>
 				</nav>
 			</header>

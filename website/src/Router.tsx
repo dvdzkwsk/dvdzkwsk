@@ -82,12 +82,20 @@ const PageMetadata = ({meta}: {meta: PageMetadata}) => {
 
 	const elem = (
 		<>
+			{meta.title && (
+				<title>
+					{meta.title === "Home"
+						? "David Zukowski"
+						: meta.title + " | David Zukowski"}
+				</title>
+			)}
 			{meta.title && <meta name="title" content={meta.title} />}
-			<meta name="author" content="David Zukowski" />
 			{meta.title && <meta property="og:title" content={meta.title} />}
+			<meta name="author" content="David Zukowski" />
 			{meta.description && (
 				<meta property="og:description" content={meta.description} />
 			)}
+			<meta property="og:site_name" content="David Zukowski" />
 			{process.env.WEBSITE_DOMAIN && (
 				<meta
 					property="og:url"
@@ -109,6 +117,7 @@ const PageMetadata = ({meta}: {meta: PageMetadata}) => {
 
 	useEffect(() => {
 		// TODO: infer this from what's rendered inside elem
+		document.head.querySelector("title")?.remove()
 		document.head.querySelector('link[rel="canonical"]')?.remove()
 		document.head.querySelector('meta[name="title"]')?.remove()
 		document.head.querySelector('meta[name="author"]')?.remove()

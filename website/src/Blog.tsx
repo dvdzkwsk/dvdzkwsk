@@ -2,6 +2,8 @@ import {ComponentChildren} from "preact"
 import {Link, PageLayout} from "./lib/LayoutUtil.js"
 import {Text, sluggify} from "./lib/TextUtil.js"
 import {parseDateString} from "./lib/DateUtil.js"
+import {useContext} from "preact/hooks"
+import {AppContext} from "./App.js"
 
 export interface BlogPost {
 	title: string
@@ -54,4 +56,8 @@ export const BlogPostRenderer = ({post}: {post: BlogPost}) => {
 			{post.render()}
 		</PageLayout>
 	)
+}
+
+export function useBlogPosts(): BlogPost[] {
+	return useContext(AppContext).posts
 }

@@ -1,9 +1,11 @@
 import {History} from "history"
 import {createContext} from "preact"
 import {CurrentRoute, PageMetadata} from "./Router.js"
+import {BlogPost} from "./Blog.js"
 
 export interface AppContext {
 	history: History
+	posts: BlogPost[]
 	meta: PageMetadata
 	metaHtml?: string
 }
@@ -14,6 +16,7 @@ export function createAppContext(history: History): AppContext {
 	return {
 		history,
 		meta: {},
+		posts: [],
 	}
 }
 

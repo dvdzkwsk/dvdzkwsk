@@ -5,7 +5,6 @@ import {About} from "./About.js"
 import {AppContext} from "./App.js"
 import {Home} from "./Home.js"
 import {PageLayout} from "./lib/LayoutUtil.js"
-import {getBlogPosts} from "./blog/index.js"
 import {BlogPostRenderer} from "./Blog.js"
 import {Text} from "./lib/TextUtil.js"
 import {Archive} from "./Archive.js"
@@ -17,7 +16,7 @@ export interface Route {
 	render(): ComponentChildren
 }
 
-export function getRoutes(): Route[] {
+export function getRoutes(context: AppContext): Route[] {
 	const routes: Route[] = [
 		{
 			path: "/",
@@ -35,8 +34,7 @@ export function getRoutes(): Route[] {
 			render: () => <Archive />,
 		},
 	]
-	const posts = getBlogPosts()
-	for (const post of posts) {
+	for (const post of context.posts) {
 		routes.push({
 			path: post.path,
 			title: post.title,
@@ -54,11 +52,11 @@ export interface PageMetadata {
 }
 
 export const CurrentRoute = () => {
-	const {history} = useContext(AppContext)
+	const context = useContext(AppContext)
 	const [, forceUpdate] = useState<any>(null)
-	const routes = useMemo(getRoutes, [])
+	const routes = useMemo(() => getRoutes(context), [context])
 	const currentRoute = routes.find((route) => {
-		return history.location.pathname === route.path
+		return context.history.location.pathname === route.path
 	})
 	const meta = useMemo(() => {
 		return {
@@ -69,8 +67,8 @@ export const CurrentRoute = () => {
 	}, [currentRoute])
 
 	useEffect(() => {
-		history.listen(() => forceUpdate({}))
-	}, [history])
+		return context.history.listen(() => forceUpdate({}))
+	}, [context.history])
 
 	if (!currentRoute) {
 		return <PageNotFound />

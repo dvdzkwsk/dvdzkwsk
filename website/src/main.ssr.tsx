@@ -6,6 +6,7 @@ import {renderToString} from "preact-render-to-string"
 import {Logger} from "@dvdzkwsk/logger"
 import {App, createAppContext} from "./App.js"
 import {Route, getRoutes} from "./Router.js"
+import {__unsafeGetBlogPosts} from "./blog/index.js"
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url))
 const logger = new Logger("SSR")
@@ -15,7 +16,11 @@ async function main() {
 		path.join(__dirname, "../dist/index.html"),
 		"utf8",
 	)
-	for (const route of getRoutes()) {
+	const history = createMemoryHistory()
+	const context = createAppContext(history)
+	context.posts = __unsafeGetBlogPosts()
+	const routes = getRoutes(context)
+	for (const route of routes) {
 		await buildRoute(route, templateHtml)
 	}
 }

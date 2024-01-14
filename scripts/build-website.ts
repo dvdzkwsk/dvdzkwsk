@@ -61,7 +61,7 @@ export async function rebuildBlogIndex(cwd: string) {
 	logger.debug("rebuildBlogIndex", "rebuilding index...")
 
 	const dst = path.join(cwd, "src/blog/index.registry.ts")
-	await fs.promises.writeFile(dst, `export default []`, "utf8")
+	await fs.promises.rm(dst, {force: true})
 
 	const files = await fs.promises
 		.readdir(path.join(cwd, "src/blog"))

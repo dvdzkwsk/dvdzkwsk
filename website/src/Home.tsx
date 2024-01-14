@@ -1,9 +1,8 @@
-import {BlogPostPreview} from "./Blog.js"
+import {BlogPostPreview, useBlogPosts} from "./Blog.js"
 import {PageLayout} from "./lib/LayoutUtil.js"
-import {getBlogPosts} from "./blog/index.js"
 
 export const Home = () => {
-	const recentBlogPosts = getBlogPosts()
+	const recentBlogPosts = useBlogPosts()
 	return (
 		<PageLayout>
 			{recentBlogPosts.map((post) => {

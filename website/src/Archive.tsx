@@ -1,7 +1,7 @@
-import {getBlogPosts} from "./blog/index.js"
 import {PageLayout, Link} from "./lib/LayoutUtil.js"
 import {formatDate, parseDateString} from "./lib/DateUtil.js"
 import {Text} from "./lib/TextUtil.js"
+import {useBlogPosts} from "./Blog.js"
 
 const BOOKS = [
 	{date: parseDateString("2023-12-26"), title: "The Three Body Problem"},
@@ -9,7 +9,7 @@ const BOOKS = [
 ]
 
 export const Archive = () => {
-	const posts = getBlogPosts()
+	const posts = useBlogPosts()
 	return (
 		<PageLayout>
 			<Text headingLevel={2}>Blog Posts</Text>

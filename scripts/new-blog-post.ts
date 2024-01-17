@@ -10,7 +10,7 @@ async function newBlogPost() {
 	const yyyy = today.getFullYear()
 	const mm = (today.getMonth() + 1).toString().padStart(2, "0")
 	const dd = today.getDate().toString().padStart(2, "0")
-	const title = process.argv.slice(2).join(" ")
+	const title = process.argv[2]
 
 	if (!title) {
 		console.error("Please provide a title for the blog post.")

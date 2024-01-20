@@ -1,24 +1,6 @@
 import * as url from "url"
 import * as path from "path"
-import {Logger} from "@dvdzkwsk/logger"
 import {getEnvVar} from "./_util.js"
-
-const logger = new Logger("Config")
-
-export interface GCPConfig {
-	projectId: string
-	keyFilename: string
-	serviceAccount: string
-}
-
-export function getGCPConfig(): GCPConfig {
-	const config: GCPConfig = {
-		projectId: getEnvVar("GCP_PROJECT_ID")!,
-		keyFilename: "secrets/gcp.keyfile.json",
-		serviceAccount: getEnvVar("GCP_SERVICE_ACCOUNT")!,
-	}
-	return config
-}
 
 export interface CloudflareConfig {
 	apiToken: string

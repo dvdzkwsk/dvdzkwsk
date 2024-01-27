@@ -3,7 +3,8 @@ import {formatDate, parseDateString} from "./lib/DateUtil.js"
 import {Text} from "./lib/TextUtil.js"
 import {useBlogPosts} from "./Blog.js"
 
-const BOOKS = [
+const READING_LOG = [
+	{date: parseDateString("2024-01-23"), title: "A Scanner Darkly"},
 	{date: parseDateString("2023-12-26"), title: "The Three Body Problem"},
 	{date: parseDateString("2023-12-15"), title: "Chickenhawk"},
 ]
@@ -30,7 +31,7 @@ export const Archive = () => {
 				Reading Log
 			</Text>
 			<ol className="Archive-List">
-				{BOOKS.map((book) => {
+				{READING_LOG.map((book) => {
 					return (
 						<li key={book.title}>
 							<Text as="span" mono>

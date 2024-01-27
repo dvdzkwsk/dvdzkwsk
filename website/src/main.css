@@ -1,6 +1,17 @@
 @import "./_normalize.css";
+@import "./lib/ThemeSwitcher.css";
 
-:root {
+html[data-theme="light"] {
+	--fg: rgb(0, 0, 0);
+	--fg-muted: rgb(100, 100, 100);
+
+	--bg: rgb(255, 255, 255);
+
+	--accent: rgb(255, 107, 1);
+	--accent-border: rgba(255, 107, 1, 0.8);
+}
+
+html[data-theme="dark"] {
 	--fg: rgb(234, 237, 243);
 	--fg-muted: rgb(175, 176, 178);
 
@@ -56,6 +67,23 @@ a:hover,
 a:focus-visible {
 	text-decoration: underline;
 	color: var(--accent);
+}
+
+ol,
+ul {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+button {
+	background: none;
+	color: inherit;
+	border: none;
+	padding: 0;
+	font: inherit;
+	cursor: pointer;
+	outline: inherit;
 }
 
 .container {
@@ -116,11 +144,4 @@ a:focus-visible {
 
 .Archive-Link {
 	text-decoration: none;
-}
-
-ol,
-ul {
-	margin: 0;
-	padding: 0;
-	list-style: none;
 }

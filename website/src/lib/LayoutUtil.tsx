@@ -1,6 +1,7 @@
 import {ComponentChildren, JSX} from "preact"
 import {useContext} from "preact/hooks"
 import {AppContext} from "../App.js"
+import {ThemeSwitcher} from "./ThemeSwitcher.js"
 
 export const PageLayout = ({children}: {children: ComponentChildren}) => {
 	return (
@@ -17,6 +18,7 @@ export const PageLayout = ({children}: {children: ComponentChildren}) => {
 							<Link href="https://github.com/dvdzkwsk">
 								GitHub
 							</Link>
+							<ThemeSwitcher />
 						</div>
 					</nav>
 				</div>

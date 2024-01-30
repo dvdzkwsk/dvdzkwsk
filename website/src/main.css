@@ -59,7 +59,7 @@ a {
 
 a:has(:is(h1, h2, h3, h4, h5)) {
 	display: block;
-	width: max-content;
+	max-width: max-content;
 	text-decoration: none;
 }
 
@@ -122,6 +122,22 @@ button {
 	display: flex;
 	gap: 1rem;
 	color: var(--fg-muted);
+}
+
+@media screen and (max-width: 768px) {
+	.PageHeader-title {
+		font-size: 1.25rem;
+	}
+
+	.PageHeader-links {
+		font-size: 0.85rem;
+	}
+
+	.theme-toggle {
+		--size: 1.25rem;
+		position: relative;
+		top: 1px;
+	}
 }
 
 .PageHeader-links a:not(:hover) {

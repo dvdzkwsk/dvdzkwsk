@@ -87,7 +87,7 @@ html {
 }
 
 .theme-toggle {
-	--size: 1.5rem;
+	--size: 1.25rem;
 	--icon-fill: hsl(210 10% 30%);
 	--icon-fill-hover: hsl(210 10% 15%);
 	background: none;

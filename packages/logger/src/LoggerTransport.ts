@@ -9,3 +9,19 @@ export interface LoggerTransport {
 export function setLoggerTransports(transports: LoggerTransport[]) {
 	ACTIVE_TRANSPORTS = transports
 }
+
+export interface ConsoleTransportOptions {
+	verbose: boolean
+}
+export class ConsoleTransport implements LoggerTransport {
+	constructor(public options: ConsoleTransportOptions) {}
+
+	log(message: LogMessage) {
+		const formatted = `[${message.context}.${message.subcontext}] ${message.message}`
+		if (message.aux && this.options.verbose) {
+			console[message.level](formatted, message.aux)
+		} else {
+			console[message.level](formatted)
+		}
+	}
+}

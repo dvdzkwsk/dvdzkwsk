@@ -3,7 +3,7 @@ import * as cp from "child_process"
 import * as url from "url"
 import * as path from "path"
 import * as assert from "assert"
-import {configureTransports, newConsoleTransport} from "@dvdzkwsk/logger"
+import {setLoggerTransports, ConsoleTransport} from "@dvdzkwsk/logger"
 
 async function loadEnvFile() {
 	try {
@@ -69,7 +69,7 @@ function isMainModule(importMeta: ImportMeta) {
 
 export async function execScript(importMeta: ImportMeta, fn: () => unknown) {
 	if (isMainModule(importMeta)) {
-		configureTransports([newConsoleTransport({verbose: true})])
+		setLoggerTransports([new ConsoleTransport({verbose: true})])
 		await loadEnvFile()
 		await fn()
 	}

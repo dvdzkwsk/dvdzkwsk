@@ -11,3 +11,4 @@ secrets
 dist
 tsconfig.tsbuildinfo
 website/src/blog/index.registry.ts
+**/public/assets/

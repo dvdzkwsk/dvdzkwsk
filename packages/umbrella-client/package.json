@@ -1,0 +1,13 @@
+{
+	"name": "@dvdzkwsk/umbrella-client",
+	"type": "module",
+	"scripts": {
+		"build": "dzx build",
+		"start": "dzx build --dev"
+	},
+	"packageType": "WebApp",
+	"dependencies": {
+		"@dvdzkwsk/build": "*",
+		"@dvdzkwsk/logger": "*"
+	}
+}

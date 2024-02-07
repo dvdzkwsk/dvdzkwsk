@@ -1,0 +1,18 @@
+{
+	"name": "@dvdzkwsk/umbrella-server",
+	"type": "module",
+	"scripts": {
+		"build": "dzx build",
+		"start": "dzx build --dev"
+	},
+	"packageType": "NodeApp",
+	"dependencies": {
+		"@dvdzkwsk/build": "*",
+		"@dvdzkwsk/logger": "*",
+		"cookie-parser": "^1.4.6",
+		"cors": "^2.8.5",
+		"express": "^4.18.2",
+		"helmet": "^7.1.0",
+		"winston": "^3.11.0"
+	}
+}

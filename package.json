@@ -17,7 +17,8 @@
 		"build-website": "tsx ./scripts/build-website.ts",
 		"deploy-website": "tsx ./scripts/deploy-website.ts",
 		"new-blog-post": "tsx ./scripts/new-blog-post.ts",
-		"start-umbrella": "concurrently --names \"client,server\" \"cd packages/umbrella-client && npm run start\" \"cd packages/umbrella-server && npm run start\""
+		"start-umbrella": "tsx ./scripts/build-umbrella.ts --dev",
+		"build-umbrella": "tsx ./scripts/build-umbrella.ts"
 	},
 	"devDependencies": {
 		"@preact/signals": "^1.2.2",

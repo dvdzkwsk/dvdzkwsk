@@ -1,11 +1,11 @@
 {
-	"name": "@dvdzkwsk/umbrella-server",
+	"name": "@dvdzkwsk/umbrella",
 	"type": "module",
 	"scripts": {
-		"build": "dzx build",
-		"start": "dzx build --dev"
+		"build": "tsx ./scripts/build.ts",
+		"start": "tsx ./scripts/build.ts --dev"
 	},
-	"packageType": "NodeApp",
+	"packageType": "WebApp",
 	"dependencies": {
 		"@dvdzkwsk/build": "*",
 		"@dvdzkwsk/logger": "*",

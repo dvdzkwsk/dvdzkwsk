@@ -6,6 +6,15 @@ export default createBlogPost({
 	title: "Quick Thoughts on Public Interfaces",
 	date: "2024-02-10",
 	render: () => <Content />,
+	preview: () => (
+		<p>
+			So you've got a cool library that does useful things. That's
+			amazing. Great work. Even better, it has helpful logging to help
+			people understand what it's doing when things go wrong. Well, read
+			more, since this post explores different ways to design an interface
+			for a logger module.
+		</p>
+	),
 })
 
 const Content = () => (

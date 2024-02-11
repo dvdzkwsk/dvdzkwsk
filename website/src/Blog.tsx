@@ -12,6 +12,7 @@ export interface BlogPost {
 	path: string
 	date: Date
 	render(): ComponentChildren
+	preview?(): ComponentChildren
 }
 
 interface CreateBlogPostOptions {
@@ -20,6 +21,7 @@ interface CreateBlogPostOptions {
 	slug?: string
 	date: string
 	render(): ComponentChildren
+	preview?(): ComponentChildren
 }
 export function createBlogPost(options: CreateBlogPostOptions) {
 	const slug = options.slug || sluggify(options.title)
@@ -45,7 +47,7 @@ export const BlogPostPreview = ({post}: {post: BlogPost}) => {
 					day: "numeric",
 				})}
 			</Text>
-			{post.render()}
+			{post.preview?.() ?? post.render()}
 		</article>
 	)
 }

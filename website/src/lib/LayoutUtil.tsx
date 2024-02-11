@@ -1,7 +1,6 @@
-import {ComponentChildren, JSX} from "preact"
-import {useContext} from "preact/hooks"
-import {AppContext} from "../App.js"
+import {ComponentChildren} from "preact"
 import {ThemeSwitcher} from "./ThemeSwitcher.js"
+import {Link} from "../Router.js"
 
 export const PageLayout = ({children}: {children: ComponentChildren}) => {
 	return (
@@ -27,26 +26,5 @@ export const PageLayout = ({children}: {children: ComponentChildren}) => {
 				<div className="container PageMain-content">{children}</div>
 			</main>
 		</div>
-	)
-}
-
-export const Link = (
-	props: JSX.HTMLAttributes<HTMLAnchorElement> & {href: string},
-) => {
-	const {history} = useContext(AppContext)
-
-	if (typeof props.href === "string" && props.href.startsWith("http")) {
-		return <a {...props} rel="noopener noreferrer" target="_blank" />
-	}
-	return (
-		<a
-			{...props}
-			onClick={(e) => {
-				if (!e.ctrlKey && !e.metaKey) {
-					e.preventDefault()
-					history.push(props.href)
-				}
-			}}
-		/>
 	)
 }

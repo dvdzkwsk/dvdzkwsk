@@ -1,4 +1,6 @@
-import {ComponentChildren, createElement} from "preact"
+import {ComponentChildren, JSX, createElement} from "preact"
+import {useContext} from "preact/hooks"
+import {AppContext} from "../App.js"
 
 const FONT_MONO = [
 	"ui-monospace",
@@ -54,4 +56,25 @@ export const Text = ({
 
 export function sluggify(str: string) {
 	return str.toLowerCase().replace(/(\s+)/g, "-").replace(/[()]/g, "")
+}
+
+export const Link = (
+	props: JSX.HTMLAttributes<HTMLAnchorElement> & {href: string},
+) => {
+	const {history} = useContext(AppContext)
+
+	if (typeof props.href === "string" && props.href.startsWith("http")) {
+		return <a {...props} rel="noopener noreferrer" target="_blank" />
+	}
+	return (
+		<a
+			{...props}
+			onClick={(e) => {
+				if (!e.ctrlKey && !e.metaKey) {
+					e.preventDefault()
+					history.push(props.href)
+				}
+			}}
+		/>
+	)
 }

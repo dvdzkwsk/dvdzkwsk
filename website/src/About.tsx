@@ -1,4 +1,5 @@
-import {Link, PageLayout} from "./lib/LayoutUtil.js"
+import {Link} from "./Router.js"
+import {PageLayout} from "./lib/LayoutUtil.js"
 import {Text} from "./lib/TextUtil.js"
 
 export const About = () => {

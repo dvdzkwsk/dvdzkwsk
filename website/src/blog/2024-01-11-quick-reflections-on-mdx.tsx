@@ -1,4 +1,4 @@
-import {Link} from "../lib/LayoutUtil.js"
+import {Link} from "../Router.js"
 import {createBlogPost} from "../Blog.js"
 
 export default createBlogPost({

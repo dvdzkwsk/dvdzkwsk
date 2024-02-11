@@ -1,4 +1,4 @@
-import {render, ComponentChildren} from "preact"
+import {render, ComponentChildren, JSX} from "preact"
 import {renderToStaticMarkup} from "preact-render-to-string"
 import {useContext, useState, useMemo, useEffect} from "preact/hooks"
 import {About} from "./About.js"
@@ -143,5 +143,26 @@ const PageNotFound = () => {
 		<PageLayout>
 			<Text>Not Found</Text>
 		</PageLayout>
+	)
+}
+
+export const Link = (
+	props: JSX.HTMLAttributes<HTMLAnchorElement> & {href: string},
+) => {
+	const {history} = useContext(AppContext)
+
+	if (typeof props.href === "string" && props.href.startsWith("http")) {
+		return <a {...props} rel="noopener noreferrer" target="_blank" />
+	}
+	return (
+		<a
+			{...props}
+			onClick={(e) => {
+				if (!e.ctrlKey && !e.metaKey) {
+					e.preventDefault()
+					history.push(props.href)
+				}
+			}}
+		/>
 	)
 }

@@ -1,5 +1,5 @@
 import {createBlogPost} from "../Blog.js"
-import {Link} from "../lib/LayoutUtil.js"
+import {Link} from "../Router.js"
 
 export default createBlogPost({
 	title: "Quick Thoughts on Public Interfaces",

@@ -1,9 +1,10 @@
 import {ComponentChildren} from "preact"
-import {Link, PageLayout} from "./lib/LayoutUtil.js"
+import {PageLayout} from "./lib/LayoutUtil.js"
 import {Text, sluggify} from "./lib/TextUtil.js"
 import {parseDateString} from "./lib/DateUtil.js"
 import {useContext} from "preact/hooks"
 import {AppContext} from "./App.js"
+import {Link} from "./Router.js"
 
 export interface BlogPost {
 	title: string

@@ -1,7 +1,8 @@
-import {PageLayout, Link} from "./lib/LayoutUtil.js"
+import {PageLayout} from "./lib/LayoutUtil.js"
 import {formatDate, parseDateString} from "./lib/DateUtil.js"
 import {Text} from "./lib/TextUtil.js"
 import {useBlogPosts} from "./Blog.js"
+import {Link} from "./Router.js"
 
 const READING_LOG = [
 	{date: parseDateString("2024-01-23"), title: "A Scanner Darkly"},

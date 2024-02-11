@@ -1,5 +1,6 @@
 import {createBlogPost} from "../Blog.js"
 import {Link} from "../Router.js"
+import {Code} from "../lib/Code.js"
 
 export default createBlogPost({
 	title: "Quick Thoughts on Public Interfaces",
@@ -177,7 +178,3 @@ function doPart2(userId: string, logger: InternalLogger) {
 		</Code>
 	</>
 )
-
-const Code = ({language, children}: {language: string; children?: string}) => {
-	return <pre>{children}</pre>
-}

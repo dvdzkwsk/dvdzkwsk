@@ -1,3 +1,4 @@
+@import "highlight.js/styles/github.css";
 @import "./_normalize.css";
 @import "./lib/ThemeSwitcher.css";
 
@@ -9,6 +10,8 @@ html[data-theme="light"] {
 
 	--accent: rgb(255, 107, 1);
 	--accent-border: rgba(255, 107, 1, 0.8);
+
+	--code-border: #000;
 }
 
 html[data-theme="dark"] {
@@ -19,6 +22,10 @@ html[data-theme="dark"] {
 
 	--accent: rgb(255, 107, 1);
 	--accent-border: rgba(255, 107, 1, 0.6);
+
+	--code-fg: rgb(0, 0, 0);
+	--code-bg: rgb(235, 235, 235);
+	--code-border: #000;
 }
 
 body {
@@ -160,4 +167,12 @@ button {
 
 .Archive-Link {
 	text-decoration: none;
+}
+
+.Code {
+	padding: 1rem;
+	color: var(--code-fg);
+	background: var(--code-bg);
+	border: 1px solid var(--code-border);
+	overflow: auto;
 }

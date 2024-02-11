@@ -14,18 +14,17 @@ export interface BuildContext {
 export function context(buildOptions: BuildOptions): BuildContext {
 	buildOptions = structuredClone(buildOptions)
 	buildOptions.env["NODE_ENV"] ??= process.env.NODE_ENV ?? buildOptions.mode
-	buildOptions.env["NODE_ENV"] = "asdadsada"
 	return {
 		buildOptions,
 	}
 }
 
 export interface BuildOptions {
+	workdir: string
 	target: "node" | "browser"
 	mode: "development" | "production"
-	src: string
 	dst: string
-	servedir?: string
+	publicdir?: string
 	entrypoints: string[]
 	env: EnvVars
 }
@@ -51,14 +50,15 @@ export async function buildToDisk(context: BuildContext) {
 				(await esbuild.analyzeMetafile(result.metafile)),
 		)
 	}
-	await fs.promises.cp(
-		path.resolve(buildOptions.src, "public"),
-		buildOptions.dst,
-		{
-			recursive: true,
-		},
-	)
-	// await updateHashedAssetPaths(buildOptions.src, result)
+	if (buildOptions.publicdir) {
+		await fs.promises.cp(
+			path.resolve(buildOptions.publicdir),
+			buildOptions.dst,
+			{
+				recursive: true,
+			},
+		)
+	}
 }
 
 function buildEsbuildOptions(
@@ -71,7 +71,6 @@ function buildEsbuildOptions(
 	switch (buildOptions.target) {
 		case "browser":
 			esbuildBuildOptions = {
-				absWorkingDir: buildOptions.src,
 				entryPoints: buildOptions.entrypoints,
 				outdir: path.resolve(buildOptions.dst, "assets"),
 				assetNames: "[name]",
@@ -81,7 +80,7 @@ function buildEsbuildOptions(
 				platform: "browser",
 				target: "esnext",
 				pure: [],
-				plugins: [EsbuildPluginPreact()],
+				plugins: [EsbuildPluginPreact(buildOptions.workdir)],
 				sourcemap: "linked",
 				define: stringifyEnvVars(buildOptions.env),
 			}
@@ -116,66 +115,20 @@ interface ServeOptions {
 	port?: number
 }
 export async function serve(context: BuildContext, options?: ServeOptions) {
-	const {servedir} = context.buildOptions
-	if (!servedir) {
-		throw logger.newError("serve", "missing servedir in build options")
+	const {publicdir} = context.buildOptions
+	if (!publicdir) {
+		throw logger.newError("serve", "missing publicdir in build options")
 	}
 	const esbuildBuildOptions = buildEsbuildOptions(context.buildOptions)
-	esbuildBuildOptions.outdir = path.resolve(servedir, "assets")
+	esbuildBuildOptions.outdir = path.resolve(publicdir, "assets")
 	const esbuildContext = await esbuild.context(esbuildBuildOptions)
 	const esbuildServeOptions: esbuild.ServeOptions = {
 		port: options?.port ?? 3000,
-		servedir: servedir,
-		fallback: path.join(servedir, "index.html"),
+		servedir: publicdir,
+		fallback: path.join(publicdir, "index.html"),
 	}
-	console.log({
-		context,
-		esbuildBuildOptions,
-		env: context.buildOptions.env,
-		esbuildServeOptions,
-	})
 	const server = await esbuildContext.serve(esbuildServeOptions)
 	logger.info("serve", `server running at: http://localhost:${server.port}`)
-}
-
-async function updateHashedAssetPaths(
-	src: string,
-	result: esbuild.BuildResult,
-) {
-	const outputs = Object.entries(result.metafile!.outputs).map((o) => {
-		return {
-			outputFile: o[0],
-			...o[1],
-		}
-	})
-	const mainJS = outputs.find((o) => {
-		return (
-			o.entryPoint?.endsWith("main.ts") ||
-			o.entryPoint?.endsWith("main.tsx")
-		)
-	})!
-	const mainCSSOutputFile =
-		mainJS.cssBundle ||
-		outputs.find((o) => {
-			return o.entryPoint?.endsWith("main.css")
-		})?.outputFile!
-
-	const htmlFiles = ["dist/index.html"]
-
-	for (const htmlFile of htmlFiles) {
-		let html = fs.readFileSync(path.resolve(src, htmlFile), "utf8")
-		html = html.replace(
-			"/assets/main.js",
-			mainJS.outputFile.replace("dist/assets", "/assets"),
-		)
-		if (mainCSSOutputFile) {
-			html = html.replace(
-				"/assets/main.css",
-				mainCSSOutputFile.replace("dist/assets", "/assets"),
-			)
-		}
-		await fs.promises.writeFile(path.resolve(cwd, htmlFile), html, "utf8")
-	}
 }
 
 export async function loadEnvFile(

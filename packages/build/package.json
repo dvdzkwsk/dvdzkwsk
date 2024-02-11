@@ -1,8 +1,5 @@
 {
 	"name": "@dvdzkwsk/build",
 	"type": "module",
-	"main": "./src/index.ts",
-	"bin": {
-		"dzx": "./bin/dzx.ts"
-	}
+	"main": "./src/index.ts"
 }

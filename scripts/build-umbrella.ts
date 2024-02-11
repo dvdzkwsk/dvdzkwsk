@@ -21,10 +21,10 @@ async function buildClient() {
 		],
 	})
 	const context = build.context({
-		src: path.join(WORKDIR, "client"),
+		workdir: WORKDIR,
 		dst: path.join(WORKDIR, "dist/client"),
 		entrypoints: [path.join(WORKDIR, "client/main.tsx")],
-		servedir: path.join(WORKDIR, "client/public"),
+		publicdir: path.join(WORKDIR, "client/public"),
 		target: "browser",
 		mode: BUILD_MODE,
 		env,
@@ -38,7 +38,7 @@ async function buildClient() {
 
 async function buildServer() {
 	const context = build.context({
-		src: path.join(WORKDIR, "server"),
+		workdir: WORKDIR,
 		dst: path.join(WORKDIR, "dist/server"),
 		entrypoints: [path.join(WORKDIR, "server/main.ts")],
 		target: "node",

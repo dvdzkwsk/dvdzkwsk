@@ -1,8 +1,8 @@
 import {createRequire} from "node:module"
 import alias from "esbuild-plugin-alias"
 
-export function EsbuildPluginPreact() {
-	const require = createRequire(import.meta.url)
+export function EsbuildPluginPreact(workdir: string) {
+	const require = createRequire(workdir)
 	return alias({
 		react: require.resolve("preact/compat"),
 		"react-dom": require.resolve("preact/compat"),

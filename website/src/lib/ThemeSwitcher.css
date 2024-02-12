@@ -88,8 +88,8 @@ html {
 
 .theme-toggle {
 	--size: 1.25rem;
-	--icon-fill: hsl(210 10% 30%);
-	--icon-fill-hover: hsl(210 10% 15%);
+	--icon-fill: var(--fg-muted, hsl(210 10% 30%));
+	--icon-fill-hover: var(--fg, hsl(210 10% 15%));
 	background: none;
 	border: none;
 	padding: 0;

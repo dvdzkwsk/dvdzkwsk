@@ -1,6 +1,4 @@
 /* Credit to https://web.dev/articles/building/a-theme-switch-component */
-@import "https://unpkg.com/open-props/easings.min.css";
-
 html {
 	color-scheme: light;
 	&[data-theme="dark"] {

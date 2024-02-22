@@ -1,4 +1,5 @@
 @import "highlight.js/styles/github.css";
+@import "./_easings.css";
 @import "./_normalize.css";
 @import "./lib/ThemeSwitcher.css";
 

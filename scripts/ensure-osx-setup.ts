@@ -19,6 +19,8 @@ async function ensureOSXSetup() {
 	await ensureOSXSettings()
 	await ensureDotFilesLinked(options)
 	await ensureConfigFilesLinked(options)
+	await ensureApps()
+	await ensureFonts()
 }
 
 async function ensureOSXSettings() {
@@ -155,6 +157,93 @@ async function ensureSymlink(
 			...link,
 			error: e,
 		})
+	}
+}
+
+function commandExists(command: string): boolean {
+	try {
+		cp.execSync(`which ${command}`)
+		return true
+	} catch (e) {
+		return false
+	}
+}
+
+async function ensureApps() {
+	logger.info("ensureApps", "ensuring homebrew is installed")
+	if (!commandExists("brew")) {
+		cp.execFileSync(
+			'/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+			{stdio: "inherit"},
+		)
+	}
+
+	logger.info("ensureApps", "install homebrew apps")
+	await doHomebrewInstall([
+		"brew tap homebrew/cask-versions",
+		"brew install coreutils",
+		"brew install hub",
+		"brew install git-extras",
+		"brew install zsh-completions",
+		"brew install nvim", // dark vim
+		"brew install jq", // json explorer
+		"brew install gron", // json flattener
+		"brew install tree", // print nice file trees
+		"brew install fasd", // easily jump to commonly-used directories
+		"brew install fzf", // general purpose fuzzy-finder
+		"brew install htop", // better `top`all
+		"brew install tldr", // better `man`
+		"brew install ripgrep", // better `grep`
+		"brew install fd", // better `find`
+		"brew install bat ", // better `less` or `cat`
+		"brew install tig", // better `git`
+		"brew install diff-so-fancy", // better `git diff`
+		"brew install pstree", // `ps` as a tree
+		"brew install up", // write pipes with instant live preview
+		"brew install iterm2 --cask",
+		"brew install docker --cask",
+		"brew install slack --cask",
+		"brew install flux --cask",
+	])
+	cp.execSync("$(brew --prefix)/opt/fzf/install", {stdio: "inherit"})
+}
+
+async function ensureFonts() {
+	logger.info("ensureFonts", "ensuring fonts...")
+	await doHomebrewInstall([
+		"brew tap homebrew/cask-fonts",
+		"brew install font-source-code-pro --cask",
+		"brew install font-hack-nerd-font --cask",
+	])
+}
+
+async function doHomebrewInstall(commands: string[]) {
+	const taps: string[] = []
+	const apps: string[] = []
+	const casks: string[] = []
+	for (const cmd of commands) {
+		if (cmd.includes("brew tap")) {
+			taps.push(cmd.split(" ")[2])
+		} else if (cmd.includes("--cask")) {
+			casks.push(cmd.split(" ")[2])
+		} else {
+			apps.push(cmd.split(" ")[2])
+		}
+	}
+	if (taps.length) {
+		cp.execSync(`brew tap ${taps.join(" ")}`, {stdio: "inherit"})
+	}
+	if (apps.length) {
+		cp.execSync(`brew install ${apps.join(" ")}`, {stdio: "inherit"})
+	}
+	if (casks.length) {
+		for (const cask of casks) {
+			try {
+				cp.execSync(`brew install ${cask} --cask`, {
+					stdio: "inherit",
+				})
+			} catch (e) {}
+		}
 	}
 }
 

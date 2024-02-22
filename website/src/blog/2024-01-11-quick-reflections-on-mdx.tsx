@@ -35,16 +35,17 @@ const Content = () => (
 			first place. Writing MDX is comparable to writing raw HTML inside a
 			Markdown file and pretending that you're still just writing
 			Markdown, as if the important part of Markdown is the `.md`
-			extension and not its goals.
+			extension.
 		</p>
 		<p>
-			MDX says it can give you the best of both worlds. In reality, it
-			gives you your own unique, non-standard world that requires a
-			complicated toolchain to work. It's far more than just a syntax
-			extension; it roots into your React components, your dependencies,
-			your build system. What it isn't is Markdown. If you need the extra
-			power, avoid the extra step of going from React to Markdown just to
-			back to React again. Writing JSX really isn't that bad.
+			MDX appeals to that part of you that thinks you can have the best of
+			both worlds. In reality, it gives you your own unique, non-standard
+			world that requires a complicated toolchain to work. It's far more
+			than just a syntax extension; it roots into your React components,
+			your dependencies, your build system. What it isn't is Markdown. If
+			you need the extra power, avoid the extra step of going from React
+			to Markdown just to back to React again. Writing JSX really isn't
+			that bad.
 		</p>
 	</>
 )

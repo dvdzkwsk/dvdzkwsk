@@ -2,7 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
 import htmlMinify from "html-minifier-terser"
-import {Logger} from "@dvdzkwsk/logger"
+import {Logger} from "@pkg/logger/Logger.js"
 import {execScript} from "./_util.js"
 import {WebsiteConfig, getWebsiteConfig} from "./_config.js"
 

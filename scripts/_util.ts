@@ -3,7 +3,7 @@ import * as cp from "child_process"
 import * as url from "url"
 import * as path from "path"
 import * as assert from "assert"
-import {setLoggerTransports, ConsoleTransport} from "@dvdzkwsk/logger"
+import {setLoggerTransports, ConsoleTransport} from "@pkg/logger/Logger.js"
 
 async function loadEnvFile() {
 	try {

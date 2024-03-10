@@ -4,7 +4,7 @@ import * as os from "os"
 import * as fs from "fs"
 import * as path from "path"
 import {execScript} from "./_util.js"
-import {Logger} from "@dvdzkwsk/logger"
+import {Logger} from "@pkg/logger/Logger.js"
 
 const logger = new Logger("EnsureOSXSetup")
 

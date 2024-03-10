@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as esbuild from "esbuild"
-import {Logger} from "@dvdzkwsk/logger"
+import {Logger} from "@pkg/logger/Logger.js"
 import {EsbuildPluginPreact} from "./plugins/EsbuildPluginPreact.js"
 
 const logger = new Logger("Build")

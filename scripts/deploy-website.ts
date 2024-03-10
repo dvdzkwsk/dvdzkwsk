@@ -1,4 +1,4 @@
-import {Logger} from "@dvdzkwsk/logger"
+import {Logger} from "@pkg/logger/Logger.js"
 import {deepEqual, execScript} from "./_util.js"
 import {
 	CloudflareConfig,

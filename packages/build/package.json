@@ -1,5 +1,0 @@
-{
-	"name": "@dvdzkwsk/build",
-	"type": "module",
-	"main": "./src/index.ts"
-}

@@ -1,6 +1,6 @@
 import * as path from "path"
-import {ConsoleTransport, setLoggerTransports} from "@dvdzkwsk/logger"
-import * as build from "@dvdzkwsk/build"
+import {setLoggerTransports, ConsoleTransport} from "@pkg/logger/Logger.js"
+import * as build from "@pkg/build/Build.js"
 
 const WORKDIR = path.join(import.meta.dirname, "..", "packages/umbrella")
 const DEV_MODE = process.argv.includes("--dev")

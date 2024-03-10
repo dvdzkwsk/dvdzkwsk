@@ -8,9 +8,6 @@
 	"engines": {
 		"node": ">=20.10.0"
 	},
-	"workspaces": [
-		"./packages/*"
-	],
 	"scripts": {
 		"start": "npm run start-website",
 		"start-website": "tsx ./scripts/build-website.ts --dev",
@@ -22,7 +19,6 @@
 	},
 	"devDependencies": {
 		"@preact/signals": "^1.2.2",
-		"@supabase/supabase-js": "^2.39.3",
 		"@types/html-minifier-terser": "^7.0.2",
 		"@types/node": "^20.11.5",
 		"concurrently": "^8.2.2",

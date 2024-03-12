@@ -107,6 +107,16 @@ async function ensureConfigFilesLinked(options: Options) {
 		},
 		options,
 	)
+	logger.debug("ensureConfigFilesLinked", "ensure config file", {
+		name: "zed/settings.json",
+	})
+	await ensureSymlink(
+		{
+			from: path.join(os.homedir(), ".config/zed/settings.json"),
+			to: path.join(process.cwd(), "dotfiles/config/zed/settings.json"),
+		},
+		options,
+	)
 }
 
 /**

@@ -128,6 +128,7 @@ alias diff="colordiff"
 alias cat="bat"
 alias plan="$EDITOR ~/Workspace/docs/plan.txt"
 alias t="$EDITOR ~/Workspace/docs/triage.txt"
+alias q="quilt"
 
 function snapshot {
 	cd ~/Workspace

@@ -13,6 +13,8 @@ interface Options {
 }
 
 async function ensureOSXSetup() {
+	await ensureDependencies()
+
 	const options: Options = {
 		force: process.argv.includes("--force"),
 	}
@@ -21,6 +23,20 @@ async function ensureOSXSetup() {
 	await ensureConfigFilesLinked(options)
 	await ensureApps()
 	await ensureFonts()
+}
+
+async function ensureDependencies() {
+	if (!commandExists("brew")) {
+		logger.info("ensureDependencies", "installing homebrew...")
+		cp.execSync(
+			'/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
+			{stdio: "inherit"},
+		)
+	}
+	if (!commandExists("gum")) {
+		logger.info("ensureHomebrew", "installing gum...")
+		cp.execSync("brew install gum", {stdio: "inherit"})
+	}
 }
 
 async function ensureOSXSettings() {
@@ -180,14 +196,6 @@ function commandExists(command: string): boolean {
 }
 
 async function ensureApps() {
-	logger.info("ensureApps", "ensuring homebrew is installed")
-	if (!commandExists("brew")) {
-		cp.execFileSync(
-			'/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
-			{stdio: "inherit"},
-		)
-	}
-
 	logger.info("ensureApps", "install homebrew apps")
 	await doHomebrewInstall([
 		"brew tap homebrew/cask-versions",

@@ -133,6 +133,16 @@ async function ensureConfigFilesLinked(options: Options) {
 		},
 		options,
 	)
+	logger.debug("ensureConfigFilesLinked", "ensure config file", {
+		name: "zed/keymap.json",
+	})
+	await ensureSymlink(
+		{
+			from: path.join(os.homedir(), ".config/zed/keymap.json"),
+			to: path.join(process.cwd(), "dotfiles/config/zed/keymap.json"),
+		},
+		options,
+	)
 }
 
 /**

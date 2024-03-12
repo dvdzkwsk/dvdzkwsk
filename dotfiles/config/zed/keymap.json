@@ -1,0 +1,15 @@
+[
+	{
+		"bindings": {
+			"shift-escape": null
+		}
+	},
+	{
+		"context": "Editor",
+		"bindings": {
+			"ctrl-shift-up": "editor::AddSelectionAbove",
+			"ctrl-shift-down": "editor::AddSelectionBelow",
+			"shift-escape": null
+		}
+	}
+]

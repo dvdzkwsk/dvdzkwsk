@@ -7,12 +7,15 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
-	"theme": "Atelier Cave Light",
+	"theme": "Gruvbox Dark",
 	"ui_font_size": 16,
 	"buffer_font_size": 14,
 	"tab_size": 4,
 	"buffer_line_height": "standard",
 	"buffer_font_family": "Zed Mono",
+	"extend_comment_on_newline": false,
+	"hard_tabs": true,
+	"use_autoclose": false,
 	"buffer_font_features": {
 		// disable ligatures
 		"calt": false

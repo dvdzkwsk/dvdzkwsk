@@ -18,6 +18,13 @@ async function ensureOSXSetup() {
 	const options: Options = {
 		force: process.argv.includes("--force"),
 	}
+
+	if (process.argv.includes("--link")) {
+		await ensureDotFilesLinked(options)
+		await ensureConfigFilesLinked(options)
+		return
+	}
+
 	await ensureOSXSettings()
 	await ensureDotFilesLinked(options)
 	await ensureConfigFilesLinked(options)

@@ -10,5 +10,5 @@ secrets
 .cache
 dist
 tsconfig.tsbuildinfo
-website/src/blog/index.registry.ts
-**/public/assets/
+_generated
+**/static/assets/

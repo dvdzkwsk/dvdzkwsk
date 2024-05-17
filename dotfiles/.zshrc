@@ -128,7 +128,11 @@ alias diff="colordiff"
 alias cat="bat"
 alias plan="$EDITOR ~/Workspace/docs/plan.txt"
 alias t="$EDITOR ~/Workspace/docs/triage.txt"
-alias q="quilt"
+
+export QUILT_NOTEBOOK="$HOME/Documents/Notebook"
+function quilt {
+  bun run $HOME/Documents/Projects/quilt/cmd/quilt-cli/Main.ts "$@"
+}
 
 function snapshot {
 	cd ~/Workspace

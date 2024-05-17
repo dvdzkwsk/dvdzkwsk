@@ -9,18 +9,14 @@
 		"node": ">=20.10.0"
 	},
 	"scripts": {
-		"start": "npm run start-website",
-		"start-website": "tsx ./scripts/build-website.ts --dev",
-		"build-website": "tsx ./scripts/build-website.ts",
-		"deploy-website": "tsx ./scripts/deploy-website.ts",
-		"new-blog-post": "tsx ./scripts/new-blog-post.ts",
-		"start-umbrella": "tsx ./scripts/build-umbrella.ts --dev",
-		"build-umbrella": "tsx ./scripts/build-umbrella.ts"
+		"website": "bun ./tools/Build.ts ./cmd/website",
+		"setup": "node ./tools/Setup.js"
 	},
 	"devDependencies": {
 		"@preact/signals": "^1.2.2",
 		"@types/html-minifier-terser": "^7.0.2",
 		"@types/node": "^20.11.5",
+		"bun": "^1.1.8",
 		"concurrently": "^8.2.2",
 		"esbuild": "^0.19.11",
 		"esbuild-plugin-alias": "^0.2.1",
@@ -30,7 +26,6 @@
 		"preact": "^10.19.3",
 		"preact-render-to-string": "^6.3.1",
 		"prettier": "^3.2.5",
-		"tsx": "^4.7.0",
 		"typescript": "^5.3.3"
 	}
 }

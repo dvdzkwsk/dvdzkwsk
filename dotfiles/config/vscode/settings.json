@@ -1,60 +1,59 @@
 {
-	"editor.codeActionsOnSave": {
-		"source.fixAll.eslint": "explicit"
-	},
-	"editor.formatOnSave": true,
-	"editor.minimap.enabled": false,
-	"editor.renderControlCharacters": false,
-	"editor.renderWhitespace": "none",
-	"explorer.confirmDelete": false,
-	"explorer.confirmDragAndDrop": false,
-	"files.associations": {
-		"*.css": "postcss"
-	},
-	"git.enableSmartCommit": true,
-	"gitlens.codeLens.enabled": false,
-	"gitlens.currentLine.enabled": false,
-	"gitlens.hovers.currentLine.over": "line",
-	"go.autocompleteUnimportedPackages": true,
-	"go.buildOnSave": "off",
-	"go.formatTool": "goimports",
-	"go.lintOnSave": "off",
-	"go.toolsManagement.autoUpdate": true,
-	"go.useLanguageServer": true,
-	"go.vetOnSave": "off",
-	"javascript.updateImportsOnFileMove.enabled": "never",
-	"security.workspace.trust.untrustedFiles": "open",
-	"typescript.preferences.importModuleSpecifier": "shortest",
-	"typescript.updateImportsOnFileMove.enabled": "always",
-	"window.restoreWindows": "none",
-	"workbench.editor.enablePreview": false,
-	"workbench.editor.showTabs": "none",
-	"workbench.startupEditor": "none",
-	"[css]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[javascript]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[json]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[jsonc]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[go]": {
-		"editor.formatOnSave": true
-	},
-	"[html]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[markdown]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[typescript]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[typescriptreact]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	}
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "editor.formatOnSave": true,
+  "editor.minimap.enabled": false,
+  "editor.renderControlCharacters": false,
+  "editor.renderWhitespace": "none",
+  "explorer.confirmDelete": false,
+  "explorer.confirmDragAndDrop": false,
+  "git.enableSmartCommit": true,
+  "gitlens.codeLens.enabled": false,
+  "gitlens.currentLine.enabled": false,
+  "gitlens.hovers.currentLine.over": "line",
+  "go.autocompleteUnimportedPackages": true,
+  "go.buildOnSave": "off",
+  "go.formatTool": "goimports",
+  "go.lintOnSave": "off",
+  "go.toolsManagement.autoUpdate": true,
+  "go.useLanguageServer": true,
+  "go.vetOnSave": "off",
+  "javascript.updateImportsOnFileMove.enabled": "never",
+  "security.workspace.trust.untrustedFiles": "open",
+  "typescript.preferences.importModuleSpecifier": "shortest",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "window.restoreWindows": "none",
+  "workbench.editor.enablePreview": false,
+  "workbench.editor.showTabs": "none",
+  "workbench.startupEditor": "none",
+  "[css]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[go]": {
+    "editor.formatOnSave": true
+  },
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "workbench.colorTheme": "Default Dark+",
+  "svelte.enable-ts-plugin": true
 }

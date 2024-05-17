@@ -1,9 +1,11 @@
 # dvdzkwsk
 
 ```sh
-# build my personal website for production
-npm run build-website
+# setup the repo after cloning it.
+# you do not need to run `npm install` first.
+npm run setup
 
-# start the website dev server
-npm run build-website -- --dev
+# build my website (dvdzkwsk.com)
+# add --dev to start the dev server.
+bun website
 ```

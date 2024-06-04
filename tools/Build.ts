@@ -13,7 +13,7 @@ async function buildCli() {
 	const target = args[0]
 
 	if (path.basename(target) === "website") {
-		await buildBlogIndex()
+		// await buildBlogIndex()
 	}
 	if (fs.existsSync(path.join(target, "Main.tsx"))) {
 		await buildWebApp(target)

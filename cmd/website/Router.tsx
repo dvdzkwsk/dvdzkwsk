@@ -1,12 +1,8 @@
 import {render, ComponentChildren, JSX} from "preact"
 import {renderToStaticMarkup} from "preact-render-to-string"
 import {useContext, useState, useMemo, useEffect} from "preact/hooks"
-import {About} from "./pages/About.js"
 import {AppContext} from "./App.js"
 import {Home} from "./pages/Home.js"
-import {BlogPostPage} from "./pages/BlogPost.js"
-import {Archive} from "./pages/Archive.js"
-import {getBlogPosts} from "./blog/BlogUtil.js"
 import {NotFound} from "./pages/NotFound.js"
 
 const WEBSITE_DOMAIN = "dvdzkwsk.com"
@@ -25,25 +21,7 @@ export function getRoutes(context: AppContext): Route[] {
 			title: "Home",
 			render: () => <Home />,
 		},
-		{
-			path: "/about",
-			title: "About",
-			render: () => <About />,
-		},
-		{
-			path: "/archive",
-			title: "Archive",
-			render: () => <Archive />,
-		},
 	]
-	for (const post of getBlogPosts()) {
-		routes.push({
-			path: post.path,
-			title: post.title,
-			description: post.description,
-			render: () => <BlogPostPage post={post} />,
-		})
-	}
 	return routes
 }
 

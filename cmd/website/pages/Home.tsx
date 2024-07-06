@@ -33,10 +33,10 @@ export const Home = () => {
 				My name is David Zukowski. I'm a software engineer based out of
 				Washington state. I currently work at{" "}
 				<Link href="https://material.security/">Material Security</Link>
-				. We do some cool stuff to secure your Google Workspace and
-				Microsoft 365 environments. Prior to that I worked at Microsoft
-				on a slimmer, faster version of Microsoft Teams. You can see my
-				full work history{" "}
+				. We do some cool stuff to secure Google Workspace and Microsoft
+				365 environments. Prior to that I worked at Microsoft on a
+				slimmer, faster version of Microsoft Teams. You can see my full
+				work history{" "}
 				<Link href="https://www.linkedin.com/in/david-zukowski-0318a475/">
 					here
 				</Link>
@@ -45,11 +45,11 @@ export const Home = () => {
 			<Text>
 				My steadfast companion is Kona, the friendliest corgi you'll
 				ever meet. We spend lots of time visiting local parks. I'm an
-				avid hockey player, beginner guitarist, and am easily spotted as
-				that guy over there staring up at planes.
+				avid hockey player and a beginner guitarist. Easily spotted in a
+				crowd as that guy over there staring up at airplanes.
 			</Text>
 			<Text headingLevel={2} style={{marginTop: "2rem"}}>
-				Books I'm Reading
+				2024 Reading List
 			</Text>
 			<ol
 				style={{

@@ -14,10 +14,12 @@
 	},
 	"devDependencies": {
 		"@preact/signals": "^1.2.2",
+		"@types/bun": "^1.1.13",
 		"@types/html-minifier-terser": "^7.0.2",
 		"@types/node": "^20.11.5",
 		"bun": "^1.1.8",
 		"concurrently": "^8.2.2",
+		"date-fns": "^4.1.0",
 		"esbuild": "^0.19.11",
 		"esbuild-plugin-alias": "^0.2.1",
 		"highlight.js": "^11.9.0",

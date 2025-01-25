@@ -4,7 +4,7 @@ import {createMemoryHistory} from "history"
 import {renderToString} from "preact-render-to-string"
 import {Logger} from "@pkg/logger/Logger.js"
 import {App, createAppContext} from "./App.js"
-import {Route, getRoutes} from "./Router.js"
+import {Route, ROUTES} from "./Router.js"
 import {dirname} from "../../tools/CliUtil.js"
 
 const OUT_DIR = path.join(dirname(import.meta), "dist")
@@ -18,8 +18,7 @@ export async function ssr() {
 	)
 	const history = createMemoryHistory()
 	const context = createAppContext(history)
-	const routes = getRoutes(context)
-	for (const route of routes) {
+	for (const route of ROUTES) {
 		await buildRoute(route, templateHtml)
 	}
 }

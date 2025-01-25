@@ -13,29 +13,18 @@ export interface Route {
 	description?: string
 	render(): ComponentChildren
 }
-
-export function getRoutes(context: AppContext): Route[] {
-	const routes: Route[] = [
-		{
-			path: "/",
-			title: "Home",
-			render: () => <Home />,
-		},
-	]
-	return routes
-}
-
-export interface PageMetadata {
-	uri?: string
-	title?: string
-	description?: string
-}
+export const ROUTES: Route[] = [
+	{
+		path: "/",
+		title: "Home",
+		render: () => <Home />,
+	},
+]
 
 export const CurrentRoute = () => {
 	const context = useContext(AppContext)
 	const [, forceUpdate] = useState<any>(null)
-	const routes = useMemo(() => getRoutes(context), [context])
-	const currentRoute = routes.find((route) => {
+	const currentRoute = ROUTES.find((route) => {
 		return context.history.location.pathname === route.path
 	})
 	const meta = useMemo(() => {
@@ -61,6 +50,11 @@ export const CurrentRoute = () => {
 	)
 }
 
+export interface PageMetadata {
+	uri?: string
+	title?: string
+	description?: string
+}
 const PageMetadata = ({meta}: {meta: PageMetadata}) => {
 	const appContext = useContext(AppContext)
 	appContext.meta = meta

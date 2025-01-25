@@ -4,7 +4,6 @@ import * as esbuild from "esbuild"
 import alias from "esbuild-plugin-alias"
 import {Logger} from "@pkg/logger/Logger.js"
 import {execScript} from "./CliUtil.js"
-import {buildBlogIndex} from "./BlogUtil.js"
 
 const logger = new Logger("Build")
 
@@ -12,9 +11,6 @@ async function buildCli() {
 	const args = process.argv.slice(2)
 	const target = args[0]
 
-	if (path.basename(target) === "website") {
-		// await buildBlogIndex()
-	}
 	if (fs.existsSync(path.join(target, "Main.tsx"))) {
 		await buildWebApp(target)
 	} else if (fs.existsSync(path.join(target, "Main.ts"))) {

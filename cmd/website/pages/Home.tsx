@@ -3,9 +3,11 @@ import {PageLayout} from "../components/PageLayout.js"
 import {Text} from "../lib/TextUtil.js"
 
 const READING_LOG = [
-	{title: "Into the Wild", author: "John Krakauer"},
-	{title: "Smokejumper", author: "Jason Ramos"},
+	{title: "Girl with Curious Hair", author: "David Foster Wallace"},
+	{title: "Ubik", author: "Philip K. Dick"},
 	{title: "Galápagos", author: "Kurt Vonnegut"},
+	{title: "Smokejumper", author: "Jason Ramos"},
+	{title: "Into the Wild", author: "John Krakauer"},
 ]
 
 export const Home = () => {

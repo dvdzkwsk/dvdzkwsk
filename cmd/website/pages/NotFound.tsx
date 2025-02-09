@@ -1,5 +1,5 @@
 import {PageLayout} from "../components/PageLayout.js"
-import {Text} from "../lib/TextUtil.js"
+import {Text} from "../components/Text.js"
 
 export const NotFound = () => {
 	return (

@@ -1,6 +1,6 @@
 import {Link} from "../Router.js"
 import {PageLayout} from "../components/PageLayout.js"
-import {Text} from "../lib/TextUtil.js"
+import {Text} from "../components/Text.js"
 
 const READING_LOG = [
 	{title: "Girl with Curious Hair", author: "David Foster Wallace"},

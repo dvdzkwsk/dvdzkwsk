@@ -1,3 +1,5 @@
+import {cx} from "../lib/ReactUtil.js"
+import "./Text.css"
 import {ComponentChildren, createElement} from "preact"
 
 const FONT_MONO = [
@@ -19,6 +21,7 @@ interface TextProps {
 	as?: any
 	children: ComponentChildren
 	muted?: boolean
+	className?: string
 	headingLevel?: 1 | 2 | 3 | 4 | 5 | 6
 	style?: any
 	mono?: boolean
@@ -27,6 +30,7 @@ interface TextProps {
 export const Text = ({
 	as,
 	children,
+	className,
 	muted,
 	headingLevel,
 	mono,
@@ -49,6 +53,8 @@ export const Text = ({
 			...rest,
 		})
 	}
+	props.className = cx("Text", className)
+	props.style["--leading"] = 5
 	return createElement(as || (inline ? "span" : "p"), props, children)
 }
 

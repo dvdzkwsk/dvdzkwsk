@@ -1,4 +1,5 @@
 import "./theme/Normalize.css"
+import "./theme/Theme.css"
 import {History} from "history"
 import {createContext} from "preact"
 import {CurrentRoute, PageMetadata} from "./Router.js"

@@ -7,23 +7,35 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
-    "theme": "Gruvbox Dark",
-    "ui_font_size": 16,
-    "buffer_font_size": 14,
-    "tab_size": 4,
-    "buffer_line_height": "standard",
-    "buffer_font_family": "Zed Mono",
-    "extend_comment_on_newline": false,
-    "hard_tabs": true,
-    "use_autoclose": false,
-    "buffer_font_features": {
-        // disable ligatures
-        "calt": false
-    },
-    "languages": {
-        "Markdown": {
-            "tab_size": 4,
-            "soft_wrap": "none"
-        }
-    }
+	"theme": "Gruvbox Dark",
+	"ui_font_size": 14,
+	"buffer_font_size": 14,
+	"tab_size": 4,
+	"buffer_line_height": "standard",
+	"buffer_font_family": "Zed Plex Mono",
+	"buffer_font_features": {
+		// disable ligatures
+		"calt": false
+	},
+	"ui_font_family": "Zed Plex Mono",
+	// Whether to start a new line with a comment when a previous line is a comment as well.
+	"extend_comment_on_newline": false,
+	// // Whether to indent lines using tab characters, as opposed to multiple spaces.
+	"hard_tabs": true,
+	// Whether to automatically add matching closing characters when typing
+	// opening parenthesis, bracket, brace, single or double quote characters.
+	// For example, when you type (, Zed will add a closing ) at the correct position.
+	"use_autoclose": false,
+	"git": {
+		"git_gutter": "tracked_files",
+		"inline_blame": {
+			"enabled": false
+		}
+	},
+	"languages": {
+		"Markdown": {
+			"tab_size": 4,
+			"soft_wrap": "none"
+		}
+	}
 }

@@ -7,41 +7,29 @@ import {execScript} from "./CliUtil.js"
 
 const logger = new Logger("EnsureOSXSetup")
 
-interface Options {
+interface ProgramOptions {
 	force: boolean
 }
 
 async function ensureMacSetup() {
-	await ensureDependencies()
-
-	const options: Options = {
+	const options: ProgramOptions = {
 		force: process.argv.includes("--force"),
-	}
-
-	if (process.argv.includes("--link")) {
-		await ensureDotFilesLinked(options)
-		await ensureConfigFilesLinked(options)
-		return
 	}
 
 	await ensureOSXSettings()
 	await ensureDotFilesLinked(options)
 	await ensureConfigFilesLinked(options)
+	await ensureHomebrew()
 	await ensureApps()
 	await ensureFonts()
 }
 
-async function ensureDependencies() {
+async function ensureHomebrew() {
 	if (!commandExists("brew")) {
-		logger.info("ensureDependencies", "installing homebrew...")
-		cp.execSync(
+		logger.info("ensureMacSetup", "installing homebrew...")
+		execSync(
 			'/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"',
-			{stdio: "inherit"},
 		)
-	}
-	if (!commandExists("gum")) {
-		logger.info("ensureHomebrew", "installing gum...")
-		cp.execSync("brew install gum", {stdio: "inherit"})
 	}
 }
 
@@ -93,36 +81,36 @@ async function ensureOSXSettings() {
 	logger.info("ensureOSXSettings", "applying settings...")
 	for (const cmd of commands) {
 		console.debug(cmd)
-		cp.execSync(cmd, {stdio: "inherit"})
+		execSync(cmd)
 	}
 }
 
-async function ensureDotFilesLinked(options: Options) {
+async function ensureDotFilesLinked(options: ProgramOptions) {
 	for (const name of fs.readdirSync("dotfiles")) {
 		if (!name.startsWith(".")) continue
 
 		logger.debug("ensureDotFilesLinked", "ensure dotfile", {name})
 		await ensureSymlink(
 			{
-				from: path.join(os.homedir(), name),
-				to: path.join(process.cwd(), "dotfiles", name),
+				path: path.join(os.homedir(), name),
+				target: path.join(process.cwd(), "dotfiles", name),
 			},
 			options,
 		)
 	}
 }
 
-async function ensureConfigFilesLinked(options: Options) {
+async function ensureConfigFilesLinked(options: ProgramOptions) {
 	logger.debug("ensureConfigFilesLinked", "ensure config file", {
 		name: "vscode/settings.json",
 	})
 	await ensureSymlink(
 		{
-			from: path.join(
+			path: path.join(
 				os.homedir(),
 				"Library/Application Support/Code/User/settings.json",
 			),
-			to: path.join(
+			target: path.join(
 				process.cwd(),
 				"dotfiles/config/vscode/settings.json",
 			),
@@ -134,8 +122,11 @@ async function ensureConfigFilesLinked(options: Options) {
 	})
 	await ensureSymlink(
 		{
-			from: path.join(os.homedir(), ".config/zed/settings.json"),
-			to: path.join(process.cwd(), "dotfiles/config/zed/settings.json"),
+			path: path.join(os.homedir(), ".config/zed/settings.json"),
+			target: path.join(
+				process.cwd(),
+				"dotfiles/config/zed/settings.json",
+			),
 		},
 		options,
 	)
@@ -144,8 +135,8 @@ async function ensureConfigFilesLinked(options: Options) {
 	})
 	await ensureSymlink(
 		{
-			from: path.join(os.homedir(), ".config/zed/keymap.json"),
-			to: path.join(process.cwd(), "dotfiles/config/zed/keymap.json"),
+			path: path.join(os.homedir(), ".config/zed/keymap.json"),
+			target: path.join(process.cwd(), "dotfiles/config/zed/keymap.json"),
 		},
 		options,
 	)
@@ -155,14 +146,14 @@ async function ensureConfigFilesLinked(options: Options) {
  * Ensures a symlink exists at `src` and points to `dst`.
  */
 async function ensureSymlink(
-	link: {from: string; to: string},
+	link: {path: string; target: string},
 	options: {force: boolean},
 ) {
-	if (fs.existsSync(link.from)) {
-		const stat = await fs.promises.lstat(link.from)
+	if (fs.existsSync(link.path)) {
+		const stat = await fs.promises.lstat(link.path)
 		if (stat.isSymbolicLink()) {
-			const linksTo = await fs.promises.readlink(link.from)
-			if (linksTo === link.to) {
+			const linksTo = await fs.promises.readlink(link.path)
+			if (linksTo === link.target) {
 				return
 			}
 		}
@@ -179,7 +170,7 @@ async function ensureSymlink(
 			link,
 		)
 		try {
-			await fs.promises.rm(link.from, {force: true})
+			await fs.promises.rm(link.path, {force: true})
 		} catch (e) {
 			throw logger.newError(
 				"ensureSymlink",
@@ -192,7 +183,8 @@ async function ensureSymlink(
 		}
 	}
 	try {
-		await fs.promises.symlink(link.to, link.from, "file")
+		fs.mkdirSync(path.dirname(link.path), {recursive: true})
+		await fs.promises.symlink(link.target, link.path, "file")
 		logger.debug("ensureSymlink", "created symlink", link)
 	} catch (e) {
 		throw logger.newError("ensureSymlink", "failed to create symlink", {
@@ -204,7 +196,7 @@ async function ensureSymlink(
 
 function commandExists(command: string): boolean {
 	try {
-		cp.execSync(`which ${command}`)
+		execSync(`which ${command}`)
 		return true
 	} catch (e) {
 		return false
@@ -214,71 +206,97 @@ function commandExists(command: string): boolean {
 async function ensureApps() {
 	logger.info("ensureApps", "install homebrew apps")
 	await doHomebrewInstall([
-		"brew tap homebrew/cask-versions",
-		"brew install coreutils",
-		"brew install hub",
-		"brew install git-extras",
-		"brew install zsh-completions",
-		"brew install nvim", // dark vim
-		"brew install jq", // json explorer
-		"brew install gron", // json flattener
-		"brew install tree", // print nice file trees
-		"brew install fasd", // easily jump to commonly-used directories
-		"brew install fzf", // general purpose fuzzy-finder
-		"brew install htop", // better `top`all
-		"brew install tldr", // better `man`
-		"brew install ripgrep", // better `grep`
-		"brew install fd", // better `find`
-		"brew install bat ", // better `less` or `cat`
-		"brew install tig", // better `git`
-		"brew install diff-so-fancy", // better `git diff`
-		"brew install pstree", // `ps` as a tree
-		"brew install up", // write pipes with instant live preview
-		"brew install iterm2 --cask",
-		"brew install docker --cask",
-		"brew install slack --cask",
-		"brew install flux --cask",
+		{name: "coreutils"},
+		{name: "hub"},
+		{name: "git-extras"},
+		{name: "zsh-completions"},
+		{name: "nvim"}, // dark vim
+		{name: "jq"}, // json explorer
+		{name: "gron"}, // json flattener
+		{name: "tree"}, // print nice file trees
+		{name: "fasd"}, // easily jump to commonly-used directories
+		{name: "fzf"}, // general purpose fuzzy-finder
+		{name: "htop"}, // better `top`all
+		{name: "tldr"}, // better `man`
+		{name: "ripgrep"}, // better `grep`
+		{name: "fd"}, // better `find`
+		{name: "bat"}, // better `less` or `cat`
+		{name: "tig"}, // better `git`
+		{name: "diff-so-fancy"}, // better `git diff`
+		{name: "pstree"}, // `ps` as a tree
+		{name: "up"}, // write pipes with instant live preview
+		{
+			name: "iterm2",
+			args: "--cask",
+			skipIfExists: "/Applications/iTerm.app",
+		},
+		{
+			name: "docker",
+			args: "--cask",
+			skipIfExists: "/Applications/Docker.app",
+		},
+		{
+			name: "slack",
+			args: "--cask",
+			skipIfExists: "/Applications/Slack.app",
+		},
+		{name: "flux", args: "--cask", skipIfExists: "/Applications/Flux.app"},
 	])
-	cp.execSync("$(brew --prefix)/opt/fzf/install", {stdio: "inherit"})
+	execSync(
+		"$(brew --prefix)/opt/fzf/install --no-update-rc --key-bindings --completion",
+	)
 }
 
 async function ensureFonts() {
 	logger.info("ensureFonts", "ensuring fonts...")
 	await doHomebrewInstall([
-		"brew tap homebrew/cask-fonts",
-		"brew install font-source-code-pro --cask",
-		"brew install font-hack-nerd-font --cask",
+		{name: "font-source-code-pro", args: "--cask"},
+		{name: "font-hack-nerd-font", args: "--cask"},
 	])
 }
 
-async function doHomebrewInstall(commands: string[]) {
-	const taps: string[] = []
-	const apps: string[] = []
-	const casks: string[] = []
-	for (const cmd of commands) {
-		if (cmd.includes("brew tap")) {
-			taps.push(cmd.split(" ")[2])
-		} else if (cmd.includes("--cask")) {
-			casks.push(cmd.split(" ")[2])
-		} else {
-			apps.push(cmd.split(" ")[2])
+interface HomebrewPackage {
+	name: string
+	args?: string
+	skipIfExists?: string
+}
+async function doHomebrewInstall(allPackages: HomebrewPackage[]) {
+	const packagesToInstall = allPackages.filter((p) => {
+		if (p.skipIfExists && fs.existsSync(p.skipIfExists)) {
+			logger.debug(
+				"doHomebrewInstall",
+				"skip package because it already exists",
+				{package: p},
+			)
+			return false
 		}
+		return true
+	})
+	const batched = packagesToInstall.filter((p) => !p.args)
+	if (batched.length) {
+		execSync(`brew install ${batched.map((p) => p.name).join(" ")}`)
 	}
-	if (taps.length) {
-		cp.execSync(`brew tap ${taps.join(" ")}`, {stdio: "inherit"})
-	}
-	if (apps.length) {
-		cp.execSync(`brew install ${apps.join(" ")}`, {stdio: "inherit"})
-	}
-	if (casks.length) {
-		for (const cask of casks) {
-			try {
-				cp.execSync(`brew install ${cask} --cask`, {
-					stdio: "inherit",
-				})
-			} catch (e) {}
-		}
+	const rest = packagesToInstall.filter((p) => p.args)
+	for (const p of rest) {
+		execSync(`brew install ${p.name} ${p.args}`)
 	}
 }
 
-execScript(import.meta, ensureMacSetup)
+function execSync(command: string) {
+	try {
+		cp.execSync(command, {
+			stdio: "inherit",
+		})
+	} catch (e) {
+		throw logger.newError("execSync", "command failed", {command, error: e})
+	}
+}
+
+execScript(import.meta, async () => {
+	try {
+		await ensureMacSetup()
+	} catch (error) {
+		logger.error("ensureMacSetup", "script failed", {error})
+		process.exit(1)
+	}
+})

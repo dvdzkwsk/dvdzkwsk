@@ -1,26 +1,24 @@
 import cp from "child_process"
 import fs from "fs"
 
-export async function ensureSetup(options) {
-	async function check(name, promise) {
-		const FAIL_STR = "FAIL"
-		const PASS_STR = "  OK"
-		try {
-			await promise
-			if (options?.enableLogging) {
-				console.info(`${PASS_STR} ${name}`)
-			}
-		} catch (e) {
-			console.error(e)
-			console.error(`${FAIL_STR} ${name}`)
-			process.exit(1)
-		}
-	}
+export async function ensureSetup() {
+	await step("ensureNodeVersion", ensureNodeVersion)
+	await step("ensureBunInstalled", ensureBunInstalled)
+	await step("ensureNodeModulesInstalled", ensureNodeModulesInstalled)
+	await step("ensureNodeModulesUpToDate", ensureNodeModulesUpToDate)
+}
 
-	await check("ensureNodeVersion", ensureNodeVersion())
-	await check("ensureBunInstalled", ensureBunInstalled())
-	await check("ensureNodeModulesInstalled", ensureNodeModulesInstalled())
-	await check("ensureNodeModulesUpToDate", ensureNodeModulesUpToDate())
+async function step(name, fn) {
+	const FAIL_STR = "FAIL"
+	const PASS_STR = "  OK"
+	try {
+		await fn()
+		console.info(`${PASS_STR} ${name}`)
+	} catch (e) {
+		console.error(e)
+		console.error(`${FAIL_STR} ${name}`)
+		process.exit(1)
+	}
 }
 
 async function ensureNodeVersion() {
@@ -122,12 +120,6 @@ function mustParseInt(str) {
 	return num
 }
 
-function isMainModule(importMeta) {
-	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
-}
-
-if (isMainModule) {
-	ensureSetup({enableLogging: true}).then(() => {
-		console.info(`\nSetup complete :)`)
-	})
-}
+ensureSetup().then(() => {
+	console.info(`\nSetup complete :)`)
+})

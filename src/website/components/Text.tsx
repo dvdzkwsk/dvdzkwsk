@@ -1,6 +1,6 @@
-import {cx} from "../lib/ReactUtil.js"
 import "./Text.css"
-import {ComponentChildren, createElement} from "preact"
+import * as React from "react"
+import {cx} from "../../util/ReactUtil.js"
 
 const FONT_MONO = [
 	"ui-monospace",
@@ -19,7 +19,7 @@ const FONT_MONO = [
 
 interface TextProps {
 	as?: any
-	children: ComponentChildren
+	children: React.ReactNode
 	muted?: boolean
 	className?: string
 	headingLevel?: 1 | 2 | 3 | 4 | 5 | 6
@@ -45,7 +45,7 @@ export const Text = ({
 		props.style.fontFamily = FONT_MONO
 	}
 	if (headingLevel) {
-		return createElement(`h${headingLevel}`, {
+		return React.createElement(`h${headingLevel}`, {
 			children: children,
 			...(typeof children === "string" && {
 				id: sluggify(children),
@@ -55,7 +55,7 @@ export const Text = ({
 	}
 	props.className = cx("Text", className)
 	props.style["--leading"] = 5
-	return createElement(as || (inline ? "span" : "p"), props, children)
+	return React.createElement(as || (inline ? "span" : "p"), props, children)
 }
 
 export function sluggify(str: string) {

@@ -1,0 +1,13 @@
+@import "./Normalize.css";
+
+:root {
+	--spacing: 0.25rem;
+	--site-bg: #f5f4ed;
+	/* --site-bg: #faf9f5; */
+	--site-fg: hsl(60 2.6% 7.6%);
+}
+
+body {
+	background: var(--site-bg);
+	color: var(--site-fg);
+}

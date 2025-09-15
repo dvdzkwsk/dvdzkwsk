@@ -4,6 +4,7 @@ node_modules
 .rpt2_cache
 .logs
 .env
+.netlify
 secrets
 
 # generated files

@@ -1,21 +1,16 @@
-import "./theme/Normalize.css"
-import "./theme/Theme.css"
+import * as React from "react"
 import {History} from "history"
-import {createContext} from "preact"
-import {CurrentRoute, PageMetadata} from "./Router.js"
+import {CurrentRoute} from "./RouteMap.js"
 
 export interface AppContext {
 	history: History
-	meta: PageMetadata
-	metaHtml?: string
 }
 
-export const AppContext = createContext<AppContext>(null!)
+export const AppContext = React.createContext<AppContext>(null!)
 
 export function createAppContext(history: History): AppContext {
 	return {
 		history,
-		meta: {},
 	}
 }
 

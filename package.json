@@ -6,28 +6,29 @@
 	"license": "UNLICENSED",
 	"type": "module",
 	"engines": {
-		"node": ">=20.10.0"
+		"node": ">=22.19.0"
 	},
 	"scripts": {
-		"website": "bun ./tools/Build.ts ./cmd/website",
+		"website": "tsx ./tools/Build.ts website",
 		"setup": "node ./tools/Setup.js"
 	},
 	"devDependencies": {
-		"@preact/signals": "^2.0.1",
-		"@types/bun": "^1.2.0",
-		"@types/html-minifier-terser": "^7.0.2",
+		"@types/cross-spawn": "^6.0.6",
 		"@types/node": "^22.10.10",
-		"bun": "^1.2.0",
-		"concurrently": "^9.1.2",
+		"@types/react": "^19.1.13",
+		"@types/react-dom": "^19.1.9",
+		"@types/react-helmet": "^6.1.11",
+		"cross-spawn": "^7.0.6",
 		"date-fns": "^4.1.0",
 		"esbuild": "^0.24.2",
-		"esbuild-plugin-alias": "^0.2.1",
-		"highlight.js": "^11.11.1",
 		"history": "^5.3.0",
-		"html-minifier-terser": "^7.2.0",
-		"preact": "^10.25.4",
-		"preact-render-to-string": "^6.5.13",
+		"netlify-cli": "^23.5.1",
 		"prettier": "^3.4.2",
-		"typescript": "^5.7.3"
+		"react": "^19.1.1",
+		"react-dom": "^19.1.1",
+		"react-helmet": "^6.1.0",
+		"tsx": "^4.20.5",
+		"typescript": "^5.7.3",
+		"vite": "^7.1.5"
 	}
 }

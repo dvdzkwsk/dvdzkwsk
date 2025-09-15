@@ -1,11 +1,13 @@
 import * as fs from "fs"
 import * as url from "url"
 import * as path from "path"
-import {ConsoleTransport, setLoggerTransports} from "@pkg/logger/Logger.js"
+import {
+	ConsoleTransport,
+	Logger,
+	setLoggerTransports,
+} from "../src/util/Logger.js"
 
-export function isMainModule(importMeta: ImportMeta) {
-	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
-}
+const logger = new Logger("CliUtil")
 
 export async function execScript(
 	importMeta: ImportMeta,
@@ -16,6 +18,10 @@ export async function execScript(
 		await loadEnvFile()
 		await handler()
 	}
+}
+
+function isMainModule(importMeta: ImportMeta) {
+	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
 }
 
 async function loadEnvFile() {
@@ -50,14 +56,20 @@ async function readEnvFile(
 	return result
 }
 
-export function getEnvVar(key: string): string | null {
-	const value = process.env[key]
+export function getEnvVar(name: string, required = true): string {
+	const value = process.env[name]
 	if (!value) {
-		console.warn("Warn: missing environment variable: %s", key)
+		if (required) {
+			throw logger.newError(
+				"getEnvVar",
+				"missing required environment variable",
+				{variable: name},
+			)
+		} else {
+			logger.warn("getEnvVar", "missing environment variable", {
+				variable: name,
+			})
+		}
 	}
-	return value ?? null
-}
-
-export function dirname(importMeta: ImportMeta): string {
-	return path.dirname(url.fileURLToPath(importMeta.url))
+	return value ?? ""
 }

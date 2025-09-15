@@ -2,7 +2,7 @@ import * as cp from "child_process"
 import * as os from "os"
 import * as fs from "fs"
 import * as path from "path"
-import {Logger} from "@pkg/logger/Logger.js"
+import {Logger} from "../src/util/Logger.js"
 import {execScript} from "./CliUtil.js"
 
 const logger = new Logger("EnsureOSXSetup")

@@ -1,11 +1,11 @@
 import * as cp from "child_process"
-import * as os from "os"
 import * as fs from "fs"
+import * as os from "os"
 import * as path from "path"
-import {Logger} from "../src/util/Logger.js"
-import {execScript} from "./CliUtil.js"
+import {createCliTool} from "../pkg/util/CliUtil.js"
+import {Logger} from "../pkg/util/Logger.js"
 
-const logger = new Logger("EnsureOSXSetup")
+const logger = new Logger("SetupMap")
 
 interface ProgramOptions {
 	force: boolean
@@ -198,7 +198,7 @@ function commandExists(command: string): boolean {
 	try {
 		execSync(`which ${command}`)
 		return true
-	} catch (e) {
+	} catch {
 		return false
 	}
 }
@@ -292,7 +292,7 @@ function execSync(command: string) {
 	}
 }
 
-execScript(import.meta, async () => {
+createCliTool(import.meta, async () => {
 	try {
 		await ensureMacSetup()
 	} catch (error) {

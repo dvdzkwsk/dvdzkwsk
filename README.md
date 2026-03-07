@@ -1,10 +1,9 @@
 # dvdzkwsk
 
 ```sh
-# setup the repo after cloning it.
-# you do not need to run `npm install` first.
-npm run setup
+# install dependencies
+bun install
 
-# start my website (dvdzkwsk.com) in development mode
-npm run website -- --dev
+# start the development server
+bun dev
 ```

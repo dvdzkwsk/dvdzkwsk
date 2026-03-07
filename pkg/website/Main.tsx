@@ -1,5 +1,5 @@
-import {createRoot} from "react-dom/client"
 import {createBrowserHistory} from "history"
+import {createRoot} from "react-dom/client"
 import {App, createAppContext} from "./App.js"
 
 function main() {

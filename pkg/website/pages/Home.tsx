@@ -1,7 +1,7 @@
 import * as React from "react"
+import {Text} from "../components/Text.js"
 import {DefaultLayout} from "../layouts/DefaultLayout.js"
 import {Link, definePage} from "../RouterJson.js"
-import {Text} from "../components/Text.js"
 
 const HomePage: React.FC = () => {
 	return (
@@ -19,11 +19,6 @@ const HomePage: React.FC = () => {
 				<Link href="https://material.security/">Material Security</Link>
 				, where we did some cool stuff to secure Google Workspace and
 				Microsoft 365 environments.
-			</Text>
-			<Text>
-				My steadfast companion is Kona, the friendliest corgi you'll
-				ever meet. We spend lots of time visiting local parks. I spend
-				much of my free time playing hockey and practicing guitar.
 			</Text>
 		</>
 	)

@@ -6,7 +6,7 @@ interface MapAsyncOptions {
 export async function mapAsync<T, R>(
 	items: T[],
 	mapFn: (item: T) => Promise<R>,
-	options: MapAsyncOptions,
+	_options: MapAsyncOptions,
 ) {
 	return Promise.all(items.map((item) => mapFn(item)))
 }

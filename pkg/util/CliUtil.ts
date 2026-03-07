@@ -1,22 +1,23 @@
 import * as fs from "fs"
-import * as url from "url"
 import * as path from "path"
-import {
-	ConsoleTransport,
-	Logger,
-	setLoggerTransports,
-} from "../src/util/Logger.js"
+import * as url from "url"
+import {ConsoleTransport, Logger, setLoggerTransports} from "./Logger.js"
 
 const logger = new Logger("CliUtil")
 
-export async function execScript(
+export async function createCliTool(
 	importMeta: ImportMeta,
 	handler: () => unknown,
 ) {
 	if (isMainModule(importMeta)) {
 		setLoggerTransports([new ConsoleTransport({verbose: true})])
 		await loadEnvFile()
-		await handler()
+		try {
+			await handler()
+		} catch (error) {
+			logger.error("createCliTool", "script failed", {error})
+			process.exit(1)
+		}
 	}
 }
 
@@ -50,7 +51,7 @@ async function readEnvFile(
 			const [key, value] = kv.split("=")
 			result[key] = value
 		}
-	} catch (e) {
+	} catch {
 		return null
 	}
 	return result

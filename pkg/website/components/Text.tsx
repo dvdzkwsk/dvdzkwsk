@@ -17,13 +17,15 @@ const FONT_MONO = [
 	"monospace",
 ].join(",")
 
+type Style = React.CSSProperties & Record<string, unknown>
+
 interface TextProps {
-	as?: any
+	as?: React.ElementType
 	children: React.ReactNode
 	muted?: boolean
 	className?: string
 	headingLevel?: 1 | 2 | 3 | 4 | 5 | 6
-	style?: any
+	style?: React.CSSProperties
 	mono?: boolean
 	inline?: boolean
 }
@@ -35,27 +37,28 @@ export const Text = ({
 	headingLevel,
 	mono,
 	inline,
-	...rest
+	style: styleProp,
 }: TextProps) => {
-	const props: any = {...rest, style: rest.style ?? {}}
-	if (muted) {
-		props.style.color = "var(--fg-muted)"
-	}
-	if (mono) {
-		props.style.fontFamily = FONT_MONO
-	}
 	if (headingLevel) {
 		return React.createElement(`h${headingLevel}`, {
-			children: children,
-			...(typeof children === "string" && {
-				id: sluggify(children),
-			}),
-			...rest,
+			children,
+			...(typeof children === "string" && {id: sluggify(children)}),
+			style: styleProp,
 		})
 	}
-	props.className = cx("Text", className)
-	props.style["--leading"] = 5
-	return React.createElement(as || (inline ? "span" : "p"), props, children)
+	const style: Style = {...(styleProp ?? {})}
+	if (muted) {
+		style.color = "var(--fg-muted)"
+	}
+	if (mono) {
+		style.fontFamily = FONT_MONO
+	}
+	style["--leading"] = 5
+	return React.createElement(
+		as || (inline ? "span" : "p"),
+		{className: cx("Text", className), style},
+		children,
+	)
 }
 
 export function sluggify(str: string) {

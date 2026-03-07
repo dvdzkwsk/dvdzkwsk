@@ -1,7 +1,6 @@
 {
-	"include": ["src", "tools", "types"],
+	"include": ["pkg", "tools", "types"],
 	"compilerOptions": {
-		"baseUrl": ".",
 		"forceConsistentCasingInFileNames": true,
 		"importHelpers": false,
 		"isolatedModules": true,

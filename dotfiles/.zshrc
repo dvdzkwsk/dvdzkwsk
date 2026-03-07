@@ -174,3 +174,4 @@ alias zrcs="source ~/.zshrc"
 
 # bun completions
 [ -s "/Users/davezuko/.bun/_bun" ] && source "/Users/davezuko/.bun/_bun"
+export PATH="$HOME/.local/bin:$PATH"

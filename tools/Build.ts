@@ -1,31 +1,53 @@
 import * as fs from "fs"
 import * as path from "path"
+import {search} from "@inquirer/prompts"
 import crossSpawn from "cross-spawn"
-import {Logger} from "../src/util/Logger.js"
-import {execScript, getEnvVar} from "./CliUtil.js"
+import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
+import {Logger} from "../pkg/util/Logger.js"
 
 const logger = new Logger("Build")
 
 const REPO_ROOT = path.join(import.meta.dirname, "..")
 
-async function build() {
-	const args = process.argv.slice(2)
-	const target = args[0]
-
-	switch (target) {
-		case "website":
-			await buildWebsite()
-			break
-		default:
-			throw logger.newError("build", "unknown build target", {target})
-	}
+interface BuildOptions {
+	dev: boolean
 }
 
-async function buildWebsite() {
-	const srcdir = path.join(REPO_ROOT, "src/website")
+const targets: Record<string, (options: BuildOptions) => Promise<void>> = {
+	website: buildWebsite,
+}
+
+async function main() {
+	const targetName = await promptTarget()
+
+	const builder = targets[targetName]
+	if (!builder) {
+		throw logger.newError("main", "unknown build target", {
+			target: targetName,
+		})
+	}
+
+	await builder({dev: process.argv.includes("--dev")})
+}
+
+async function promptTarget(): Promise<string> {
+	const names = Object.keys(targets)
+	return search({
+		message: "Select a build target",
+		source: (input) => {
+			const query = input?.toLowerCase() ?? ""
+			return names
+				.filter((name) => name.toLowerCase().includes(query))
+				.map((name) => ({value: name}))
+		},
+	})
+}
+
+async function buildWebsite(options: BuildOptions) {
+	const srcdir = path.join(REPO_ROOT, "pkg/website")
 	const outdir = path.join(REPO_ROOT, "dist/website")
 
-	if (hasDevFlag()) {
+	if (options.dev) {
 		crossSpawn(
 			"vite",
 			["dev", "--config", path.join(srcdir, "vite.config.js")],
@@ -35,19 +57,13 @@ async function buildWebsite() {
 		)
 		return
 	}
-	if (process.argv.includes("--build")) {
-		fs.rmSync(outdir, {
-			recursive: true,
-			force: true,
-		})
-		crossSpawn.sync(
-			"vite",
-			["build", "--config", path.join(srcdir, "vite.config.js")],
-			{
-				stdio: "inherit",
-			},
-		)
-	}
+
+	fs.rmSync(outdir, {recursive: true, force: true})
+	crossSpawn.sync(
+		"vite",
+		["build", "--config", path.join(srcdir, "vite.config.js")],
+		{stdio: "inherit"},
+	)
 
 	if (process.argv.includes("--deploy")) {
 		if (!fs.existsSync(outdir)) {
@@ -80,8 +96,4 @@ async function buildWebsite() {
 	}
 }
 
-function hasDevFlag() {
-	return process.argv.includes("--dev")
-}
-
-execScript(import.meta, build)
+createCliTool(import.meta, main)

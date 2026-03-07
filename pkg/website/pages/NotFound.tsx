@@ -1,6 +1,6 @@
+import {Text} from "../components/Text.js"
 import {DefaultLayout} from "../layouts/DefaultLayout.js"
 import {definePage} from "../RouterJson.js"
-import {Text} from "../components/Text.js"
 
 const NotFound = () => {
 	return (

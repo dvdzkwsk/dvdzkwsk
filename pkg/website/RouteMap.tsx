@@ -1,10 +1,10 @@
-import * as React from "react"
 import {Location} from "history"
+import * as React from "react"
+import {Helmet} from "react-helmet"
 import {AppContext} from "./App.js"
 import HomePage from "./pages/Home.js"
 import NotFoundPage from "./pages/NotFound.js"
 import {PageSchema} from "./RouterJson.js"
-import {Helmet} from "react-helmet"
 
 const WEBSITE_DOMAIN = "dvdzkwsk.com"
 
@@ -17,7 +17,7 @@ export const ROUTE_MAP: {
 
 export const CurrentRoute = () => {
 	const context = React.useContext(AppContext)
-	const [, forceUpdate] = React.useState<any>(null)
+	const [, forceUpdate] = React.useReducer((n: number) => n + 1, 0)
 
 	let pathname = context.history.location.pathname.replace(/\/$/, "")
 	if (pathname === "") {
@@ -26,7 +26,7 @@ export const CurrentRoute = () => {
 	const currentPage = ROUTE_MAP[pathname] ?? ROUTE_MAP["/404"]
 
 	React.useEffect(() => {
-		return context.history.listen(() => forceUpdate({}))
+		return context.history.listen(() => forceUpdate())
 	}, [context.history])
 
 	return renderPage(currentPage, context.history.location)

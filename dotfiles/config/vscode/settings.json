@@ -4,7 +4,6 @@
 	},
 	"editor.formatOnSave": true,
 	"editor.minimap.enabled": false,
-	"editor.renderControlCharacters": false,
 	"editor.renderWhitespace": "none",
 	"explorer.confirmDelete": false,
 	"explorer.confirmDragAndDrop": false,
@@ -54,6 +53,7 @@
 	"[typescriptreact]": {
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
 	},
-	"workbench.colorTheme": "Default Dark+",
-	"svelte.enable-ts-plugin": true
+	"workbench.colorTheme": "Default Light Modern",
+	"svelte.enable-ts-plugin": true,
+	"claudeCode.preferredLocation": "sidebar"
 }

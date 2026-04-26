@@ -53,7 +53,7 @@
 	"[typescriptreact]": {
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
 	},
-	"workbench.colorTheme": "Default Light Modern",
+	"workbench.colorTheme": "Light Modern",
 	"svelte.enable-ts-plugin": true,
 	"claudeCode.preferredLocation": "sidebar"
 }

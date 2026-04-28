@@ -764,9 +764,16 @@ async function ensureCliApps(ctx: SetupContext) {
 	brewInstall("tree", {}, ctx) // print nice file trees
 
 	brewInstall("fzf", {}, ctx) // general purpose fuzzy-finder
-	execSync(
-		"$(brew --prefix)/opt/fzf/install --no-update-rc --key-bindings --completion",
-	)
+	if (!fs.existsSync(path.join(os.homedir(), ".fzf.zsh"))) {
+		execSync(
+			"$(brew --prefix)/opt/fzf/install --no-update-rc --key-bindings --completion",
+		)
+	} else {
+		logger.debug(
+			"ensureCliApps",
+			"fzf shell integration already installed, skipping",
+		)
+	}
 
 	brewInstall("htop", {}, ctx) // better `top`
 	brewInstall("tldr", {}, ctx) // better `man`

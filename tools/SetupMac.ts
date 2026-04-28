@@ -41,6 +41,7 @@ async function ensureMacSetup() {
 	await ensureCliApps(ctx)
 	await ensureDesktopApps(ctx)
 	await ensureNode(ctx)
+	await ensureClaudeSetup(ctx)
 	await ensureFonts(ctx)
 
 	if (ctx.warnings.length) {
@@ -599,6 +600,21 @@ async function ensureSshSetup(_ctx: SetupContext) {
 			existing.length > 0 && !existing.endsWith("\n\n") ? "\n\n" : ""
 		fs.writeFileSync(configPath, existing + separator + githubBlock + "\n")
 		fs.chmodSync(configPath, 0o600)
+	}
+}
+
+async function ensureClaudeSetup(_ctx: SetupContext) {
+	const result = await ensureSymlink(
+		{
+			path: path.join(os.homedir(), ".claude", "skills"),
+			target: path.join(PROJECT_ROOT, "dotfiles/claude/skills"),
+		},
+		{force: false},
+	)
+	if (result === "already-linked") {
+		logger.debug("ensureClaudeSetup", "already linked: ~/.claude/skills")
+	} else {
+		logger.info("ensureClaudeSetup", "linked: ~/.claude/skills")
 	}
 }
 

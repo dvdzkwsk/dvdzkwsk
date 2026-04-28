@@ -602,6 +602,27 @@ async function ensureSshSetup(_ctx: SetupContext) {
 	}
 }
 
+async function ensureNode(ctx: SetupContext) {
+	if (commandExists("node")) {
+		logger.debug("ensureNode", "node already installed, skipping")
+		return
+	}
+	if (!commandExists("n")) {
+		ctx.warnings.push(
+			"Cannot install node: 'n' version manager is not installed",
+		)
+		return
+	}
+	logger.info("ensureNode", "installing Node.js LTS via n...")
+	try {
+		cp.execSync("n lts", {stdio: "inherit"})
+	} catch (e) {
+		const msg = `Failed to install Node.js: ${toError(e).message}`
+		logger.warn("ensureNode", msg)
+		ctx.warnings.push(msg)
+	}
+}
+
 async function ensureSymlink(
 	link: {path: string; target: string},
 	options: {force: boolean},
@@ -777,6 +798,11 @@ async function ensureDesktopApps(ctx: SetupContext) {
 		ctx,
 	)
 	brewInstall(
+		"cleanshot",
+		{cask: true, skipIfExists: ["/Applications/CleanShot X.app"]},
+		ctx,
+	)
+	brewInstall(
 		"docker",
 		{cask: true, skipIfExists: ["/Applications/Docker.app"]},
 		ctx,
@@ -809,6 +835,16 @@ async function ensureDesktopApps(ctx: SetupContext) {
 	brewInstall(
 		"tableplus",
 		{cask: true, skipIfExists: ["/Applications/TablePlus.app"]},
+		ctx,
+	)
+	brewInstall(
+		"dropbox",
+		{cask: true, skipIfExists: ["/Applications/Dropbox.app"]},
+		ctx,
+	)
+	brewInstall(
+		"google-drive",
+		{cask: true, skipIfExists: ["/Applications/Google Drive.app"]},
 		ctx,
 	)
 	brewInstall(

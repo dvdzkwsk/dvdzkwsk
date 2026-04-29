@@ -38,8 +38,7 @@ async function ensureMacSetup() {
 	await ensureZshSetup(ctx)
 	await ensureGitConfig(ctx)
 	await ensureSshSetup(ctx)
-	await ensureCliApps(ctx)
-	await ensureDesktopApps(ctx)
+	await ensureBrewPackages(ctx)
 	await ensureNode(ctx)
 	await ensureClaudeSetup(ctx)
 	await ensureFonts(ctx)
@@ -519,6 +518,11 @@ async function ensureConfigFilesLinked(
 			path: path.join(os.homedir(), ".config/zed/keymap.json"),
 			target: path.join(PROJECT_ROOT, "dotfiles/config/zed/keymap.json"),
 		},
+		{
+			name: "ghostty/config",
+			path: path.join(os.homedir(), ".config/ghostty/config"),
+			target: path.join(PROJECT_ROOT, "dotfiles/config/ghostty/config"),
+		},
 	]
 	for (const config of configs) {
 		const result = await ensureSymlink(config, options)
@@ -702,189 +706,176 @@ function commandExists(command: string): boolean {
 	}
 }
 
-function brewInstall(
-	name: string,
-	opts: {cask?: boolean; skipIfExists?: string[]},
-	ctx: SetupContext,
-) {
-	if (opts.skipIfExists?.some((p) => fs.existsSync(p))) {
-		logger.debug("brewInstall", `skip ${name}, already exists`)
-		return
-	}
-	if (!opts.cask) {
-		try {
-			cp.execSync(`brew list --formula ${name}`, {stdio: "ignore"})
+async function ensureBrewPackages(ctx: SetupContext) {
+	logger.info("ensureBrewPackages", "loading installed packages...")
+	const parseBrewList = (cmd: string) =>
+		new Set(
+			cp
+				.execSync(cmd, {
+					encoding: "utf8",
+					stdio: ["ignore", "pipe", "ignore"],
+				})
+				.trim()
+				.split("\n")
+				.filter(Boolean),
+		)
+	const installedFormulas = parseBrewList("brew list --formula")
+	const installedCasks = parseBrewList("brew list --cask")
+
+	function brewInstall(
+		name: string,
+		opts: {cask?: boolean; skipIfExists?: string[]} = {},
+	) {
+		if (opts.skipIfExists?.some((p) => fs.existsSync(p))) {
+			logger.debug("brewInstall", `skip ${name}, already exists`)
+			return
+		}
+		if ((opts.cask ? installedCasks : installedFormulas).has(name)) {
 			logger.debug("brewInstall", `skip ${name}, already installed`)
 			return
-		} catch {
-			// not installed, proceed
+		}
+		try {
+			cp.execSync(`brew install ${opts.cask ? "--cask " : ""}${name}`, {
+				stdio: "inherit",
+				timeout: 10 * 60 * 1000,
+			})
+		} catch (e) {
+			const msg = `Failed to install ${name}: ${toError(e).message}`
+			logger.warn("brewInstall", msg)
+			ctx.warnings.push(msg)
 		}
 	}
-	try {
-		cp.execSync(`brew install ${opts.cask ? "--cask " : ""}${name}`, {
-			stdio: "inherit",
-			timeout: 10 * 60 * 1000,
-		})
-	} catch (e) {
-		const msg = `Failed to install ${name}: ${toError(e).message}`
-		logger.warn("brewInstall", msg)
-		ctx.warnings.push(msg)
-	}
-}
 
-async function ensureCliApps(ctx: SetupContext) {
-	logger.info("ensureCliApps", "installing CLI apps")
-	brewInstall("coreutils", {}, ctx)
-	brewInstall("gh", {}, ctx) // GitHub CLI
-	brewInstall("git-extras", {}, ctx)
-	brewInstall("zsh-completions", {}, ctx)
+	logger.info("ensureBrewPackages", "installing CLI apps")
+	brewInstall("coreutils")
+	brewInstall("gh") // GitHub CLI
+	brewInstall("git-extras")
+	brewInstall("zsh-completions")
 
-	brewInstall("n", {}, ctx) // node version manager
+	brewInstall("n") // node version manager
 	if (commandExists("node")) {
-		logger.debug("ensureCliApps", "node already installed, skipping")
+		logger.debug("ensureBrewPackages", "node already installed, skipping")
 	} else {
 		if (!commandExists("n")) {
 			ctx.warnings.push(
 				"Cannot install node: 'n' version manager is not installed",
 			)
 		}
-		logger.info("ensureCliApps", "installing Node.js LTS via n...")
+		logger.info("ensureBrewPackages", "installing Node.js LTS via n...")
 		try {
 			cp.execSync("n lts", {stdio: "inherit"})
 		} catch (e) {
 			const msg = `Failed to install Node.js: ${toError(e).message}`
-			logger.warn("ensureCliApps", msg)
+			logger.warn("ensureBrewPackages", msg)
 			ctx.warnings.push(msg)
 		}
 	}
 
-	brewInstall("neovim", {}, ctx)
-	brewInstall("jq", {}, ctx) // json explorer
-	brewInstall("gron", {}, ctx) // json flattener
-	brewInstall("tree", {}, ctx) // print nice file trees
+	brewInstall("neovim")
+	brewInstall("jq") // json explorer
+	brewInstall("gron") // json flattener
+	brewInstall("tree") // print nice file trees
 
-	brewInstall("fzf", {}, ctx) // general purpose fuzzy-finder
+	brewInstall("fzf") // general purpose fuzzy-finder
 	if (!fs.existsSync(path.join(os.homedir(), ".fzf.zsh"))) {
 		execSync(
 			"$(brew --prefix)/opt/fzf/install --no-update-rc --key-bindings --completion",
 		)
 	} else {
 		logger.debug(
-			"ensureCliApps",
+			"ensureBrewPackages",
 			"fzf shell integration already installed, skipping",
 		)
 	}
 
-	brewInstall("htop", {}, ctx) // better `top`
-	brewInstall("tldr", {}, ctx) // better `man`
-	brewInstall("ripgrep", {}, ctx) // better `grep`
-	brewInstall("fd", {}, ctx) // better `find`
-	brewInstall("bat", {}, ctx) // better `cat`/`less`
-	brewInstall("delta", {}, ctx) // better `git diff`
-	brewInstall("lazygit", {}, ctx) // terminal git UI
-	brewInstall("tig", {}, ctx) // terminal git browser
-	brewInstall("pstree", {}, ctx) // `ps` as a tree
-	brewInstall("up", {}, ctx) // write pipes with instant live preview
-	brewInstall("watch", {}, ctx) // run command repeatedly
-	brewInstall("mkcert", {}, ctx) // local HTTPS certs
-	brewInstall("zoxide", {}, ctx) // better `cd`
+	brewInstall("htop") // better `top`
+	brewInstall("tldr") // better `man`
+	brewInstall("ripgrep") // better `grep`
+	brewInstall("fd") // better `find`
+	brewInstall("bat") // better `cat`/`less`
+	brewInstall("delta") // better `git diff`
+	brewInstall("lazygit") // terminal git UI
+	brewInstall("tig") // terminal git browser
+	brewInstall("pstree") // `ps` as a tree
+	brewInstall("up") // write pipes with instant live preview
+	brewInstall("watch") // run command repeatedly
+	brewInstall("mkcert") // local HTTPS certs
+	brewInstall("zoxide") // better `cd`
 
 	if (!commandExists("claude")) {
-		logger.info("ensureCliApps", "installing Claude Code...")
+		logger.info("ensureBrewPackages", "installing Claude Code...")
 		try {
 			cp.execSync("npm install -g @anthropic-ai/claude-code", {
 				stdio: "inherit",
 			})
 		} catch (e) {
 			const msg = `Failed to install Claude Code: ${toError(e).message}`
-			logger.warn("ensureCliApps", msg)
+			logger.warn("ensureBrewPackages", msg)
 			ctx.warnings.push(msg)
 		}
 	}
-}
 
-async function ensureDesktopApps(ctx: SetupContext) {
-	logger.info("ensureDesktopApps", "installing desktop apps")
-	brewInstall(
-		"iterm2",
-		{cask: true, skipIfExists: ["/Applications/iTerm.app"]},
-		ctx,
-	)
-	brewInstall(
-		"ghostty",
-		{cask: true, skipIfExists: ["/Applications/Ghostty.app"]},
-		ctx,
-	)
-	brewInstall(
-		"google-chrome",
-		{cask: true, skipIfExists: ["/Applications/Google Chrome.app"]},
-		ctx,
-	)
-	brewInstall(
-		"cleanshot",
-		{cask: true, skipIfExists: ["/Applications/CleanShot X.app"]},
-		ctx,
-	)
-	brewInstall(
-		"docker",
-		{cask: true, skipIfExists: ["/Applications/Docker.app"]},
-		ctx,
-	)
-	brewInstall(
-		"slack",
-		{cask: true, skipIfExists: ["/Applications/Slack.app"]},
-		ctx,
-	)
-	brewInstall(
-		"flux",
-		{cask: true, skipIfExists: ["/Applications/Flux.app"]},
-		ctx,
-	)
-	brewInstall(
-		"visual-studio-code",
-		{cask: true, skipIfExists: ["/Applications/Visual Studio Code.app"]},
-		ctx,
-	)
-	brewInstall(
-		"discord",
-		{cask: true, skipIfExists: ["/Applications/Discord.app"]},
-		ctx,
-	)
-	brewInstall(
-		"raycast",
-		{cask: true, skipIfExists: ["/Applications/Raycast.app"]},
-		ctx,
-	)
-	brewInstall(
-		"tableplus",
-		{cask: true, skipIfExists: ["/Applications/TablePlus.app"]},
-		ctx,
-	)
-	brewInstall(
-		"dropbox",
-		{cask: true, skipIfExists: ["/Applications/Dropbox.app"]},
-		ctx,
-	)
-	brewInstall(
-		"google-drive",
-		{cask: true, skipIfExists: ["/Applications/Google Drive.app"]},
-		ctx,
-	)
-	brewInstall(
-		"1password",
-		{
-			cask: true,
-			skipIfExists: [
-				"/Applications/1Password.app",
-				"/Applications/1Password 7 - Password Manager.app",
-			],
-		},
-		ctx,
-	)
+	logger.info("ensureBrewPackages", "installing desktop apps")
+	brewInstall("iterm2", {
+		cask: true,
+		skipIfExists: ["/Applications/iTerm.app"],
+	})
+	brewInstall("ghostty", {
+		cask: true,
+		skipIfExists: ["/Applications/Ghostty.app"],
+	})
+	brewInstall("google-chrome", {
+		cask: true,
+		skipIfExists: ["/Applications/Google Chrome.app"],
+	})
+	brewInstall("cleanshot", {
+		cask: true,
+		skipIfExists: ["/Applications/CleanShot X.app"],
+	})
+	brewInstall("docker", {
+		cask: true,
+		skipIfExists: ["/Applications/Docker.app"],
+	})
+	brewInstall("slack", {
+		cask: true,
+		skipIfExists: ["/Applications/Slack.app"],
+	})
+	brewInstall("flux", {cask: true, skipIfExists: ["/Applications/Flux.app"]})
+	brewInstall("visual-studio-code", {
+		cask: true,
+		skipIfExists: ["/Applications/Visual Studio Code.app"],
+	})
+	brewInstall("discord", {
+		cask: true,
+		skipIfExists: ["/Applications/Discord.app"],
+	})
+	brewInstall("raycast", {
+		cask: true,
+		skipIfExists: ["/Applications/Raycast.app"],
+	})
+	brewInstall("tableplus", {
+		cask: true,
+		skipIfExists: ["/Applications/TablePlus.app"],
+	})
+	brewInstall("dropbox", {
+		cask: true,
+		skipIfExists: ["/Applications/Dropbox.app"],
+	})
+	brewInstall("google-drive", {
+		cask: true,
+		skipIfExists: ["/Applications/Google Drive.app"],
+	})
+	brewInstall("1password", {
+		cask: true,
+		skipIfExists: [
+			"/Applications/1Password.app",
+			"/Applications/1Password 7 - Password Manager.app",
+		],
+	})
 }
 
 async function ensureFonts(ctx: SetupContext) {
-	logger.info("ensureFonts", "ensuring fonts...")
+	// logger.info("ensureFonts", "ensuring fonts...")
 	// brewInstall("font-source-code-pro", {cask: true}, ctx)
 	// brewInstall("font-hack-nerd-font", {cask: true}, ctx)
 }

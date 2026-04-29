@@ -1,0 +1,18 @@
+font-size = 14
+background-opacity = 0.95
+window-decoration = false
+
+shell-integration = detect
+shell-integration-features = cursor,sudo,title
+
+cursor-style = block
+cursor-style-blink = false
+
+scrollback-limit = 10000
+
+macos-option-as-alt = left
+window-colorspace = display-p3
+quit-after-last-window-closed = true
+
+resize-overlay = never
+confirm-close-surface = false

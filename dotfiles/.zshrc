@@ -39,15 +39,15 @@ bindkey -M vicmd v edit-command-line
 bindkey '^R' history-incremental-search-backward
 #}}}
 
-# Fasd ----------------------------------------------------- {{{
-eval "$(fasd --init auto)"
-#}}}
-
 # FZF ------------------------------------------------------ {{{
 # respect .gitignore
 export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+#}}}
+
+# Zoxide --------------------------------------------------- {{{
+eval "$(zoxide init zsh)"
 #}}}
 
 # Git ------------------------------------------------------ {{{

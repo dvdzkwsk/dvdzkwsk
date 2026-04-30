@@ -7,7 +7,26 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
-	"theme": "Gruvbox Dark",
+	"base_keymap": "VSCode",
+ "preview_tabs": {
+  "enabled": false
+ },
+ "tab_bar": {
+  "show": false
+ },
+ "minimap": {
+  "show": "never"
+ },
+ "show_whitespaces": "none",
+ "agent_servers": {
+  "claude-acp": {
+   "type": "registry"
+  },
+  "github-copilot-cli": {
+   "type": "registry"
+  }
+ },
+ "theme": "Gruvbox Dark",
 	"ui_font_size": 14,
 	"buffer_font_size": 14,
 	"tab_size": 4,
@@ -34,7 +53,8 @@
 	},
 	"languages": {
 		"Markdown": {
-			"tab_size": 4,
+			"show_whitespaces": "none",
+   "tab_size": 4,
 			"soft_wrap": "none"
 		}
 	}

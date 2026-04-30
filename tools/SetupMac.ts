@@ -2,6 +2,7 @@ import * as cp from "child_process"
 import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
+import {input} from "@inquirer/prompts"
 import {createCliTool} from "../pkg/util/CliUtil.js"
 import {toError} from "../pkg/util/ErrorUtil.js"
 import {Logger} from "../pkg/util/Logger.js"
@@ -39,6 +40,7 @@ async function ensureMacSetup() {
 	await ensureGitConfig(ctx)
 	await ensureSshSetup(ctx)
 	await ensureBrewPackages(ctx)
+	await ensureClaude(ctx)
 	await ensureNode(ctx)
 	await ensureClaudeSetup(ctx)
 	await ensureFonts(ctx)
@@ -571,9 +573,10 @@ async function ensureSshSetup(_ctx: SetupContext) {
 
 	if (!fs.existsSync(keyPath)) {
 		logger.info("ensureSshSetup", "generating ed25519 SSH key...")
-		execSync(
-			`ssh-keygen -t ed25519 -C "dvd.zkwsk@gmail.com" -N "" -f ${keyPath}`,
-		)
+		const email = await input({
+			message: "Enter email for SSH key (for GitHub):",
+		})
+		execSync(`ssh-keygen -t ed25519 -C "${email}" -N "" -f ${keyPath}`)
 		logger.info("ensureSshSetup", "SSH key generated", {keyPath})
 	} else {
 		logger.debug("ensureSshSetup", "SSH key already exists, skipping")
@@ -628,6 +631,8 @@ async function ensureNode(ctx: SetupContext) {
 		return
 	}
 	if (!commandExists("n")) {
+		const brewInstall = createBrewInstallFn(ctx)
+		brewInstall("n") // node version manager
 		ctx.warnings.push(
 			"Cannot install node: 'n' version manager is not installed",
 		)
@@ -640,6 +645,21 @@ async function ensureNode(ctx: SetupContext) {
 		const msg = `Failed to install Node.js: ${toError(e).message}`
 		logger.warn("ensureNode", msg)
 		ctx.warnings.push(msg)
+	}
+}
+
+async function ensureClaude(ctx: SetupContext) {
+	if (!commandExists("claude")) {
+		logger.info("ensureBrewPackages", "installing Claude Code...")
+		try {
+			cp.execSync("npm install -g @anthropic-ai/claude-code", {
+				stdio: "inherit",
+			})
+		} catch (e) {
+			const msg = `Failed to install Claude Code: ${toError(e).message}`
+			logger.warn("ensureBrewPackages", msg)
+			ctx.warnings.push(msg)
+		}
 	}
 }
 
@@ -707,87 +727,17 @@ function commandExists(command: string): boolean {
 }
 
 async function ensureBrewPackages(ctx: SetupContext) {
-	logger.info("ensureBrewPackages", "loading installed packages...")
-	const parseBrewList = (cmd: string) =>
-		new Set(
-			cp
-				.execSync(cmd, {
-					encoding: "utf8",
-					stdio: ["ignore", "pipe", "ignore"],
-				})
-				.trim()
-				.split("\n")
-				.filter(Boolean),
-		)
-	const installedFormulas = parseBrewList("brew list --formula")
-	const installedCasks = parseBrewList("brew list --cask")
-
-	function brewInstall(
-		name: string,
-		opts: {cask?: boolean; skipIfExists?: string[]} = {},
-	) {
-		if (opts.skipIfExists?.some((p) => fs.existsSync(p))) {
-			logger.debug("brewInstall", `skip ${name}, already exists`)
-			return
-		}
-		if ((opts.cask ? installedCasks : installedFormulas).has(name)) {
-			logger.debug("brewInstall", `skip ${name}, already installed`)
-			return
-		}
-		try {
-			cp.execSync(`brew install ${opts.cask ? "--cask " : ""}${name}`, {
-				stdio: "inherit",
-				timeout: 10 * 60 * 1000,
-			})
-		} catch (e) {
-			const msg = `Failed to install ${name}: ${toError(e).message}`
-			logger.warn("brewInstall", msg)
-			ctx.warnings.push(msg)
-		}
-	}
+	const brewInstall = createBrewInstallFn(ctx)
 
 	logger.info("ensureBrewPackages", "installing CLI apps")
 	brewInstall("coreutils")
 	brewInstall("gh") // GitHub CLI
 	brewInstall("git-extras")
 	brewInstall("zsh-completions")
-
 	brewInstall("n") // node version manager
-	if (commandExists("node")) {
-		logger.debug("ensureBrewPackages", "node already installed, skipping")
-	} else {
-		if (!commandExists("n")) {
-			ctx.warnings.push(
-				"Cannot install node: 'n' version manager is not installed",
-			)
-		}
-		logger.info("ensureBrewPackages", "installing Node.js LTS via n...")
-		try {
-			cp.execSync("n lts", {stdio: "inherit"})
-		} catch (e) {
-			const msg = `Failed to install Node.js: ${toError(e).message}`
-			logger.warn("ensureBrewPackages", msg)
-			ctx.warnings.push(msg)
-		}
-	}
-
-	brewInstall("neovim")
 	brewInstall("jq") // json explorer
 	brewInstall("gron") // json flattener
 	brewInstall("tree") // print nice file trees
-
-	brewInstall("fzf") // general purpose fuzzy-finder
-	if (!fs.existsSync(path.join(os.homedir(), ".fzf.zsh"))) {
-		execSync(
-			"$(brew --prefix)/opt/fzf/install --no-update-rc --key-bindings --completion",
-		)
-	} else {
-		logger.debug(
-			"ensureBrewPackages",
-			"fzf shell integration already installed, skipping",
-		)
-	}
-
 	brewInstall("htop") // better `top`
 	brewInstall("tldr") // better `man`
 	brewInstall("ripgrep") // better `grep`
@@ -801,18 +751,18 @@ async function ensureBrewPackages(ctx: SetupContext) {
 	brewInstall("watch") // run command repeatedly
 	brewInstall("mkcert") // local HTTPS certs
 	brewInstall("zoxide") // better `cd`
+	brewInstall("neovim")
 
-	if (!commandExists("claude")) {
-		logger.info("ensureBrewPackages", "installing Claude Code...")
-		try {
-			cp.execSync("npm install -g @anthropic-ai/claude-code", {
-				stdio: "inherit",
-			})
-		} catch (e) {
-			const msg = `Failed to install Claude Code: ${toError(e).message}`
-			logger.warn("ensureBrewPackages", msg)
-			ctx.warnings.push(msg)
-		}
+	brewInstall("fzf") // general purpose fuzzy-finder
+	if (!fs.existsSync(path.join(os.homedir(), ".fzf.zsh"))) {
+		execSync(
+			"$(brew --prefix)/opt/fzf/install --no-update-rc --key-bindings --completion",
+		)
+	} else {
+		logger.debug(
+			"ensureBrewPackages",
+			"fzf shell integration already installed, skipping",
+		)
 	}
 
 	logger.info("ensureBrewPackages", "installing desktop apps")
@@ -872,6 +822,47 @@ async function ensureBrewPackages(ctx: SetupContext) {
 			"/Applications/1Password 7 - Password Manager.app",
 		],
 	})
+}
+
+function createBrewInstallFn(ctx: SetupContext) {
+	logger.info("createBrewInstallFn", "loading installed packages...")
+	const parseBrewList = (cmd: string) =>
+		new Set(
+			cp
+				.execSync(cmd, {
+					encoding: "utf8",
+					stdio: ["ignore", "pipe", "ignore"],
+				})
+				.trim()
+				.split("\n")
+				.filter(Boolean),
+		)
+	const installedFormulas = parseBrewList("brew list --formula")
+	const installedCasks = parseBrewList("brew list --cask")
+
+	return function brewInstall(
+		name: string,
+		opts: {cask?: boolean; skipIfExists?: string[]} = {},
+	) {
+		if (opts.skipIfExists?.some((p) => fs.existsSync(p))) {
+			logger.debug("brewInstall", `skip ${name}, already exists`)
+			return
+		}
+		if ((opts.cask ? installedCasks : installedFormulas).has(name)) {
+			logger.debug("brewInstall", `skip ${name}, already installed`)
+			return
+		}
+		try {
+			cp.execSync(`brew install ${opts.cask ? "--cask " : ""}${name}`, {
+				stdio: "inherit",
+				timeout: 10 * 60 * 1000,
+			})
+		} catch (e) {
+			const msg = `Failed to install ${name}: ${toError(e).message}`
+			logger.warn("brewInstall", msg)
+			ctx.warnings.push(msg)
+		}
+	}
 }
 
 async function ensureFonts(ctx: SetupContext) {

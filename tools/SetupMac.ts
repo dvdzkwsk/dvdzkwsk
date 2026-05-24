@@ -33,11 +33,10 @@ async function ensureMacSetup() {
 
 	await ensureHomebrew(ctx)
 	await ensureOSXSettings(ctx)
-	await ensureDotFilesLinked(options, ctx)
+	await ensureDotFiles(options, ctx)
 	await ensureConfigFilesLinked(options, ctx)
 	await ensureITermSettings(options, ctx)
 	await ensureZshSetup(ctx)
-	await ensureGitConfig(ctx)
 	await ensureSshSetup(ctx)
 	await ensureBrewPackages(ctx)
 	await ensureClaude(ctx)
@@ -45,7 +44,6 @@ async function ensureMacSetup() {
 	await ensureVSCodeExtensions(ctx)
 	await ensureRaycastSetup(ctx)
 	await ensureClaudeSetup(options, ctx)
-	await ensureFonts(ctx)
 	await ensureChromeApps(ctx)
 
 	if (ctx.warnings.length) {
@@ -436,15 +434,16 @@ async function ensureOSXSettings(_ctx: SetupContext) {
 	}
 }
 
-async function ensureDotFilesLinked(
-	options: ProgramOptions,
-	_ctx: SetupContext,
-) {
+async function ensureDotFiles(options: ProgramOptions, ctx: SetupContext) {
 	for (const name of fs.readdirSync(path.join(PROJECT_ROOT, "dotfiles"))) {
 		if (!name.startsWith(".")) continue
-		if (name === ".gitconfig") continue
 
-		logger.debug("ensureDotFilesLinked", "ensure dotfile", {name})
+		if (name === ".gitconfig") {
+			await ensureGitConfig(ctx)
+			continue
+		}
+
+		logger.debug("ensureDotFiles", "ensure dotfile", {name})
 		await ensureSymlink(
 			{
 				path: path.join(os.homedir(), name),
@@ -489,6 +488,8 @@ async function ensureGitConfig(ctx: SetupContext) {
 		return
 	}
 
+	// Copied rather than symlinked: git user credentials are expected to differ
+	// per machine and we don't want those changes synced back to the repo.
 	logger.info("ensureGitConfig", "copying .gitconfig to home directory")
 	await fs.promises.copyFile(src, dest)
 }
@@ -504,10 +505,7 @@ async function ensureConfigFilesLinked(
 				os.homedir(),
 				"Library/Application Support/Code/User/settings.json",
 			),
-			target: path.join(
-				PROJECT_ROOT,
-				"dotfiles/config/vscode/settings.json",
-			),
+			target: path.join(PROJECT_ROOT, "config/vscode/settings.json"),
 		},
 		{
 			name: "vscode/keybindings.json",
@@ -515,28 +513,22 @@ async function ensureConfigFilesLinked(
 				os.homedir(),
 				"Library/Application Support/Code/User/keybindings.json",
 			),
-			target: path.join(
-				PROJECT_ROOT,
-				"dotfiles/config/vscode/keybindings.json",
-			),
+			target: path.join(PROJECT_ROOT, "config/vscode/keybindings.json"),
 		},
 		{
 			name: "zed/settings.json",
 			path: path.join(os.homedir(), ".config/zed/settings.json"),
-			target: path.join(
-				PROJECT_ROOT,
-				"dotfiles/config/zed/settings.json",
-			),
+			target: path.join(PROJECT_ROOT, "config/zed/settings.json"),
 		},
 		{
 			name: "zed/keymap.json",
 			path: path.join(os.homedir(), ".config/zed/keymap.json"),
-			target: path.join(PROJECT_ROOT, "dotfiles/config/zed/keymap.json"),
+			target: path.join(PROJECT_ROOT, "config/zed/keymap.json"),
 		},
 		{
 			name: "ghostty/config",
 			path: path.join(os.homedir(), ".config/ghostty/config"),
-			target: path.join(PROJECT_ROOT, "dotfiles/config/ghostty/config"),
+			target: path.join(PROJECT_ROOT, "config/ghostty/config"),
 		},
 	]
 	for (const config of configs) {
@@ -565,7 +557,7 @@ async function ensureITermSettings(
 			),
 			target: path.join(
 				PROJECT_ROOT,
-				"dotfiles/config/iterm2/com.googlecode.iterm2.plist",
+				"config/iterm2/com.googlecode.iterm2.plist",
 			),
 		},
 		options,
@@ -629,7 +621,7 @@ async function ensureClaudeSetup(options: ProgramOptions, _ctx: SetupContext) {
 		const result = await ensureSymlink(
 			{
 				path: path.join(os.homedir(), ".claude", name),
-				target: path.join(PROJECT_ROOT, "dotfiles/claude", name),
+				target: path.join(PROJECT_ROOT, "config/claude", name),
 			},
 			options,
 		)
@@ -988,17 +980,35 @@ function createBrewInstallFn(ctx: SetupContext) {
 			})
 			return
 		}
-		if ((opts.cask ? installedCasks : installedFormulas).has(name)) {
+		const alreadyInBrew = (
+			opts.cask ? installedCasks : installedFormulas
+		).has(name)
+		// If skipIfExists was provided but none of the paths exist, the app didn't
+		// actually land on disk (e.g. a .pkg cask that failed silently). Reinstall.
+		if (alreadyInBrew && !opts.skipIfExists) {
 			logger.debug("brewInstall", `skip package, already installed`, {
 				name,
 			})
 			return
 		}
 		try {
-			cp.execSync(`brew install ${opts.cask ? "--cask " : ""}${name}`, {
-				stdio: "inherit",
-				timeout: 10 * 60 * 1000,
-			})
+			if (alreadyInBrew) {
+				cp.execSync(
+					`brew reinstall ${opts.cask ? "--cask " : ""}${name}`,
+					{
+						stdio: "inherit",
+						timeout: 10 * 60 * 1000,
+					},
+				)
+			} else {
+				cp.execSync(
+					`brew install ${opts.cask ? "--cask " : ""}${name}`,
+					{
+						stdio: "inherit",
+						timeout: 10 * 60 * 1000,
+					},
+				)
+			}
 		} catch (e) {
 			logger.warn("brewInstall", "failed to install package", {
 				error: e,

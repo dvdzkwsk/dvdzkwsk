@@ -42,14 +42,16 @@ async function ensureMacSetup() {
 	await ensureBrewPackages(ctx)
 	await ensureClaude(ctx)
 	await ensureNode(ctx)
-	await ensureClaudeSetup(ctx)
+	await ensureVSCodeExtensions(ctx)
+	await ensureRaycastSetup(ctx)
+	await ensureClaudeSetup(options, ctx)
 	await ensureFonts(ctx)
+	await ensureChromeApps(ctx)
 
 	if (ctx.warnings.length) {
-		logger.warn("ensureMacSetup", `${ctx.warnings.length} warning(s):`)
-		for (const w of ctx.warnings) {
-			logger.warn("ensureMacSetup", w)
-		}
+		logger.warn("ensureMacSetup", "finished with warnings", {
+			warnings: ctx.warnings,
+		})
 	}
 }
 
@@ -508,6 +510,17 @@ async function ensureConfigFilesLinked(
 			),
 		},
 		{
+			name: "vscode/keybindings.json",
+			path: path.join(
+				os.homedir(),
+				"Library/Application Support/Code/User/keybindings.json",
+			),
+			target: path.join(
+				PROJECT_ROOT,
+				"dotfiles/config/vscode/keybindings.json",
+			),
+		},
+		{
 			name: "zed/settings.json",
 			path: path.join(os.homedir(), ".config/zed/settings.json"),
 			target: path.join(
@@ -610,18 +623,24 @@ async function ensureSshSetup(_ctx: SetupContext) {
 	}
 }
 
-async function ensureClaudeSetup(_ctx: SetupContext) {
-	const result = await ensureSymlink(
-		{
-			path: path.join(os.homedir(), ".claude", "skills"),
-			target: path.join(PROJECT_ROOT, "dotfiles/claude/skills"),
-		},
-		{force: false},
-	)
-	if (result === "already-linked") {
-		logger.debug("ensureClaudeSetup", "already linked: ~/.claude/skills")
-	} else {
-		logger.info("ensureClaudeSetup", "linked: ~/.claude/skills")
+async function ensureClaudeSetup(options: ProgramOptions, _ctx: SetupContext) {
+	const links = ["CLAUDE.md", "keybindings.json", "settings.json", "skills"]
+	for (const name of links) {
+		const result = await ensureSymlink(
+			{
+				path: path.join(os.homedir(), ".claude", name),
+				target: path.join(PROJECT_ROOT, "dotfiles/claude", name),
+			},
+			options,
+		)
+		if (result === "already-linked") {
+			logger.debug(
+				"ensureClaudeSetup",
+				`already linked: ~/.claude/${name}`,
+			)
+		} else {
+			logger.info("ensureClaudeSetup", `linked: ~/.claude/${name}`)
+		}
 	}
 }
 
@@ -659,6 +678,125 @@ async function ensureClaude(ctx: SetupContext) {
 			const msg = `Failed to install Claude Code: ${toError(e).message}`
 			logger.warn("ensureBrewPackages", msg)
 			ctx.warnings.push(msg)
+		}
+	}
+}
+
+async function ensureRaycastSetup(ctx: SetupContext) {
+	const chromeAppsDir = path.join(
+		os.homedir(),
+		"Applications",
+		"Chrome Apps.localized",
+	)
+	const plistPath = path.join(
+		os.homedir(),
+		"Library/Preferences/com.raycast.macos.plist",
+	)
+	// Ensure Chrome Apps are registered as application directories so RayCast will
+	// suggest them.
+	if (!fs.existsSync(plistPath)) {
+		logger.debug("ensureRaycastSetup", "Raycast not installed, skipping")
+		return
+	}
+	try {
+		let currentApplicationDirs: string[] | undefined = undefined
+		try {
+			const json = cp
+				.execSync(
+					`plutil -extract applicationDirectories json -o - "${plistPath}"`,
+					{encoding: "utf8", stdio: ["ignore", "pipe", "ignore"]},
+				)
+				.trim()
+			currentApplicationDirs = JSON.parse(json)
+		} catch {
+			// key doesn't exist yet
+		}
+		if (!currentApplicationDirs?.includes(chromeAppsDir)) {
+			logger.info(
+				"ensureRaycastSetup",
+				"adding Chrome Apps dir to Raycast application directories",
+			)
+			const newApplicationDirs = (currentApplicationDirs ?? []).concat(
+				chromeAppsDir,
+			)
+			const op = currentApplicationDirs ? "replace" : "insert"
+			execSync(
+				`plutil -${op} applicationDirectories -json '${JSON.stringify(newApplicationDirs)}' "${plistPath}"`,
+			)
+		} else {
+			logger.debug(
+				"ensureRaycastSetup",
+				"Chrome Apps dir already in Raycast application directories",
+			)
+		}
+	} catch (e) {
+		ctx.warnings.push(
+			`Failed to update Raycast application directories: ${toError(e).message}`,
+		)
+	}
+}
+
+async function ensureVSCodeExtensions(ctx: SetupContext) {
+	if (!commandExists("code")) {
+		logger.debug("ensureVSCodeExtensions", "VSCode CLI not found, skipping")
+		return
+	}
+
+	const extensions = ["ms-vscode.sublime-keybindings"]
+
+	let installed: Set<string>
+	try {
+		installed = new Set(
+			cp
+				.execSync("code --list-extensions", {
+					encoding: "utf8",
+					stdio: ["ignore", "pipe", "ignore"],
+				})
+				.trim()
+				.split("\n")
+				.map((s) => s.toLowerCase()),
+		)
+	} catch {
+		installed = new Set()
+	}
+
+	for (const ext of extensions) {
+		if (installed.has(ext.toLowerCase())) {
+			logger.debug("ensureVSCodeExtensions", `already installed: ${ext}`)
+			continue
+		}
+		logger.info("ensureVSCodeExtensions", `installing extension: ${ext}`)
+		try {
+			cp.execSync(`code --install-extension ${ext}`, {stdio: "inherit"})
+		} catch (e) {
+			ctx.warnings.push(
+				`Failed to install VSCode extension ${ext}: ${toError(e).message}`,
+			)
+		}
+	}
+}
+
+async function ensureChromeApps(ctx: SetupContext) {
+	const chromeAppsDir = path.join(
+		os.homedir(),
+		"Applications",
+		"Chrome Apps.localized",
+	)
+
+	const expectedApps = [
+		"Gmail.app",
+		"Google Calendar.app",
+		"Google Keep.app",
+		"Google Tasks.app",
+	]
+	for (const app of expectedApps) {
+		const appPath = path.join(chromeAppsDir, app)
+		if (!fs.existsSync(appPath)) {
+			const appName = app.replace(".app", "")
+			ctx.warnings.push(
+				`[suggestion] ${appName} is not installed as a Chrome app. ` +
+					"To install: open app in Chrome → ⋮ menu → Save and share → Install page as app",
+			)
 		}
 	}
 }
@@ -845,11 +983,15 @@ function createBrewInstallFn(ctx: SetupContext) {
 		opts: {cask?: boolean; skipIfExists?: string[]} = {},
 	) {
 		if (opts.skipIfExists?.some((p) => fs.existsSync(p))) {
-			logger.debug("brewInstall", `skip ${name}, already exists`)
+			logger.debug("brewInstall", `skip package, already installed`, {
+				name,
+			})
 			return
 		}
 		if ((opts.cask ? installedCasks : installedFormulas).has(name)) {
-			logger.debug("brewInstall", `skip ${name}, already installed`)
+			logger.debug("brewInstall", `skip package, already installed`, {
+				name,
+			})
 			return
 		}
 		try {
@@ -858,9 +1000,13 @@ function createBrewInstallFn(ctx: SetupContext) {
 				timeout: 10 * 60 * 1000,
 			})
 		} catch (e) {
-			const msg = `Failed to install ${name}: ${toError(e).message}`
-			logger.warn("brewInstall", msg)
-			ctx.warnings.push(msg)
+			logger.warn("brewInstall", "failed to install package", {
+				error: e,
+				name,
+			})
+			ctx.warnings.push(
+				`Failed to install ${name}: ${toError(e).message}`,
+			)
 		}
 	}
 }

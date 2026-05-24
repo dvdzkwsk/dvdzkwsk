@@ -126,20 +126,6 @@ alias size="stat -f%z"
 alias weather="curl wttr.in"
 alias diff="colordiff"
 alias cat="bat"
-alias plan="$EDITOR ~/Workspace/docs/plan.txt"
-alias t="$EDITOR ~/Workspace/docs/triage.txt"
-
-export QUILT_NOTEBOOK="$HOME/Documents/Notebook"
-function quilt {
-  bun run $HOME/Documents/Projects/quilt/cmd/quilt-cli/Main.ts "$@"
-}
-
-function snapshot {
-	cd ~/Workspace
-	git add .
-	git commit -m "Snapshot"
-	git push
-}
 
 # [F]ind
 function ff {
@@ -156,9 +142,6 @@ function h {
 # [L]ist
 alias ll="ls -la -Gfh"
 alias ls="ls -Gfh"
-
-# [V]im
-alias vrc="$EDITOR ~/.config/nvim/init.vim"
 
 # [Z]sh
 alias zrc="$EDITOR ~/.zshrc"

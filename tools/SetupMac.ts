@@ -33,6 +33,7 @@ async function ensureMacSetup() {
 
 	await ensureHomebrew(ctx)
 	await ensureOSXSettings(ctx)
+	await ensureBlockedWebsites(ctx)
 	await ensureDotFiles(options, ctx)
 	await ensureConfigFilesLinked(options, ctx)
 	await ensureITermSettings(options, ctx)
@@ -431,6 +432,44 @@ async function ensureOSXSettings(_ctx: SetupContext) {
 		} catch {
 			// process may not be running
 		}
+	}
+}
+
+async function ensureBlockedWebsites(_ctx: SetupContext) {
+	const BLOCKED_HOSTS = [
+		"tildes.net",
+		"cnn.com",
+		"reddit.com",
+		"www.reddit.com",
+		"news.ycombinator.com",
+	]
+
+	const hostsPath = "/etc/hosts"
+	const existing = fs.readFileSync(hostsPath, "utf8")
+	const toAdd = BLOCKED_HOSTS.filter((host) => !existing.includes(host))
+
+	if (toAdd.length === 0) {
+		logger.debug(
+			"ensureBlockedWebsites",
+			"all hosts already blocked, skipping",
+		)
+		return
+	}
+
+	logger.info("ensureBlockedWebsites", "blocking hosts via /etc/hosts", {
+		toAdd,
+	})
+	const additions =
+		"\n" + toAdd.map((h) => `127.0.0.1 ${h}`).join("\n") + "\n"
+	const tmpFile = path.join(os.tmpdir(), "hosts_additions.txt")
+	fs.writeFileSync(tmpFile, additions, "utf8")
+	try {
+		// Elevate only for the append; write content unprivileged beforehand.
+		cp.execSync(`sudo sh -c 'cat "${tmpFile}" >> "${hostsPath}"'`, {
+			stdio: "inherit",
+		})
+	} finally {
+		fs.unlinkSync(tmpFile)
 	}
 }
 

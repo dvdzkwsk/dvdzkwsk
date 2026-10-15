@@ -75,6 +75,10 @@ export function getTeamHref(team: {id: string; seasonId: string}): string {
 	return `/teams/${team.id}?${new URLSearchParams({season: team.seasonId})}`
 }
 
+export function getSearchHref(query: string): string {
+	return `/search?${new URLSearchParams({q: query})}`
+}
+
 /** "Kraken Hockey League Fall/Winter 26/27" -> "Fall/Winter 26/27" */
 export function getShortSeasonName(name: string): string {
 	return name.replace(/^Kraken Hockey League\s+/i, "").trim()
@@ -318,6 +322,18 @@ function withSimulatedLoading<T>(load: () => Promise<T>): Promise<T> {
 		).then(load)
 	}
 	return load()
+}
+
+/** Whether a CSS media query matches, re-rendering whenever that changes. */
+export function useMediaQuery(query: string): boolean {
+	return React.useSyncExternalStore(
+		(onChange) => {
+			const list = window.matchMedia(query)
+			list.addEventListener("change", onChange)
+			return () => list.removeEventListener("change", onChange)
+		},
+		() => window.matchMedia(query).matches,
+	)
 }
 
 /** The current location, re-rendering whenever it changes. */

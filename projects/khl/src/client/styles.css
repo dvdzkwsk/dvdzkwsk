@@ -695,22 +695,25 @@ table {
 	visibility: visible;
 }
 
-.StatsTable tbody tr:hover td {
-	background: var(--subtle-bg);
-}
+/* Only with a mouse: a tap would leave the row highlighted */
+@media (hover: hover) {
+	.StatsTable tbody tr:hover td {
+		background: var(--subtle-bg);
+	}
 
-.StatsTable tbody tr:hover td:first-child {
-	border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-}
+	.StatsTable tbody tr:hover td:first-child {
+		border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+	}
 
-.StatsTable tbody tr:hover td:last-child {
-	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
+	.StatsTable tbody tr:hover td:last-child {
+		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+	}
 
-/* The rounded row replaces the dividers above and below it */
-.StatsTable tbody tr:hover td,
-.StatsTable tbody tr:has(+ tr:hover) td {
-	border-bottom-color: transparent;
+	/* The rounded row replaces the dividers above and below it */
+	.StatsTable tbody tr:hover td,
+	.StatsTable tbody tr:has(+ tr:hover) td {
+		border-bottom-color: transparent;
+	}
 }
 
 .StatsTable th:first-child,
@@ -1299,23 +1302,24 @@ table {
    goes, and the teams share what's left, their names ending in an ellipsis.
    The selectors outweigh GameTable's own min-widths. */
 @container (max-width: 760px) {
-	.GameTableCard .StatsTable.GameTable {
+	:is(.GameTableCard, .GameList-panel) table.StatsTable.GameTable {
 		min-width: 0;
 	}
 
-	.GameTableCard .GameTable .GameTable-col--rink {
+	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--rink {
 		display: none;
 	}
 
-	.GameTableCard .GameTable--scoreboard .GameTable-col--away,
-	.GameTableCard .GameTable--scoreboard .GameTable-col--home,
-	.GameTableCard
+	:is(.GameTableCard, .GameList-panel)
+		.GameTable--scoreboard
+		:is(.GameTable-col--away, .GameTable-col--home),
+	:is(.GameTableCard, .GameList-panel)
 		.GameTable--scoreboard:not(:has(.GameTable-col--rink))
 		.GameTable-col--links {
 		width: auto;
 	}
 
-	.GameTableCard .GameTable .GameTable-col--links {
+	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--links {
 		width: calc(var(--icon-links-width) + var(--spacing) * 6);
 	}
 }
@@ -1323,12 +1327,12 @@ table {
 /* Narrower still (a phone): the links and logos go too; the game page the
    row links to has the scoresheet and replays */
 @container (max-width: 520px) {
-	.GameTableCard .GameTable .GameTable-col--links,
-	.GameTableCard .GameTable .TeamAvatar {
+	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--links,
+	:is(.GameTableCard, .GameList-panel) .GameTable .TeamAvatar {
 		display: none;
 	}
 
-	.GameTableCard .GameTable .GameTable-col--score {
+	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--score {
 		width: calc(5.5rem + var(--spacing) * 2);
 	}
 }
@@ -2001,7 +2005,8 @@ table {
 
 .PlayerHero-group-stats {
 	display: flex;
-	gap: calc(var(--spacing) * 6);
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 3) calc(var(--spacing) * 6);
 	margin: 0;
 }
 
@@ -2032,6 +2037,14 @@ table {
 		font-size: var(--text-4xl);
 	}
 
+	.PlayerHero-stats {
+		column-gap: calc(var(--spacing) * 6);
+	}
+
+	.PlayerHero-group-stats {
+		column-gap: calc(var(--spacing) * 5);
+	}
+
 	.PlayerHero-group + .PlayerHero-group {
 		padding-left: 0;
 		border-left: none;
@@ -2057,7 +2070,7 @@ table {
 
 .Detail-select {
 	justify-content: space-between;
-	min-width: 240px;
+	min-width: min(240px, 100%);
 }
 
 .Detail-select svg,
@@ -2277,19 +2290,6 @@ table {
 
 .Detail-section-title {
 	margin-bottom: calc(var(--spacing) * 3);
-}
-
-.Detail-columns {
-	display: grid;
-	grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-	align-items: start;
-	gap: calc(var(--spacing) * 4);
-}
-
-@media (max-width: 900px) {
-	.Detail-columns {
-		grid-template-columns: minmax(0, 1fr);
-	}
 }
 
 .Detail-panel {
@@ -3920,6 +3920,10 @@ a.Compare-chip:hover {
 	max-width: 520px;
 }
 
+.SiteSearch-form {
+	position: relative;
+}
+
 .SiteSearch-icon {
 	position: absolute;
 	top: 50%;
@@ -3941,6 +3945,10 @@ a.Compare-chip:hover {
 	color: inherit;
 	font: inherit;
 	font-size: var(--text-md);
+}
+
+.SiteSearch-input::-webkit-search-cancel-button {
+	appearance: none;
 }
 
 .SiteSearch-input:focus {
@@ -3983,7 +3991,7 @@ a.Compare-chip:hover {
 
 .SiteSearch-positioner {
 	width: var(--anchor-width);
-	min-width: 360px;
+	min-width: min(360px, calc(100vw - var(--spacing) * 6));
 }
 
 .SiteSearch-popup {
@@ -3999,6 +4007,15 @@ a.Compare-chip:hover {
 .SiteSearch-popup .ErrorState {
 	border: none;
 	box-shadow: none;
+}
+
+.SiteSearch-all {
+	display: block;
+	margin-top: calc(var(--spacing) * 1);
+	padding: calc(var(--spacing) * 2.5);
+	border-top: 1px solid var(--panel-border);
+	font-size: var(--text-base);
+	font-weight: var(--weight-medium);
 }
 
 .SiteSearch-message {
@@ -4090,13 +4107,193 @@ a.Compare-chip:hover {
 	color: var(--kind-rink-fg);
 }
 
+/* Phones only: the search's open and cancel buttons, and the menu button */
+.SiteSearch-open,
+.SiteSearch-cancel,
+.SiteHeader .SiteMenu-button {
+	display: none;
+}
+
+.SiteSearch-open,
+.SiteMenu-button {
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-pill);
+	background: none;
+	color: var(--site-fg);
+	cursor: pointer;
+}
+
+.SiteSearch-open:hover,
+.SiteMenu-button:hover {
+	background: var(--subtle-bg);
+}
+
+.SiteSearch-open-icon,
+.SiteMenu-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.SiteSearch-cancel {
+	flex: none;
+	padding: calc(var(--spacing) * 2) 0;
+	border: none;
+	background: none;
+	color: var(--link);
+	font: inherit;
+	font-size: var(--text-md);
+	cursor: pointer;
+}
+
+/* One row on phones: brand, then search and menu buttons. Tapping search
+   fills the row with the input until it's cancelled. */
 @media (max-width: 640px) {
 	.SiteHeader-inner {
-		gap: calc(var(--spacing) * 3);
+		gap: calc(var(--spacing) * 1);
+		padding-block: calc(var(--spacing) * 2);
 	}
 
-	.SiteHeader-brand {
+	.SiteHeader-end {
 		display: none;
+	}
+
+	.SiteHeader .SiteMenu-button,
+	.SiteSearch-open {
+		display: grid;
+	}
+
+	.SiteSearch {
+		flex: none;
+		margin-left: auto;
+	}
+
+	.SiteSearch-form {
+		display: none;
+	}
+
+	.SiteSearch--expanded {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: calc(var(--spacing) * 3);
+		max-width: none;
+	}
+
+	.SiteSearch--expanded .SiteSearch-open {
+		display: none;
+	}
+
+	.SiteSearch--expanded .SiteSearch-form {
+		display: block;
+		flex: 1;
+	}
+
+	.SiteSearch--expanded .SiteSearch-cancel {
+		display: block;
+	}
+
+	.SiteHeader:has(.SiteSearch--expanded)
+		:is(.SiteHeader-brand, .SiteMenu-button) {
+		display: none;
+	}
+
+	/* 16px, or iOS zooms in on focus */
+	.SiteSearch-input {
+		font-size: var(--text-lg);
+	}
+}
+
+/* === SiteMenu: the nav in a drawer, on phones === */
+
+.SiteMenu-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	background: var(--backdrop);
+	transition: opacity 200ms;
+}
+
+.SiteMenu-backdrop:is([data-starting-style], [data-ending-style]) {
+	opacity: 0;
+}
+
+.SiteMenu {
+	position: fixed;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 40;
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 4);
+	width: min(20rem, 85vw);
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3)
+		calc(var(--spacing) * 6);
+	overflow-y: auto;
+	background: var(--panel-bg);
+	border-left: 1px solid var(--panel-border);
+	box-shadow: var(--shadow-md);
+	color: var(--site-fg);
+	outline: none;
+	translate: var(--drawer-swipe-movement-x, 0) 0;
+	transition: translate 250ms ease;
+}
+
+.SiteMenu[data-swiping] {
+	transition: none;
+}
+
+.SiteMenu:is([data-starting-style], [data-ending-style]) {
+	translate: 100% 0;
+}
+
+.SiteMenu-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-left: calc(var(--spacing) * 3);
+}
+
+.SiteMenu-title {
+	margin: 0;
+	font-size: var(--text-lg);
+	font-weight: var(--weight-bold);
+	letter-spacing: -0.02em;
+}
+
+.SiteMenu-button {
+	display: grid;
+}
+
+.SiteNav--menu {
+	flex-direction: column;
+}
+
+.SiteNav--menu .SiteNav-link {
+	padding: calc(var(--spacing) * 3);
+	border-radius: var(--radius-md);
+	font-size: var(--text-lg);
+}
+
+.SiteMenu-theme {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: auto;
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 3) 0;
+	border-top: 1px solid var(--panel-border);
+	font-size: var(--text-md);
+	color: var(--muted-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.SiteMenu,
+	.SiteMenu-backdrop {
+		transition: none;
 	}
 }
 
@@ -4198,6 +4395,7 @@ a.Compare-chip:hover {
 
 /* A day's games on the home page, in a card like a rink page's tables */
 .GameList-panel {
+	container-type: inline-size;
 	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 6);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
@@ -4517,8 +4715,10 @@ a.Compare-chip:hover {
 	background: var(--panel-bg);
 }
 
-.Standings-table .StatsTable tbody tr:hover td:first-child {
-	background: var(--subtle-bg);
+@media (hover: hover) {
+	.Standings-table .StatsTable tbody tr:hover td:first-child {
+		background: var(--subtle-bg);
+	}
 }
 
 /* === Players page: every player's stats, grouped === */
@@ -4596,24 +4796,9 @@ a.Compare-chip:hover {
 	background: var(--panel-bg);
 }
 
-.PlayersPage-table .StatsTable tbody tr:hover td:first-child {
-	background: var(--subtle-bg);
-}
-
-/* The nav links don't fit beside search on phones: give them their own row */
-@media (max-width: 640px) {
-	.SiteHeader-inner {
-		flex-wrap: wrap;
-		row-gap: calc(var(--spacing) * 2);
-	}
-
-	.SiteHeader-end {
-		display: contents;
-	}
-
-	.SiteNav {
-		order: 1;
-		width: 100%;
+@media (hover: hover) {
+	.PlayersPage-table .StatsTable tbody tr:hover td:first-child {
+		background: var(--subtle-bg);
 	}
 }
 
@@ -4911,6 +5096,126 @@ a.Compare-chip:hover {
 .BadgeHint-label {
 	font-weight: var(--weight-semibold);
 	color: var(--site-fg);
+}
+
+/* === SearchPage === */
+
+.SearchPage {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 6);
+	max-width: 760px;
+}
+
+.SearchPage-title {
+	margin: 0;
+	font-size: var(--text-5xl);
+	font-weight: var(--weight-heavy);
+	letter-spacing: -0.025em;
+}
+
+.SearchPage-form {
+	position: relative;
+}
+
+.SearchPage-icon {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--spacing) * 4);
+	width: 18px;
+	height: 18px;
+	translate: 0 -50%;
+	color: var(--subtle-fg);
+	pointer-events: none;
+}
+
+/* 16px, or iOS zooms in on focus */
+.SearchPage-input {
+	width: 100%;
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4)
+		calc(var(--spacing) * 3) calc(var(--spacing) * 11);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-pill);
+	background: var(--panel-bg);
+	color: inherit;
+	font: inherit;
+	font-size: var(--text-lg);
+}
+
+.SearchPage-input::-webkit-search-cancel-button {
+	appearance: none;
+}
+
+.SearchPage-input:focus {
+	outline: none;
+	border-color: var(--subtle-fg);
+	box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+.SearchPage-hint,
+.SearchResults-empty {
+	margin: 0;
+	color: var(--muted-fg);
+}
+
+/* === SearchResults (on SearchPage) === */
+
+.SearchResults {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 6);
+}
+
+.SearchResults-group {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+}
+
+.SearchResults-list {
+	margin: 0;
+	padding: calc(var(--spacing) * 1);
+	list-style: none;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.SearchResults-item {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+	border-radius: var(--radius-md);
+	color: inherit;
+}
+
+.SearchResults-item:hover {
+	text-decoration: none;
+	background: var(--subtle-bg);
+}
+
+.SearchResults-item-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.SearchResults-item-label {
+	font-weight: var(--weight-semibold);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.SearchResults-item-detail {
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 /* === BadgesPage === */
@@ -5442,4 +5747,41 @@ a.Compare-chip:hover {
 
 .SiteFooter-link:hover {
 	color: var(--site-fg);
+}
+
+/* === Phone gutters (last, to override each component's padding) === */
+
+/* Phones: narrower gutters, so content gets the width */
+@media (max-width: 640px) {
+	.PageShell,
+	.SiteHeader-inner,
+	.SiteFooter-inner {
+		padding-inline: calc(var(--spacing) * 3);
+	}
+
+	.GameList-panel {
+		padding-inline: calc(var(--spacing) * 1);
+	}
+
+	.GameTableCard-header {
+		padding-inline: calc(var(--spacing) * 3);
+	}
+
+	.GameTableCard .StatsTable-wrapper {
+		padding-inline: calc(var(--spacing) * 1);
+	}
+
+	.Detail-header,
+	.RinkRoute-panel {
+		padding: calc(var(--spacing) * 4);
+	}
+
+	.Detail-name,
+	.RinkRoute-name {
+		font-size: var(--text-4xl);
+	}
+
+	.NoGames {
+		padding: calc(var(--spacing) * 8) calc(var(--spacing) * 4);
+	}
 }

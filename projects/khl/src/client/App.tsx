@@ -23,6 +23,7 @@ import {MatchupRoute} from "./pages/MatchupPage.js"
 import {PlayerRoute} from "./pages/PlayerPage.js"
 import {PlayersRoute} from "./pages/PlayersPage.js"
 import {RinkRoute} from "./pages/RinkPage.js"
+import {SearchRoute} from "./pages/SearchPage.js"
 import {StatusRoute} from "./pages/StatusPage.js"
 import {TeamRoute} from "./pages/TeamPage.js"
 import {TeamsRoute} from "./pages/TeamsPage.js"
@@ -60,6 +61,7 @@ const ROUTES: Route[] = [
 	TeamRoute,
 	RinkRoute,
 	MatchupRoute,
+	SearchRoute,
 	AboutRoute,
 	HelpRoute,
 	StatusRoute,

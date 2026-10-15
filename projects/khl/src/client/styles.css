@@ -2963,10 +2963,12 @@ table {
 
 .Matchup-side--a {
 	--team: var(--team-a);
+	grid-area: 1 / 1;
 }
 
 .Matchup-side--b {
 	--team: var(--team-b);
+	grid-area: 1 / 3;
 }
 
 .Matchup-side {
@@ -3049,7 +3051,7 @@ table {
 /* Secondary to the team: a quiet chip below it */
 .Matchup-season {
 	width: auto;
-	max-width: 280px;
+	max-width: min(280px, 100%);
 	padding: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
 	border-color: transparent;
 	background: var(--chip-bg);
@@ -3068,6 +3070,7 @@ table {
 /* A hairline down the middle, broken by the "vs" badge and swap button */
 .Matchup-center {
 	position: relative;
+	grid-area: 1 / 2;
 	align-self: stretch;
 	display: flex;
 	flex-direction: column;
@@ -3162,55 +3165,21 @@ table {
 	color: var(--muted-fg);
 }
 
-.Matchup-features {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: calc(var(--spacing) * 3);
-	max-width: 880px;
-	margin: calc(var(--spacing) * 6) auto 0;
-	padding: 0;
-	list-style: none;
-	text-align: left;
-}
-
-.Matchup-feature {
-	display: flex;
-	align-items: flex-start;
-	gap: calc(var(--spacing) * 3);
-	padding: calc(var(--spacing) * 4);
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius-md);
-	font-size: var(--text-base);
-	color: var(--muted-fg);
-}
-
-.Matchup-feature svg {
-	flex: none;
-	width: 20px;
-	height: 20px;
-	margin-top: 1px;
-	color: var(--site-fg);
-}
-
-.Matchup-feature-title {
-	display: block;
-	margin-bottom: calc(var(--spacing) * 0.5);
-	font-weight: var(--weight-semibold);
-	color: var(--site-fg);
-}
-
+/* Until both teams are picked: between the teams, below "vs", covering the
+   end of the divider line */
 .Matchup-tip {
-	margin: calc(var(--spacing) * 5) 0 0;
+	position: relative;
+	grid-area: 1 / 2;
+	align-self: end;
+	justify-self: center;
+	padding-top: calc(var(--spacing) * 2);
+	background: var(--panel-bg);
+	max-width: 12rem;
+	margin: 0;
 	font-size: var(--text-sm);
-	color: var(--subtle-fg);
-}
-
-@media (max-width: 760px) {
-	.Matchup-features {
-		grid-template-columns: minmax(0, 1fr);
-		max-width: 420px;
-	}
+	line-height: 1.4;
+	text-align: center;
+	color: var(--muted-fg);
 }
 
 /* Full-width card: keep its rows a readable width, centered */
@@ -3422,6 +3391,14 @@ a.Compare-chip:hover {
 
 	.Matchup-center {
 		padding-top: calc(var(--spacing) * 6);
+	}
+
+	/* No room between the teams: under both instead */
+	.Matchup-tip {
+		grid-area: 2 / 1 / auto / -1;
+		max-width: none;
+		padding-top: 0;
+		background: none;
 	}
 
 	.Compare-row {

@@ -136,6 +136,12 @@ const MatchupPage = ({query}: RouteProps) => {
 							setParams({...params, bSeason: id})
 						}
 					/>
+					{!ready && (
+						<p className="Matchup-tip">
+							Pick the same team on both sides to compare two of
+							its seasons.
+						</p>
+					)}
 				</header>
 				{ready ? (
 					<MatchupContent state={matchup} now={now} />
@@ -386,38 +392,6 @@ const MatchupEmpty = () => {
 			<p className="Matchup-empty-text">
 				Pick a team and season on each side.
 			</p>
-			<ul className="Matchup-features">
-				<li className="Matchup-feature">
-					<ChartIcon />
-					<span>
-						<span className="Matchup-feature-title">
-							Season stats
-						</span>
-						Record and recent form, then goals, special teams and
-						shots, side by side.
-					</span>
-				</li>
-				<li className="Matchup-feature">
-					<SwapIcon />
-					<span>
-						<span className="Matchup-feature-title">
-							Head-to-head
-						</span>
-						Every meeting between the two teams, across seasons.
-					</span>
-				</li>
-				<li className="Matchup-feature">
-					<PlayersIcon />
-					<span>
-						<span className="Matchup-feature-title">Rosters</span>
-						Each team's players and goalies, by points.
-					</span>
-				</li>
-			</ul>
-			<p className="Matchup-tip">
-				Tip: pick the same team on both sides to compare two of its
-				seasons.
-			</p>
 		</section>
 	)
 }
@@ -447,28 +421,6 @@ const ShieldIcon = () => {
 	return (
 		<svg {...ICON_PROPS}>
 			<path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
-		</svg>
-	)
-}
-
-const ChartIcon = () => {
-	return (
-		<svg {...ICON_PROPS}>
-			<path d="M4 20V10" />
-			<path d="M10 20V4" />
-			<path d="M16 20v-7" />
-			<path d="M22 20H2" />
-		</svg>
-	)
-}
-
-const PlayersIcon = () => {
-	return (
-		<svg {...ICON_PROPS}>
-			<circle cx="9" cy="8" r="3.5" />
-			<path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5" />
-			<path d="M16 4.7a3.5 3.5 0 0 1 0 6.6" />
-			<path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" />
 		</svg>
 	)
 }

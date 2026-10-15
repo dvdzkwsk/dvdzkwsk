@@ -4,6 +4,10 @@
 
 Always use `pnpm add -D -w <package>` (devDependencies) unless a package is explicitly a runtime production dependency.
 
+## Worktrees
+
+After creating a git worktree by hand, run `pnpm install` in it before building or running anything. Without its own `node_modules`, imports resolve through the main checkout's and workspace packages like `@dvdzkwsk/logger` fail to resolve. Sessions started in a worktree install automatically via `.claude/hooks/ensure-deps.sh`.
+
 ## Errors and logging
 
 Every thrown error must reach a `logger.error()` from `@dvdzkwsk/logger`.

@@ -17,3 +17,12 @@ Every thrown error must reach a `logger.error()` from `@dvdzkwsk/logger`.
 ## Reuse before writing
 
 Before adding a helper, search `pkg/util`, the project's `shared/` directory, and its existing utility modules for one that already does it. When two call sites need the same logic, extract it once rather than copying it with small variations.
+
+## Parsing external data
+
+Parse data from outside the program with a zod schema; never cast it (`JSON.parse(text) as Foo`, `response.json() as Foo`, `Bun.TOML.parse(text) as {...}`).
+
+- This covers JSON and TOML text, HTTP responses, CLI output (e.g. `fly ... --json`), files, `localStorage`, and env-derived config. A cast gives the shape a type it was never checked against, so a changed format shows up later as `undefined` deep in the code instead of an error where the data came in.
+- Use `safeParse` and throw `logger.newError(...)` with `z.prettifyError(result.error)` in `aux`, so the failure names the source and the mismatched fields.
+- Derive the type from the schema (`z.infer<typeof Schema>`) rather than declaring a separate interface that can drift.
+- For HTTP, `doFetch` from `@dvdzkwsk/util/FetchUtil` already validates the response against `responseSchema`.

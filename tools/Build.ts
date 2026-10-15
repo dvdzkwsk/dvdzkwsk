@@ -2,6 +2,8 @@ import * as fs from "fs"
 import * as path from "path"
 import {search} from "@inquirer/prompts"
 import crossSpawn from "cross-spawn"
+import {z} from "zod"
+import {Cloudflare} from "./Cloudflare.js"
 import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
 import {getGitRevision} from "../pkg/util/GitUtil.js"
@@ -21,7 +23,7 @@ const PROJECTS: Project[] = [
 		type: "webapp",
 		server: "src/server/Server.ts",
 		// The server serves the app and /api from one process (see fly.toml)
-		deploy: {type: "fly"},
+		deploy: {type: "fly", domain: "khl.dvdzkwsk.com"},
 	},
 ]
 
@@ -36,8 +38,11 @@ interface Project {
 type DeployTarget =
 	/** Static hosting; `siteIdEnvVar` names the env var with the site id */
 	| {type: "netlify"; siteIdEnvVar: string}
-	/** A container running `server`, configured by the project's fly.toml */
-	| {type: "fly"}
+	/**
+	 * A container running `server`, configured by the project's fly.toml.
+	 * `domain` is served through the Cloudflare proxy (see ensureFlyDomain).
+	 */
+	| {type: "fly"; domain?: string}
 
 /** Run with --dev to start dev servers, --deploy to build and publish. */
 async function main() {
@@ -137,7 +142,7 @@ function deployWebApp(project: Project) {
 		case "netlify":
 			return deployToNetlify(project, project.deploy.siteIdEnvVar)
 		case "fly":
-			return deployToFly(project)
+			return deployToFly(project, project.deploy.domain)
 	}
 }
 
@@ -170,7 +175,7 @@ function deployToNetlify(project: Project, siteIdEnvVar: string) {
  * dist/server.js, and ships both in the image described by the project's
  * Dockerfile. Uses your `fly auth login` session, or FLY_API_TOKEN if set.
  */
-function deployToFly(project: Project) {
+async function deployToFly(project: Project, domain?: string) {
 	if (!project.server) {
 		throw logger.newError("deployToFly", "project has no server to run", {
 			project: project.path,
@@ -216,6 +221,92 @@ function deployToFly(project: Project) {
 		],
 		{cwd: project.path},
 	)
+	// After the deploy, since a new app has no IP addresses until then
+	if (domain) {
+		await ensureFlyDomain(config, domain)
+	}
+}
+
+/**
+ * Serves `domain` from the app through the Cloudflare proxy: a Fly
+ * certificate, proxied DNS records, an unproxied _acme-challenge CNAME so Fly
+ * can renew the certificate behind the proxy, and a Configuration Rule that
+ * makes Cloudflare connect over HTTPS (with Flexible SSL, fly.toml's
+ * force_https redirects forever).
+ */
+async function ensureFlyDomain(config: FlyConfig, domain: string) {
+	const token = getEnvVar("CLOUDFLARE_API_TOKEN", false)
+	if (!token) {
+		logger.warn("ensureFlyDomain", "skipping DNS and certificate setup", {
+			domain,
+		})
+		return
+	}
+
+	const certs =
+		captureJson(
+			"fly",
+			["certs", "list", "--app", config.app, "--json"],
+			z.array(z.object({hostname: z.string()})),
+		) ?? []
+	if (!certs.some((c) => c.hostname === domain)) {
+		logger.info("ensureFlyDomain", "adding Fly certificate", {domain})
+		run("fly", ["certs", "add", domain, "--app", config.app])
+	}
+	const cert = readFlyCert(config, domain)
+	const {a, aaaa, acme_challenge} = cert.dns_requirements
+
+	const cloudflare = new Cloudflare(token)
+	const zone = await cloudflare.findZone(domain)
+	await cloudflare.syncDnsRecords(zone, domain, [
+		...a.map((ip) => ({type: "A" as const, content: ip, proxied: true})),
+		...aaaa.map((ip) => ({
+			type: "AAAA" as const,
+			content: ip,
+			proxied: true,
+		})),
+	])
+	await cloudflare.syncDnsRecords(zone, acme_challenge.name, [
+		{type: "CNAME", content: acme_challenge.target, proxied: false},
+	])
+	await cloudflare.upsertConfigRule(zone, {
+		ref: `ssl_strict_${domain.replaceAll(/[^a-z0-9]/gi, "_")}`,
+		description: `Full (strict) SSL for ${domain}, set by tools/Build.ts`,
+		expression: `(http.host eq "${domain}")`,
+		action: "set_config",
+		action_parameters: {ssl: "strict"},
+		enabled: true,
+	})
+
+	// Showing the certificate also has Fly recheck its DNS validation
+	logger.info("ensureFlyDomain", "domain configured", {
+		domain,
+		certificate: readFlyCert(config, domain).status,
+	})
+}
+
+const FlyCertSchema = z.object({
+	status: z.string(),
+	dns_requirements: z.object({
+		a: z.array(z.string()),
+		aaaa: z.array(z.string()),
+		acme_challenge: z.object({name: z.string(), target: z.string()}),
+	}),
+})
+
+function readFlyCert(config: FlyConfig, domain: string) {
+	const cert = captureJson(
+		"fly",
+		["certs", "show", domain, "--app", config.app, "--json"],
+		FlyCertSchema,
+	)
+	if (!cert) {
+		throw logger.newError("readFlyCert", "can't read Fly certificate", {
+			app: config.app,
+			domain,
+		})
+	}
+	return cert
 }
 
 interface FlyConfig {
@@ -224,27 +315,39 @@ interface FlyConfig {
 	volume: {name: string; sizeGb: number} | null
 }
 
+const FlyTomlSchema = z.object({
+	app: z.string().min(1),
+	primary_region: z.string().min(1),
+	mounts: z
+		.array(
+			z.object({
+				source: z.string().min(1),
+				initial_size: z.string().optional(),
+			}),
+		)
+		.optional(),
+})
+
 /** The parts of the project's fly.toml needed to provision it. */
 function readFlyConfig(project: Project): FlyConfig {
 	const filepath = path.join(project.path, "fly.toml")
-	const toml = Bun.TOML.parse(fs.readFileSync(filepath, "utf8")) as {
-		app?: string
-		primary_region?: string
-		mounts?: {source?: string; initial_size?: string}[]
-	}
-	const mount = toml.mounts?.[0]
-	if (!toml.app || !toml.primary_region || (mount && !mount.source)) {
+	const result = FlyTomlSchema.safeParse(
+		Bun.TOML.parse(fs.readFileSync(filepath, "utf8")),
+	)
+	if (!result.success) {
 		throw logger.newError("readFlyConfig", "fly.toml is missing settings", {
 			filepath,
-			required: ["app", "primary_region", "mounts.source"],
+			issues: z.prettifyError(result.error),
 		})
 	}
+	const toml = result.data
+	const mount = toml.mounts?.[0]
 	return {
 		app: toml.app,
 		region: toml.primary_region,
 		volume: mount
 			? {
-					name: mount.source!,
+					name: mount.source,
 					sizeGb: Number.parseInt(mount.initial_size ?? "1", 10) || 1,
 				}
 			: null,
@@ -264,26 +367,25 @@ function ensureFlyResources(config: FlyConfig) {
 	}
 
 	// flyctl's JSON casing differs between commands; accept either
+	const NamedListSchema = z.array(
+		z.object({Name: z.string().optional(), name: z.string().optional()}),
+	)
 	const nameOf = (item: {Name?: string; name?: string}) =>
 		item.Name ?? item.name
-	const apps = JSON.parse(
-		capture("fly", ["apps", "list", "--json"]) ?? "[]",
-	) as {Name?: string; name?: string}[]
+	const apps =
+		captureJson("fly", ["apps", "list", "--json"], NamedListSchema) ?? []
 	if (!apps.some((a) => nameOf(a) === config.app)) {
 		logger.info("ensureFlyResources", "creating Fly app", {app: config.app})
 		run("fly", ["apps", "create", config.app, "--org", "personal"])
 	}
 
 	if (config.volume) {
-		const volumes = JSON.parse(
-			capture("fly", [
-				"volumes",
-				"list",
-				"--app",
-				config.app,
-				"--json",
-			]) ?? "[]",
-		) as {Name?: string; name?: string}[]
+		const volumes =
+			captureJson(
+				"fly",
+				["volumes", "list", "--app", config.app, "--json"],
+				NamedListSchema,
+			) ?? []
 		if (!volumes.some((v) => nameOf(v) === config.volume!.name)) {
 			logger.info("ensureFlyResources", "creating Fly volume", {
 				app: config.app,
@@ -315,6 +417,38 @@ function capture(command: string, args: string[]): string | null {
 		env: process.env,
 	})
 	return result.status === 0 ? result.stdout : null
+}
+
+/**
+ * Runs a command and parses its stdout as JSON matching `schema`, or returns
+ * null if the command fails. Throws if the output doesn't match.
+ */
+function captureJson<T>(
+	command: string,
+	args: string[],
+	schema: z.ZodType<T>,
+): T | null {
+	const stdout = capture(command, args)
+	if (stdout === null) {
+		return null
+	}
+	let json: unknown
+	try {
+		json = JSON.parse(stdout)
+	} catch (error) {
+		throw logger.newError("captureJson", "command printed invalid JSON", {
+			command: [command, ...args].join(" "),
+			error,
+		})
+	}
+	const result = schema.safeParse(json)
+	if (!result.success) {
+		throw logger.newError("captureJson", "unexpected command output", {
+			command: [command, ...args].join(" "),
+			issues: z.prettifyError(result.error),
+		})
+	}
+	return result.data
 }
 
 /** Runs a command to completion, throwing if it fails. */

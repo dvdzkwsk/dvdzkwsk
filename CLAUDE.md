@@ -4,6 +4,10 @@
 
 Always use `pnpm add -D -w <package>` (devDependencies) unless a package is explicitly a runtime production dependency.
 
+## Worktrees
+
+A fresh worktree has no `node_modules` or `.env` (both gitignored). Without its own `node_modules`, imports resolve through the main checkout's and workspace packages like `@dvdzkwsk/logger` fail to resolve; without `.env`, scripts like the deploy miss their tokens. `.claude/hooks/setup-worktree.sh` runs `pnpm install` and symlinks the main checkout's `.env`. It runs automatically for sessions started in a worktree; after creating one by hand, run `echo '{"cwd":"<worktree path>"}' | .claude/hooks/setup-worktree.sh` before building or running anything.
+
 ## Errors and logging
 
 Every thrown error must reach a `logger.error()` from `@dvdzkwsk/logger`.

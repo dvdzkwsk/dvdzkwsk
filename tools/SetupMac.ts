@@ -773,7 +773,16 @@ async function ensureVSCodeExtensions(ctx: SetupContext) {
 		return
 	}
 
-	const extensions = ["ms-vscode.sublime-keybindings"]
+	const extensions = [
+		"anthropic.claude-code",
+		"dbaeumer.vscode-eslint",
+		"eamodio.gitlens",
+		"esbenp.prettier-vscode",
+		"golang.go",
+		"ms-vscode.sublime-keybindings",
+		"svelte.svelte-vscode",
+		"tamasfe.even-better-toml",
+	]
 
 	let installed: Set<string>
 	try {

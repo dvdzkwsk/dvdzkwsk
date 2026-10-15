@@ -268,16 +268,31 @@ table {
 	animation: Loader-appear 0.3s 0.15s ease-out both;
 }
 
-.PageLoader-label {
-	color: var(--site-fg);
-	font-size: var(--text-xl);
-	font-weight: var(--weight-medium);
+/* The label and note read as one caption, set apart from the rink */
+.PageLoader-text {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	margin-top: calc(var(--spacing) * 2);
 }
 
-/* Reserves its line so the loader doesn't jump when the note appears */
+.PageLoader-label {
+	color: var(--site-fg);
+	font-size: var(--text-2xl);
+	font-weight: var(--weight-semibold);
+	line-height: 1.2;
+	letter-spacing: -0.02em;
+}
+
+/* Reserves two lines so the loader doesn't jump when the note appears.
+   A short measure, balanced, so it wraps into an even pair of lines */
 .PageLoader-note {
-	min-height: 1.25rem;
-	font-size: var(--text-base);
+	min-height: 3em;
+	max-width: 36ch;
+	font-size: var(--text-md);
+	line-height: 1.5;
+	text-wrap: balance;
 	animation: Loader-appear 0.4s ease-out;
 }
 
@@ -403,11 +418,14 @@ table {
 
 .InlineLoader-label {
 	font-size: var(--text-md);
+	font-weight: var(--weight-medium);
 }
 
 .InlineLoader-note {
 	min-height: 1.25rem;
+	max-width: 40ch;
 	font-size: var(--text-sm);
+	text-wrap: balance;
 	animation: Loader-appear 0.4s ease-out;
 }
 

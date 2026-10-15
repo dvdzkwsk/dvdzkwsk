@@ -981,12 +981,14 @@ export const PageLoader = ({
 	return (
 		<div className="PageLoader" role="status" aria-live="polite">
 			<ZamboniLap />
-			<span className="PageLoader-label">{label}</span>
-			<span className="PageLoader-note">
-				{/* Most data is fetched from the league's site and cached, so
-				    a first load is the slow one */}
-				{slow && slowNote}
-			</span>
+			<div className="PageLoader-text">
+				<span className="PageLoader-label">{label}</span>
+				<span className="PageLoader-note">
+					{/* Most data is fetched from the league's site and cached,
+					    so a first load is the slow one */}
+					{slow && slowNote}
+				</span>
+			</div>
 		</div>
 	)
 }

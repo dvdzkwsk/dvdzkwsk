@@ -1,23 +1,21 @@
-import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 import {
 	GameResponse,
 	SeasonSummary,
 	GET_GAME_ENDPOINT,
 } from "../../shared/ApiJson.js"
+import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {
 	KHLBoxScoreTeam,
 	KHLGoal,
 	KHLPenalty,
 	KHLPlayerRef,
 } from "../../shared/KHLJson.js"
-import {STRINGS, URLS} from "../../shared/KHLConfig.js"
-import {
-	getGameEndsAt,
-	getGameEventLocalTime,
-} from "../../shared/LeagueTime.js"
+import {getGameEndsAt, getGameEventLocalTime} from "../../shared/LeagueTime.js"
 import {getLiveBarnVodUrl} from "../../shared/LiveBarn.js"
+import {Comparison} from "../Compare.js"
 import {
 	AsyncContent,
 	Hint,
@@ -36,7 +34,6 @@ import {
 	TeamAvatar,
 	TeamLink,
 } from "../Components.js"
-import {Comparison} from "../Compare.js"
 import {HeadToHeadGames, TeamForm} from "../Games.js"
 import {
 	AppContext,
@@ -142,8 +139,8 @@ const ResultView = ({game}: {game: GameResponse}) => {
 		return (
 			<>
 				<Notice title={STRINGS.SCORESHEET_NOT_POSTED}>
-					Scoring by period, goals, penalties, and who played will show
-					here once it's up.
+					Scoring by period, goals, penalties, and who played will
+					show here once it's up.
 				</Notice>
 				{game.rosters && (
 					<RosterPanels

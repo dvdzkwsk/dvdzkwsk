@@ -1,6 +1,6 @@
-import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 import {
 	GET_STANDINGS_ENDPOINT,
 	StandingsResponse,

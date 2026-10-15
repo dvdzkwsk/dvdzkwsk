@@ -1,28 +1,8 @@
-import * as React from "react"
 import {Combobox} from "@base-ui/react/combobox"
 import {Popover} from "@base-ui/react/popover"
 import {PreviewCard} from "@base-ui/react/preview-card"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {
-	FeedGame,
-	HeadToHeadGame,
-	LiveBarnLink,
-	RecentGame,
-	Rink,
-	RinkGame,
-	RinkInfo,
-	RinkTeam,
-	SeasonSummary,
-	UpcomingGame,
-} from "../shared/ApiJson.js"
-import {getGoalsByTeam} from "../shared/KHLJson.js"
-import {LIMITS} from "../shared/KHLConfig.js"
-import {
-	DAY_MS,
-	getGameEndsAt,
-	getLeagueDayKey,
-	isGameInProgress,
-} from "../shared/LeagueTime.js"
+import * as React from "react"
 import {
 	ChevronIcon,
 	CityDot,
@@ -44,7 +24,6 @@ import {
 import {
 	formatGameDate,
 	formatGameDay,
-	formatFullGameDate,
 	formatGameTime,
 	formatRelative,
 	formatScore,
@@ -53,6 +32,25 @@ import {
 	getGameHref,
 	useNow,
 } from "./Util.js"
+import {
+	FeedGame,
+	HeadToHeadGame,
+	LiveBarnLink,
+	RecentGame,
+	Rink,
+	RinkGame,
+	RinkInfo,
+	SeasonSummary,
+	UpcomingGame,
+} from "../shared/ApiJson.js"
+import {LIMITS} from "../shared/KHLConfig.js"
+import {getGoalsByTeam} from "../shared/KHLJson.js"
+import {
+	DAY_MS,
+	getGameEndsAt,
+	getLeagueDayKey,
+	isGameInProgress,
+} from "../shared/LeagueTime.js"
 
 // --- Game cards
 
@@ -142,12 +140,7 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
 			</header>
 
 			{game ? (
-				<GameSummary
-					rink={rink}
-					game={game}
-					seasonId={seasonId}
-					now={now}
-				/>
+				<GameSummary game={game} seasonId={seasonId} now={now} />
 			) : (
 				<div className="RinkCard-empty">No games scheduled</div>
 			)}
@@ -160,12 +153,10 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
  * when it starts or started. The body of a RinkCard; also used on its own.
  */
 export const GameSummary = ({
-	rink,
 	game,
 	seasonId,
 	now,
 }: {
-	rink: RinkInfo
 	game: RinkGame
 	seasonId: string
 	now: Date
@@ -1581,7 +1572,7 @@ export const NoGames = ({
 		<div className="NoGames">
 			<CalendarIcon />
 			<h2 className="NoGames-title">
-				No games {describeDay(filters.day, now)}
+				No games {describeDay(filters.day)}
 			</h2>
 			<p className="NoGames-text">
 				{narrowed && forDay.length > 0
@@ -1617,7 +1608,7 @@ export const NoGames = ({
 }
 
 /** "today", "this week", "on Thu, Oct 22", "Oct 13 – Oct 17" */
-function describeDay(day: DayFilter, now: Date): string {
+function describeDay(day: DayFilter): string {
 	switch (day) {
 		case "yesterday":
 		case "today":

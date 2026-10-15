@@ -1,11 +1,10 @@
 import "./styles.css"
+import {Logger} from "@dvdzkwsk/logger"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {createBrowserHistory, Location} from "history"
 import * as React from "react"
 import {createRoot} from "react-dom/client"
 import {Helmet} from "react-helmet"
-import {Logger} from "@dvdzkwsk/logger"
-import {toError} from "@dvdzkwsk/util/ErrorUtil"
-import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {
 	ErrorBoundary,
 	PageShell,
@@ -13,6 +12,7 @@ import {
 	SiteFooter,
 	SiteHeader,
 } from "./Components.js"
+import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {AboutRoute} from "./pages/AboutPage.js"
 import {AdminRoute} from "./pages/AdminPage.js"
 import {BadgesRoute} from "./pages/BadgesPage.js"
@@ -33,7 +33,6 @@ import {
 	initClientLogging,
 	IS_DEV,
 	Route,
-	RouteProps,
 } from "./Util.js"
 
 // --- App

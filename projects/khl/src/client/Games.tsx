@@ -8,6 +8,7 @@ import {
 	HeadToHeadGame,
 	LiveBarnLink,
 	RecentGame,
+	toRecentGame,
 	Rink,
 	RinkGame,
 	RinkInfo,
@@ -1983,38 +1984,18 @@ export const LastResults = ({
 	showLabel?: boolean
 }) => {
 	const recent = games
-		.filter((g) => g.game.isFinal && g.game.result)
+		.flatMap(({game}) => toRecentGame(game) ?? [])
 		.slice(-LIMITS.GAME_RECENT_GAMES)
+	// No title here: it would show over the chips' hover cards
 	return (
-		<Hint
-			label={`Last ${LIMITS.GAME_RECENT_GAMES} games, oldest to newest`}
-		>
-			<span className="Detail-form">
-				{showLabel && (
-					<span className="Detail-meta-hint">
-						Last {LIMITS.GAME_RECENT_GAMES}
-					</span>
-				)}
-				{recent.map(({game}) => (
-					<span
-						key={game.startsAt}
-						className={cx(
-							"GameFeed-result",
-							`GameFeed-result--${game.result}`,
-						)}
-					>
-						{game.result}
-					</span>
-				))}
-				{/* Empty slots for games still to come */}
-				{Array.from(
-					{length: LIMITS.GAME_RECENT_GAMES - recent.length},
-					(_, i) => (
-						<ResultChipSlot key={`slot-${i}`} />
-					),
-				)}
-			</span>
-		</Hint>
+		<span className="Detail-form">
+			{showLabel && (
+				<span className="Detail-meta-hint">
+					Last {LIMITS.GAME_RECENT_GAMES}
+				</span>
+			)}
+			<ResultChips games={recent} slots={LIMITS.GAME_RECENT_GAMES} />
+		</span>
 	)
 }
 

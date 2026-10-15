@@ -1,4 +1,5 @@
 import * as React from "react"
+import {AlertDialog} from "@base-ui/react/alert-dialog"
 import {Avatar} from "@base-ui/react/avatar"
 import {Button} from "@base-ui/react/button"
 import {Collapsible} from "@base-ui/react/collapsible"
@@ -23,11 +24,18 @@ import {
 } from "../shared/ApiJson.js"
 import {getCity} from "../shared/Cities.js"
 import {KHLSeason} from "../shared/KHLJson.js"
+import {DAY_MS, toLeagueInstant} from "../shared/LeagueTime.js"
+import {
+	getLiveBarnVodDate,
+	isLiveBarnVodExpired,
+	LIVEBARN_VOD_EXPIRY,
+} from "../shared/LiveBarn.js"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {
 	AppContext,
 	AsyncState,
 	describeError,
+	formatGameDate,
 	getPlayerHref,
 	getRinkHref,
 	getScoresheetUrl,
@@ -2038,16 +2046,19 @@ const IconLink = ({
 	href,
 	label,
 	icon,
+	onClick,
 }: {
 	href: string
 	label: string
 	icon: React.ReactNode
+	onClick?: React.MouseEventHandler<HTMLAnchorElement>
 }) => {
 	return (
 		<Hint label={label}>
 			<a
 				className={cx("LiveBarnBadge", "LiveBarnBadge--compact")}
 				href={href}
+				onClick={onClick}
 				aria-label={label}
 				rel="noopener noreferrer"
 				target="_blank"
@@ -2108,29 +2119,95 @@ export const LIVEBARN_TITLES = {
 		`Watch this moment on LiveBarn (${surfaceName})`,
 }
 
-/** A pill linking out to a LiveBarn feed or replay. */
+/**
+ * A pill linking out to a LiveBarn feed or replay. A replay older than
+ * LiveBarn keeps recordings asks first, since it may be gone.
+ */
 export const LiveBarnBadge = ({
 	href,
 	surfaceName,
 	title,
 	compact,
 }: LiveBarnBadgeProps) => {
-	if (compact) {
-		return (
-			<IconLink
-				href={href}
-				label={title ?? surfaceName ?? "LiveBarn"}
-				icon={<CameraIcon />}
-			/>
-		)
-	}
+	const [confirming, setConfirming] = React.useState(false)
+	const onClick = isLiveBarnVodExpired(href, new Date())
+		? (e: React.MouseEvent) => {
+				e.preventDefault()
+				setConfirming(true)
+			}
+		: undefined
 	return (
-		<Hint label={title}>
-			<Link className="LiveBarnBadge" href={href}>
-				<CameraIcon />
-				{surfaceName ?? "LiveBarn"} ↗
-			</Link>
-		</Hint>
+		<>
+			{compact ? (
+				<IconLink
+					href={href}
+					label={title ?? surfaceName ?? "LiveBarn"}
+					icon={<CameraIcon />}
+					onClick={onClick}
+				/>
+			) : (
+				<Hint label={title}>
+					<Link className="LiveBarnBadge" href={href} onClick={onClick}>
+						<CameraIcon />
+						{surfaceName ?? "LiveBarn"} ↗
+					</Link>
+				</Hint>
+			)}
+			{onClick && (
+				<ExpiredReplayDialog
+					href={href}
+					open={confirming}
+					onOpenChange={setConfirming}
+				/>
+			)}
+		</>
+	)
+}
+
+/** Warns that a replay may be gone before opening it on LiveBarn. */
+const ExpiredReplayDialog = ({
+	href,
+	open,
+	onOpenChange,
+}: {
+	href: string
+	open: boolean
+	onOpenChange: (open: boolean) => void
+}) => {
+	const date = getLiveBarnVodDate(href)
+	const recordedOn = date
+		? `, and this one is from ${formatGameDate(toLeagueInstant(date, "12:00"), new Date())}`
+		: ""
+	return (
+		<AlertDialog.Root open={open} onOpenChange={onOpenChange}>
+			<AlertDialog.Portal>
+				<AlertDialog.Backdrop className="ReplayDialog-backdrop" />
+				<AlertDialog.Popup className="ReplayDialog">
+					<AlertDialog.Title className="ReplayDialog-title">
+						This replay may be gone
+					</AlertDialog.Title>
+					<AlertDialog.Description className="ReplayDialog-text">
+						LiveBarn only keeps recordings for{" "}
+						{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}. The video
+						may no longer be available.
+					</AlertDialog.Description>
+					<div className="ReplayDialog-actions">
+						<AlertDialog.Close className="FilterPill">
+							Cancel
+						</AlertDialog.Close>
+						<a
+							className="ReplayDialog-open"
+							href={href}
+							rel="noopener noreferrer"
+							target="_blank"
+							onClick={() => onOpenChange(false)}
+						>
+							Open LiveBarn anyway ↗
+						</a>
+					</div>
+				</AlertDialog.Popup>
+			</AlertDialog.Portal>
+		</AlertDialog.Root>
 	)
 }
 
@@ -2182,8 +2259,7 @@ export const NotOnLiveBarn = ({compact}: {compact?: boolean}) => {
 				</button>
 			}
 		>
-			<strong>No LiveBarn for this location.</strong> LiveBarn only
-			streams and records locations with its cameras. We couldn't find
+			<strong>No LiveBarn for this location.</strong> We couldn't find
 			this location on LiveBarn, so there's no live stream or replay for
 			its games.
 		</InfoPopover>

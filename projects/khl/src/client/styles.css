@@ -92,6 +92,7 @@
 	--shadow-sm: 0 1px 2px rgb(10 10 11 / 0.07), 0 2px 8px rgb(10 10 11 / 0.05);
 	--shadow-md:
 		0 10px 28px rgb(10 10 11 / 0.12), 0 2px 6px rgb(10 10 11 / 0.07);
+	--backdrop: rgb(10 10 11 / 0.4);
 
 	--font-sans:
 		"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
@@ -150,6 +151,7 @@
 
 	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
 	--shadow-md: 0 10px 28px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.4);
+	--backdrop: rgb(0 0 0 / 0.6);
 
 	color-scheme: dark;
 }
@@ -3597,6 +3599,73 @@ a.Compare-chip:hover {
 	translate: 28px 0;
 }
 
+/* === Expired replay warning (LiveBarnBadge) === */
+
+.ReplayDialog-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	background: var(--backdrop);
+}
+
+.ReplayDialog {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	z-index: 40;
+	width: min(400px, calc(100vw - var(--spacing) * 8));
+	padding: calc(var(--spacing) * 6);
+	transform: translate(-50%, -50%);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-md);
+	color: var(--site-fg);
+	outline: none;
+}
+
+.ReplayDialog-title {
+	margin: 0 0 calc(var(--spacing) * 2);
+	font-size: var(--text-xl);
+	font-weight: var(--weight-semibold);
+}
+
+.ReplayDialog-text {
+	margin: 0 0 calc(var(--spacing) * 5);
+	font-size: var(--text-base);
+	line-height: 1.5;
+	color: var(--prose-fg);
+}
+
+.ReplayDialog-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: calc(var(--spacing) * 2);
+}
+
+.ReplayDialog-open {
+	display: inline-flex;
+	align-items: center;
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+	border-radius: var(--radius-pill);
+	background: var(--accent);
+	color: var(--accent-fg);
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.ReplayDialog-open:hover {
+	filter: brightness(1.25);
+}
+
+.ReplayDialog-open:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+}
+
 /* "Not on LiveBarn", with an info icon that explains why on hover or tap */
 .InfoPopup {
 	max-width: 260px;
@@ -4559,6 +4628,12 @@ a.Compare-chip:hover {
 	background: var(--subtle-bg);
 	font-size: var(--text-2xl);
 	line-height: 1;
+}
+
+/* About an emoji's width, at the flag's 3:2 */
+.BadgeIcon-flag {
+	width: 1.2em;
+	height: 0.8em;
 }
 
 .BadgeHint {

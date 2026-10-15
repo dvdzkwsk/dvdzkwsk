@@ -16,4 +16,4 @@ Every thrown error must reach a `logger.error()` from `@dvdzkwsk/logger`.
 
 ## Reuse before writing
 
-Before adding a helper, search `pkg/util`, the project's `shared/` directory and its existing utility modules for one that already does it. When two call sites need the same logic, extract it once rather than copying it with small variations.
+Before adding a helper, search `pkg/util`, the project's `shared/` directory, and its existing utility modules for one that already does it. When two call sites need the same logic, extract it once rather than copying it with small variations.

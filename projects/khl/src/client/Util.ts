@@ -239,7 +239,6 @@ export function useAsync<T>(
 		return () => {
 			current = false
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [...deps, attempt])
 	const reload = React.useCallback(() => setAttempt((n) => n + 1), [])
 	return {...result, reload}

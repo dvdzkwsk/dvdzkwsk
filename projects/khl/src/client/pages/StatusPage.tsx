@@ -1,8 +1,8 @@
-import * as React from "react"
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 import {
 	DeployInfo,
 	GET_STATUS_ENDPOINT,

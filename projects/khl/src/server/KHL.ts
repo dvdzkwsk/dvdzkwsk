@@ -3,6 +3,7 @@ import {createConcurrencyLimiter} from "@dvdzkwsk/util/AsyncUtil"
 import {doFetch} from "@dvdzkwsk/util/FetchUtil"
 import {HTMLElement, parse} from "node-html-parser"
 import {z} from "zod"
+import {URLS} from "../shared/KHLConfig.js"
 import {
 	KHLArena,
 	KHLArenaRef,
@@ -44,7 +45,6 @@ import {
 	KHLTeamStats,
 	KHLTeamStatsSchema,
 } from "../shared/KHLJson.js"
-import {URLS} from "../shared/KHLConfig.js"
 import {toLeagueInstant} from "../shared/LeagueTime.js"
 
 const logger = new Logger("KHL")

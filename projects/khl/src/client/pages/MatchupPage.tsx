@@ -1,6 +1,6 @@
-import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 import {
 	GET_MATCHUP_ENDPOINT,
 	LIST_TEAM_SEASONS_ENDPOINT,
@@ -10,6 +10,7 @@ import {
 	TeamsResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeason, KHLTeam} from "../../shared/KHLJson.js"
+import {Comparison} from "../Compare.js"
 import {
 	AsyncContent,
 	ErrorState,
@@ -18,10 +19,8 @@ import {
 	PageTitle,
 	Picker,
 	RosterPanels,
-	RosterTables,
 	TeamAvatar,
 } from "../Components.js"
-import {Comparison} from "../Compare.js"
 import {GameCards, HeadToHeadGames, TeamForm} from "../Games.js"
 import {
 	AppContext,

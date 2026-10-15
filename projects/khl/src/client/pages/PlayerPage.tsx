@@ -1,7 +1,7 @@
-import * as React from "react"
 import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 import {
 	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,

@@ -2,8 +2,8 @@ import * as cp from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import * as url from "url"
-import {createCliTool} from "../pkg/util/CliUtil.js"
 import {Logger} from "../pkg/logger/Logger.js"
+import {createCliTool} from "../pkg/util/CliUtil.js"
 
 const logger = new Logger("SetupCron")
 

@@ -1,8 +1,8 @@
-import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 import {
 	BENCHMARK_SITE_LABELS,
 	BenchmarkResponse,

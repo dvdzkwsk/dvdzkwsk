@@ -1,7 +1,7 @@
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import {InfoPopover} from "./Components.js"
 import {SeasonSummary} from "../shared/ApiJson.js"
 import {KHLGamePreviewStats} from "../shared/KHLJson.js"
-import {InfoPopover} from "./Components.js"
 
 /** Which side a stat favors: more is better, less is better, or neither. */
 type Better = "higher" | "lower" | null

@@ -3,7 +3,7 @@ import tseslint from "@typescript-eslint/eslint-plugin"
 import tsparser from "@typescript-eslint/parser"
 import prettier from "eslint-plugin-prettier"
 import prettierConfig from "eslint-config-prettier"
-import importPlugin from "eslint-plugin-import"
+import importPlugin from "eslint-plugin-import-x"
 import unusedImports from "eslint-plugin-unused-imports"
 import globals from "globals"
 
@@ -15,7 +15,7 @@ export default [
 		plugins: {
 			"@typescript-eslint": tseslint,
 			prettier: prettier,
-			import: importPlugin,
+			"import-x": importPlugin,
 			"unused-imports": unusedImports,
 		},
 		languageOptions: {
@@ -46,7 +46,7 @@ export default [
 			],
 			"@typescript-eslint/explicit-function-return-type": "off",
 			"@typescript-eslint/no-explicit-any": "warn",
-			"import/order": [
+			"import-x/order": [
 				"error",
 				{
 					groups: [
@@ -82,6 +82,19 @@ export default [
 		},
 	},
 	{
-		ignores: ["node_modules/**", "dist/**", "pkg/**/static/**"],
+		files: ["**/vite.config.js"],
+		languageOptions: {
+			globals: {
+				...globals.node,
+			},
+		},
+	},
+	{
+		ignores: [
+			"node_modules/**",
+			"**/dist/**",
+			"pkg/**/static/**",
+			"config/claude/skills/synced/**",
+		],
 	},
 ]

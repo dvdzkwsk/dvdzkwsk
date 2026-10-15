@@ -1,10 +1,5 @@
-import * as React from "react"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {
-	ActivityEvent,
-	ActivityGame,
-	ActivityResponse,
-} from "../shared/ApiJson.js"
+import * as React from "react"
 import {
 	AsyncContent,
 	Hint,
@@ -14,12 +9,12 @@ import {
 	TeamLink,
 } from "./Components.js"
 import {toEventReplayLinks} from "./Games.js"
+import {AsyncState, formatGameDate, getGameHref, GOAL_TYPES} from "./Util.js"
 import {
-	AsyncState,
-	formatGameDate,
-	getGameHref,
-	GOAL_TYPES,
-} from "./Util.js"
+	ActivityEvent,
+	ActivityGame,
+	ActivityResponse,
+} from "../shared/ApiJson.js"
 
 /** Whose feed it is: a player's leaves their own name off their events */
 type ActivitySubject = "player" | "team"
@@ -123,7 +118,10 @@ const ActivityEventItem = ({
 					{/* A player may have been on any of their teams */}
 					{subject === "player" && (
 						<>
-							<TeamLink team={team} seasonId={team.seasonId} />{" "}
+							<TeamLink
+								team={team}
+								seasonId={team.seasonId}
+							/>{" "}
 						</>
 					)}
 					{game.homeAway === "home" ? "vs" : "@"}{" "}

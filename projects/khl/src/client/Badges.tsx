@@ -43,7 +43,6 @@ function JapanFlag() {
 
 const {BADGE_TREND_LOOKBACK_DAYS, BADGE_TREND_MIN_GAMES} = LIMITS
 
-
 /** Penalties per game over the trend window, once it has enough games */
 function getPenaltiesPerGame(stats: BadgeStats): number | null {
 	const recent = stats.recentPenalties

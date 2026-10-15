@@ -1889,13 +1889,6 @@ table {
 	line-height: 1.15;
 }
 
-.PlayerHero-number {
-	font-weight: var(--weight-medium);
-	letter-spacing: -0.01em;
-	color: var(--subtle-fg);
-	font-variant-numeric: tabular-nums;
-}
-
 .PlayerHero-bio {
 	display: flex;
 	flex-wrap: wrap;
@@ -1922,7 +1915,7 @@ table {
 	color: var(--site-fg);
 }
 
-/* The team name with its division underneath */
+/* The team name with the jersey number and division underneath */
 .PlayerHero-team-text {
 	display: flex;
 	flex-direction: column;

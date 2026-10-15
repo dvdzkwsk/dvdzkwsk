@@ -41,10 +41,21 @@ export const LEAGUE = {
 	 * LiveBarn recording.
 	 */
 	PERIOD_MINUTES: 18,
-	/** From the scheduled start to puck drop */
+	/**
+	 * Estimated time from the scheduled start to puck drop. The league only
+	 * publishes scheduled starts, not when a game actually started.
+	 */
 	WARMUP_MINUTES: 3,
-	/** Between periods; teams just change ends */
+	/** Estimated time between periods; teams just change ends */
 	INTERMISSION_MINUTES: 1,
+	/** Periods from this one on (the 3rd, then overtime) run on stop time */
+	FIRST_STOP_TIME_PERIOD: 3,
+	/**
+	 * Estimated wall-clock minutes per minute on a stop-time clock, which
+	 * stops for whistles, penalties, and goals. A guess (about 15s of
+	 * stoppage per minute) to tune against real recordings.
+	 */
+	STOP_TIME_FACTOR: 1.25,
 }
 
 export const LIMITS = {
@@ -63,4 +74,11 @@ export const LIMITS = {
 	BADGE_TREND_WINDOW: 50,
 	/** The fewest games in that window for the Angel or Devil badge */
 	BADGE_TREND_MIN_GAMES: 10,
+	/** How many goals, assists, and penalties an activity feed shows */
+	ACTIVITY_EVENTS: 10,
+	/**
+	 * The most of a player's or team's latest games an activity feed reads
+	 * box scores from; a quiet player may have fewer events than that.
+	 */
+	ACTIVITY_MAX_GAMES: 30,
 }

@@ -597,3 +597,29 @@ export const KHLBoxScoreSchema = z.object({
 	goals: z.array(KHLGoalSchema),
 	penalties: z.array(KHLPenaltySchema),
 }) satisfies z.ZodType<KHLBoxScore>
+
+/** "1st" -> 1, ...; overtime and shootouts ("OT", "SO") come after */
+export function getPeriodOrder(period: string): number {
+	const number = parseInt(period, 10)
+	return Number.isNaN(number) ? 100 + (period === "SO" ? 1 : 0) : number
+}
+
+/**
+ * Orders scoresheet events (goals and penalties) first to last: by period,
+ * then by clock, which counts down, so more time remaining means earlier.
+ */
+export function compareGameEvents(
+	a: {period: string; time: string},
+	b: {period: string; time: string},
+): number {
+	return (
+		getPeriodOrder(a.period) - getPeriodOrder(b.period) ||
+		parseClockSeconds(b.time) - parseClockSeconds(a.time)
+	)
+}
+
+/** "16:16" -> seconds */
+function parseClockSeconds(time: string): number {
+	const [minutes, seconds] = time.split(":").map(Number)
+	return (minutes ?? 0) * 60 + (seconds ?? 0)
+}

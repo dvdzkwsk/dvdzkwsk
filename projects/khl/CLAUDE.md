@@ -14,7 +14,7 @@ To run, smoke-test, typecheck, or screenshot the app, use the `run-khl` skill.
 - Extras that a page can render without (preview stats, rosters, LiveBarn checks) are wrapped so that a KHL failure logs a `warn` and returns null or `[]` instead of failing the request.
 - Errors that reach the Express error middleware are logged there. A `FetchError` (the KHL or LiveBarn site failed) returns 502, and anything else returns 500.
 - Every KHL fetch goes through `cached(...)`. Use `getSeasonTtl(isCurrentSeason)` for season-scoped pages.
-- League-local dates and times come from `shared/LeagueTime.ts` (`getLeagueDayKey`, `toLeagueInstant`, `getGameEndsAt`, `isGameInProgress`, `getGameEventLocalTime`, `DAY_MS`, and the other duration constants). Don't build another `Intl.DateTimeFormat` for the league's time zone or write `24 * 60 * 60_000` inline.
+- League-local dates and times come from `shared/LeagueTime.ts` (`getLeagueDayKey`, `toLeagueInstant`, `getGameEndsAt`, `isGameInProgress`, `getGameEventClockTime`, `DAY_MS`, and the other duration constants). Don't build another `Intl.DateTimeFormat` for the league's time zone or write `24 * 60 * 60_000` inline.
 - Reuse the existing parsing helpers: `parseClockTime`, `parseArenaLink`, `readStatCells`, `parseSeasonMenus`, and the `TEAM_HREF`, `PLAYER_HREF`, `GAME_HREF`, and `ARENA_HREF` patterns.
 - Look up teams with `findListedTeam` and `getListedDivisionName`, the current season with `getCurrentSeason()`, and rinks with `getRinkInfoOrFallback`.
 

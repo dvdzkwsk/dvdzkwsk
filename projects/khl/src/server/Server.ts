@@ -31,6 +31,9 @@ import {
 import {getLivebarnVenues} from "./LiveBarn.js"
 import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
 import {
+	ActivityEvent,
+	ActivityGame,
+	ActivityResponse,
 	FeedGame,
 	GameResponse,
 	GET_GAME_ENDPOINT,
@@ -45,7 +48,9 @@ import {
 	TeamsResponse,
 	HeadToHeadGame,
 	GET_PLAYER_ENDPOINT,
+	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
+	GET_TEAM_ACTIVITY_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	GET_RINK_ENDPOINT,
 	GET_STATUS_ENDPOINT,
@@ -79,6 +84,7 @@ import {
 import {getCity} from "../shared/Cities.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {
+	compareGameEvents,
 	getGoalsByTeam,
 	KHLBoxScore,
 	KHLBoxScoreTeam,
@@ -286,6 +292,29 @@ registerEndpoint(
 	},
 )
 
+registerEndpoint(app, GET_PLAYER_ACTIVITY_ENDPOINT, async ({playerId}) => {
+	const {registrations} = await getPlayerRegistrations(playerId)
+	const schedules = await getPlayerSchedules(
+		registrations,
+		await getTeamsPage(),
+	)
+	const khlPlayerIds = new Set(registrations.map((r) => r.khlPlayerId))
+	const isPlayer = (player: {id: string} | null) => {
+		return !!player && khlPlayerIds.has(player.id)
+	}
+	return getActivity(schedules.games, (boxScore) => [
+		...boxScore.goals.flatMap((goal): ActivityEvent[] => {
+			if (isPlayer(goal.scorer)) {
+				return [{kind: "goal", goal}]
+			}
+			return goal.assists.some(isPlayer) ? [{kind: "assist", goal}] : []
+		}),
+		...boxScore.penalties
+			.filter((penalty) => isPlayer(penalty.player))
+			.map((penalty): ActivityEvent => ({kind: "penalty", penalty})),
+	])
+})
+
 /** The player's registrations, most recently active first. */
 async function getPlayerRegistrations(playerId: string) {
 	const player = db.getPlayer(playerId)
@@ -437,7 +466,103 @@ async function getRecentPenalties(
 	}
 }
 
-registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
+/**
+ * The player's or team's latest LIMITS.ACTIVITY_EVENTS events in `games`,
+ * newest first, from each game's box score. Box scores are read a batch at a
+ * time, newest game first, and at most LIMITS.ACTIVITY_MAX_GAMES of them. A
+ * box score that fails to load is skipped.
+ */
+async function getActivity(
+	games: KHLGame[],
+	/** The events in a box score that belong in the feed, in any order */
+	getEvents: (boxScore: KHLBoxScore) => ActivityEvent[],
+): Promise<ActivityResponse> {
+	const batchSize = 5
+	const latest = [
+		...new Map(
+			games
+				.filter((game) => game.isFinal && game.id)
+				.sort((a, b) => b.startsAt.localeCompare(a.startsAt))
+				.map((game) => [game.id!, game]),
+		).values(),
+	].slice(0, LIMITS.ACTIVITY_MAX_GAMES)
+
+	const activity: ActivityGame[] = []
+	const surfacesByArena = await getSurfacesByArena(latest)
+	const playerIds = new Map<string, string>()
+	let count = 0
+	for (
+		let i = 0;
+		i < latest.length && count < LIMITS.ACTIVITY_EVENTS;
+		i += batchSize
+	) {
+		const batch = latest.slice(i, i + batchSize)
+		const boxScores = await Promise.all(
+			batch.map((game) => {
+				return getBoxScore(game.id!).catch((error: unknown) => {
+					logger.warn("getActivity", "box score unavailable", {
+						gameId: game.id,
+						error,
+					})
+					return null
+				})
+			}),
+		)
+		for (const [j, boxScore] of boxScores.entries()) {
+			const game = batch[j]!
+			const team = [boxScore?.away, boxScore?.home].find(
+				(side) => side?.id === game.team.id,
+			)
+			if (!boxScore || !team || count >= LIMITS.ACTIVITY_EVENTS) {
+				continue
+			}
+			const events = getEvents(boxScore)
+				.sort((a, b) => compareGameEvents(getEventAt(b), getEventAt(a)))
+				.slice(0, LIMITS.ACTIVITY_EVENTS - count)
+			if (events.length === 0) {
+				continue
+			}
+			count += events.length
+			const opponent =
+				team === boxScore.home ? boxScore.away : boxScore.home
+			const toActivityTeam = (side: KHLBoxScoreTeam) => ({
+				id: side.id,
+				name: side.name,
+				logoUrl: side.logoUrl,
+				seasonId: side.seasonId,
+				goals: side.goals,
+			})
+			activity.push({
+				gameId: boxScore.gameId,
+				startsAt: boxScore.startsAt,
+				homeAway: team === boxScore.home ? "home" : "away",
+				team: toActivityTeam(team),
+				opponent: toActivityTeam(opponent),
+				livebarn: toLiveBarnLinks(
+					boxScore.arena
+						? (surfacesByArena.get(boxScore.arena.id) ?? [])
+						: [],
+					boxScore,
+				),
+				events,
+			})
+			for (const [khlPlayerId, playerId] of recordBoxScorePlayers(
+				boxScore,
+			)) {
+				playerIds.set(khlPlayerId, playerId)
+			}
+		}
+	}
+	return {games: activity, playerIds: Object.fromEntries(playerIds)}
+}
+
+/** When an activity event happened on the scoresheet */
+function getEventAt(event: ActivityEvent) {
+	return event.kind === "penalty" ? event.penalty : event.goal
+}
+
+/** A team as listed in `season` (default: the current one), or a 404 */
+async function getListedTeam(teamId: string, season: string | undefined) {
 	const [teamsPage, currentSeason] = await Promise.all([
 		getTeamsPage(season),
 		getCurrentSeason(),
@@ -446,7 +571,18 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 	if (!team) {
 		throw new ApiError(404, `team ${teamId} not found`)
 	}
-	const isCurrentSeason = team.seasonId === currentSeason.id
+	return {
+		team,
+		teamsPage,
+		isCurrentSeason: team.seasonId === currentSeason.id,
+	}
+}
+
+registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
+	const {team, teamsPage, isCurrentSeason} = await getListedTeam(
+		teamId,
+		season,
+	)
 	const [schedule, stats, upcoming] = await Promise.all([
 		getSchedule(team.id, team.seasonId, isCurrentSeason),
 		getTeamStats(team.id, team.seasonId, isCurrentSeason),
@@ -462,6 +598,20 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 		roster: await getRoster(team.id, team.name, team.logoUrl, stats),
 	}
 	return response
+})
+
+// Separate from the team, since it reads a page per recent game
+registerEndpoint(app, GET_TEAM_ACTIVITY_ENDPOINT, async ({teamId, season}) => {
+	const {team, isCurrentSeason} = await getListedTeam(teamId, season)
+	const schedule = await getSchedule(team.id, team.seasonId, isCurrentSeason)
+	return getActivity(schedule, (boxScore) => [
+		...boxScore.goals
+			.filter((goal) => goal.teamId === team.id)
+			.map((goal): ActivityEvent => ({kind: "goal", goal})),
+		...boxScore.penalties
+			.filter((penalty) => penalty.teamId === team.id)
+			.map((penalty): ActivityEvent => ({kind: "penalty", penalty})),
+	])
 })
 
 registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {

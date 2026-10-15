@@ -1188,7 +1188,10 @@ table {
 
 /* === Game table cards (e.g. past games) === */
 
+/* Its own container: the table fits the card's width, which may be half a
+   page beside another card */
 .GameTableCard {
+	container-type: inline-size;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
@@ -1251,6 +1254,44 @@ table {
 /* Inset like the other cards' tables */
 .GameTableCard .StatsTable-wrapper {
 	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+}
+
+/* A narrow card fits its table instead of scrolling it sideways: the rink
+   goes, and the teams share what's left, their names ending in an ellipsis.
+   The selectors outweigh GameTable's own min-widths. */
+@container (max-width: 760px) {
+	.GameTableCard .StatsTable.GameTable {
+		min-width: 0;
+	}
+
+	.GameTableCard .GameTable .GameTable-col--rink {
+		display: none;
+	}
+
+	.GameTableCard .GameTable--scoreboard .GameTable-col--away,
+	.GameTableCard .GameTable--scoreboard .GameTable-col--home,
+	.GameTableCard
+		.GameTable--scoreboard:not(:has(.GameTable-col--rink))
+		.GameTable-col--links {
+		width: auto;
+	}
+
+	.GameTableCard .GameTable .GameTable-col--links {
+		width: calc(var(--icon-links-width) + var(--spacing) * 6);
+	}
+}
+
+/* Narrower still (a phone): the links and logos go too; the game page the
+   row links to has the scoresheet and replays */
+@container (max-width: 520px) {
+	.GameTableCard .GameTable .GameTable-col--links,
+	.GameTableCard .GameTable .TeamAvatar {
+		display: none;
+	}
+
+	.GameTableCard .GameTable .GameTable-col--score {
+		width: calc(5.5rem + var(--spacing) * 2);
+	}
 }
 
 /* === Home page, game filters and game list (and shared select popups) === */
@@ -2692,6 +2733,143 @@ table {
 	color: var(--team);
 }
 
+/* === Activity feed (player and team pages) === */
+
+/* Past games beside the activity feed; stacked when narrow */
+.Detail-columns {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+	align-items: start;
+	gap: calc(var(--spacing) * 4);
+}
+
+@media (max-width: 1080px) {
+	.Detail-columns {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.Activity-games {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.Activity-game + .Activity-game {
+	margin-top: calc(var(--spacing) * 4);
+}
+
+.Activity-game-header {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	padding-bottom: calc(var(--spacing) * 1.5);
+	font-size: var(--text-sm);
+}
+
+.Activity-matchup {
+	min-width: 0;
+	overflow: hidden;
+	font-weight: var(--weight-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.Activity-date {
+	flex: none;
+	color: var(--muted-fg);
+}
+
+.Activity-score {
+	flex: none;
+	margin-left: auto;
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+	border-radius: var(--radius-sm);
+	background: var(--chip-bg);
+	color: inherit;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
+	font-variant-numeric: tabular-nums;
+	text-decoration: none;
+}
+
+.Activity-score:hover {
+	text-decoration: underline;
+}
+
+.Activity-events {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.Activity-event {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2) 0;
+	border-top: 1px solid var(--panel-border);
+	font-size: var(--text-base);
+}
+
+/* Goals green, assists blue, penalties amber */
+.Activity-kind {
+	flex: none;
+	width: calc(var(--spacing) * 18);
+	padding: 1px 0;
+	border-radius: var(--radius-sm);
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-bold);
+	text-align: center;
+	text-transform: uppercase;
+}
+
+.Activity-event--goal .Activity-kind {
+	background: var(--win-bg);
+	color: var(--win);
+}
+
+.Activity-event--assist .Activity-kind {
+	background: var(--kind-player-bg);
+	color: var(--kind-player-fg);
+}
+
+.Activity-event--penalty .Activity-kind {
+	background: var(--warn-bg);
+	color: var(--warn-fg);
+}
+
+.Activity-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.Activity-scorer {
+	font-weight: var(--weight-semibold);
+}
+
+.Activity-detail {
+	color: var(--muted-fg);
+}
+
+.Activity-type {
+	margin-left: calc(var(--spacing) * 2);
+	padding: 1px calc(var(--spacing) * 1.5);
+	border-radius: var(--radius-sm);
+	background: var(--kind-player-bg);
+	color: var(--kind-player-fg);
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-bold);
+	vertical-align: 1px;
+}
+
+.Activity-time {
+	flex: none;
+	color: var(--muted-fg);
+	font-size: var(--text-sm);
+	font-variant-numeric: tabular-nums;
+}
+
 /* === Matchup page === */
 
 /* Team A | vs | team B, like the game page's header. Each side is tinted
@@ -4063,6 +4241,11 @@ a.Compare-chip:hover {
 	width: 12rem;
 }
 
+/* Fits "Aug 28, 2024", the longest date */
+.GameTable .GameTable-col--date {
+	width: 7rem;
+}
+
 /* Fits "10:45 PM" */
 .GameTable .GameTable-col--time {
 	width: 6.25rem;
@@ -4092,6 +4275,14 @@ a.Compare-chip:hover {
 	text-overflow: ellipsis;
 }
 
+/* No wider than the cell, so a long name ends in an ellipsis. Otherwise a
+   mirrored (away) name, aligned right, would overflow out the cell's left
+   edge and be cut off there. */
+.GameTable .GameTable-team-name,
+.GameTable-team-division {
+	max-width: 100%;
+}
+
 .GameTable-row {
 	position: relative;
 }
@@ -4102,6 +4293,14 @@ a.Compare-chip:hover {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 0.5);
+}
+
+/* Above the row's stretched link, so hovering it shows the time */
+.GameTable-date-only {
+	position: relative;
+	z-index: 1;
+	align-self: flex-start;
+	font-variant-numeric: tabular-nums;
 }
 
 /* Room for "Dec 11, 2025", left-aligned: the dates and times each line up */

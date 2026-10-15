@@ -5,12 +5,17 @@ import {
 	KHLArenaRefSchema,
 	KHLBoxScore,
 	KHLBoxScoreSchema,
+	KHLBoxScoreTeamSchema,
 	KHLGame,
 	KHLGamePreviewStats,
 	KHLGamePreviewStatsSchema,
 	KHLGameSchema,
+	KHLGoal,
+	KHLGoalSchema,
 	KHLHomeAway,
 	KHLHomeAwaySchema,
+	KHLPenalty,
+	KHLPenaltySchema,
 	KHLPlayer,
 	KHLPlayerSchema,
 	KHLPlayerSearchResult,
@@ -275,6 +280,76 @@ export const RecentPenaltiesSchema = z.object({
 	penalties: z.number().int().nonnegative(),
 }) satisfies z.ZodType<RecentPenalties>
 
+/** One side of a game in an activity feed */
+export interface ActivityTeam {
+	id: string
+	name: string
+	logoUrl: string | null
+	/** The season the game's team links point at */
+	seasonId: string
+	/** Final goals, or null until the summary is posted */
+	goals: number | null
+}
+
+export const ActivityTeamSchema = KHLBoxScoreTeamSchema.pick({
+	id: true,
+	name: true,
+	logoUrl: true,
+	seasonId: true,
+	goals: true,
+}) satisfies z.ZodType<ActivityTeam>
+
+/**
+ * A goal, assist, or penalty in an activity feed. "assist" is only in a
+ * player's feed, for someone else's goal they assisted on.
+ */
+export type ActivityEvent =
+	| {kind: "goal" | "assist"; goal: KHLGoal}
+	| {kind: "penalty"; penalty: KHLPenalty}
+
+export const ActivityEventSchema = z.union([
+	z.object({kind: z.enum(["goal", "assist"]), goal: KHLGoalSchema}),
+	z.object({kind: z.literal("penalty"), penalty: KHLPenaltySchema}),
+]) satisfies z.ZodType<ActivityEvent>
+
+/** A game in an activity feed, and the player's or team's events in it */
+export interface ActivityGame {
+	gameId: string
+	/** Start time as an ISO 8601 UTC instant */
+	startsAt: string
+	homeAway: KHLHomeAway
+	/** The team itself, or the player's team in this game */
+	team: ActivityTeam
+	opponent: ActivityTeam
+	/** The rink's LiveBarn surfaces; empty when it isn't on LiveBarn */
+	livebarn: LiveBarnLink[]
+	/** Latest first */
+	events: ActivityEvent[]
+}
+
+export const ActivityGameSchema = z.object({
+	gameId: z.string(),
+	startsAt: z.iso.datetime(),
+	homeAway: KHLHomeAwaySchema,
+	team: ActivityTeamSchema,
+	opponent: ActivityTeamSchema,
+	livebarn: z.array(LiveBarnLinkSchema),
+	events: z.array(ActivityEventSchema),
+}) satisfies z.ZodType<ActivityGame>
+
+/** A player's or team's latest LIMITS.ACTIVITY_EVENTS events */
+export interface ActivityResponse {
+	/** Newest first */
+	games: ActivityGame[]
+	/** Our player UUID for each KHL player id named in `games` */
+	playerIds: Record<string, string>
+}
+
+export const ActivityResponseSchema = z.object({
+	games: z.array(ActivityGameSchema),
+	playerIds: z.record(z.string(), z.uuid()),
+}) satisfies z.ZodType<ActivityResponse>
+
 export interface PlayerResponse {
 	/** Our player UUID */
 	playerId: string
@@ -364,6 +439,14 @@ export const GET_PLAYER_RECENT_PENALTIES_ENDPOINT = {
 	responseSchema: RecentPenaltiesSchema,
 } satisfies ApiEndpoint<GetPlayerRequest, RecentPenalties>
 
+/** The player's latest goals, assists, and penalties; slow on a cold cache. */
+export const GET_PLAYER_ACTIVITY_ENDPOINT = {
+	method: "GET",
+	uri: "/api/players/:playerId/activity",
+	requestSchema: GetPlayerRequestSchema,
+	responseSchema: ActivityResponseSchema,
+} satisfies ApiEndpoint<GetPlayerRequest, ActivityResponse>
+
 export interface GetTeamRequest {
 	teamId: string
 	/** Defaults to the current season */
@@ -381,6 +464,14 @@ export const GET_TEAM_ENDPOINT = {
 	requestSchema: GetTeamRequestSchema,
 	responseSchema: TeamResponseSchema,
 } satisfies ApiEndpoint<GetTeamRequest, TeamResponse>
+
+/** The team's latest goals and penalties in the season; slow on a cold cache. */
+export const GET_TEAM_ACTIVITY_ENDPOINT = {
+	method: "GET",
+	uri: "/api/teams/:teamId/activity",
+	requestSchema: GetTeamRequestSchema,
+	responseSchema: ActivityResponseSchema,
+} satisfies ApiEndpoint<GetTeamRequest, ActivityResponse>
 
 /** An earlier game between the same two teams. */
 export interface HeadToHeadGame {

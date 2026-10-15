@@ -89,6 +89,12 @@ const dateFormat = new Intl.DateTimeFormat("en-US", {
 	day: "numeric",
 })
 
+const shortDateFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	month: "short",
+	day: "numeric",
+})
+
 const dateWithYearFormat = new Intl.DateTimeFormat("en-US", {
 	timeZone: LEAGUE.TIME_ZONE,
 	month: "short",
@@ -112,6 +118,26 @@ export function formatGameDate(startsAt: string, now: Date): string {
 	const date = new Date(startsAt)
 	return yearFormat.format(date) === yearFormat.format(now)
 		? dateFormat.format(date)
+		: dateWithYearFormat.format(date)
+}
+
+/** "1st" -> "1st period"; "OT" and "SO" stay as they are */
+export function formatPeriodName(period: string): string {
+	return /^\d/.test(period) ? `${period} period` : period
+}
+
+/** What the scoresheet's goal types stand for */
+export const GOAL_TYPES: Record<string, string> = {
+	PPG: "Power-play goal",
+	SHG: "Short-handed goal",
+	ENG: "Empty-net goal",
+}
+
+/** "Oct 19" in league time, or "Aug 28, 2024" outside the current year */
+export function formatShortGameDate(startsAt: string, now: Date): string {
+	const date = new Date(startsAt)
+	return yearFormat.format(date) === yearFormat.format(now)
+		? shortDateFormat.format(date)
 		: dateWithYearFormat.format(date)
 }
 

@@ -3,12 +3,14 @@ import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
+	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
+import {ActivityFeed} from "../Activity.js"
 import {BadgeHint, BadgeIcon, getBadges} from "../Badges.js"
 import {
 	AsyncContent,
@@ -43,6 +45,11 @@ const PlayerPage = ({params, query}: RouteProps) => {
 	const playerId = params.playerId!
 	const state = useAsync(
 		() => doRequest(GET_PLAYER_ENDPOINT, {playerId}),
+		[playerId],
+	)
+	// Separate from the player, since it reads a box score per recent game
+	const activity = useAsync(
+		() => doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {playerId}),
 		[playerId],
 	)
 	const now = useNow()
@@ -149,18 +156,25 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									now={now}
 								/>
 							</section>
-							<PastGames
-								// Reset the list's scroll position when switching teams
-								key={selected?.khlPlayerId ?? "all"}
-								games={games}
-								now={now}
-								getTeamLogoUrl={(teamId) =>
-									player.registrations.find(
-										(r) => r.teamId === teamId,
-									)?.teamLogoUrl ?? null
-								}
-								limit={MAX_PAST_GAMES}
-							/>
+							<div className="Detail-columns">
+								<PastGames
+									// Reset the list's scroll position when switching teams
+									key={selected?.khlPlayerId ?? "all"}
+									games={games}
+									now={now}
+									getTeamLogoUrl={(teamId) =>
+										player.registrations.find(
+											(r) => r.teamId === teamId,
+										)?.teamLogoUrl ?? null
+									}
+									limit={MAX_PAST_GAMES}
+								/>
+								<ActivityFeed
+									state={activity}
+									subject="player"
+									now={now}
+								/>
+							</div>
 							<PlayerStats player={player} selected={selected} />
 						</div>
 					)

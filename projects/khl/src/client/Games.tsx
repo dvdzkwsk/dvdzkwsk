@@ -25,6 +25,7 @@ import {
 	formatGameDate,
 	formatGameDay,
 	formatGameTime,
+	formatShortGameDate,
 	formatRelative,
 	formatScore,
 	getEndOfMonthDayKey,
@@ -48,9 +49,11 @@ import {getGoalsByTeam} from "../shared/KHLJson.js"
 import {
 	DAY_MS,
 	getGameEndsAt,
+	getGameEventClockTime,
 	getLeagueDayKey,
 	isGameInProgress,
 } from "../shared/LeagueTime.js"
+import {getLiveBarnVodUrl} from "../shared/LiveBarn.js"
 
 // --- Game cards
 
@@ -281,6 +284,7 @@ export const PastGames = ({
 			now={now}
 			showResult
 			showDay
+			dateOnly
 		/>
 	)
 }
@@ -1169,6 +1173,7 @@ export const GameTable = ({
 	now,
 	showResult,
 	showDay,
+	dateOnly,
 	showRink = true,
 	maxHeight,
 }: {
@@ -1178,6 +1183,8 @@ export const GameTable = ({
 	showResult?: boolean
 	/** When rows span several days and nothing above says which */
 	showDay?: boolean
+	/** With `showDay`, just "Oct 19"; the weekday and time move to a tooltip */
+	dateOnly?: boolean
 	/** Off on a rink's own page */
 	showRink?: boolean
 	/** Rows scroll past this height under a fixed header */
@@ -1215,7 +1222,11 @@ export const GameTable = ({
 			// "Sun, Oct 11 10:30 PM" when rows span days; else just the time
 			header: showDay ? "Date" : "Time",
 			isLabel: true,
-			className: showDay ? "GameTable-col--when" : "GameTable-col--time",
+			className: !showDay
+				? "GameTable-col--time"
+				: dateOnly
+					? "GameTable-col--date"
+					: "GameTable-col--when",
 			sortValue: (row) => row.startsAt,
 			render: (row) => {
 				const time = (
@@ -1223,17 +1234,27 @@ export const GameTable = ({
 						{row.live && (
 							<span className="GameTable-live">LIVE</span>
 						)}
-						<span>
-							{showDay && (
-								<>
-									{/* Fixed width, so the times line up */}
-									<span className="GameTable-date">
-										{formatGameDate(row.startsAt, now)}
-									</span>
-								</>
-							)}
-							{formatGameTime(row.startsAt)}
-						</span>
+						{showDay && dateOnly ? (
+							<Hint
+								label={`${formatGameDate(row.startsAt, now)} · ${formatGameTime(row.startsAt)}`}
+							>
+								<span className="GameTable-date-only">
+									{formatShortGameDate(row.startsAt, now)}
+								</span>
+							</Hint>
+						) : (
+							<span>
+								{showDay && (
+									<>
+										{/* Fixed width, so the times line up */}
+										<span className="GameTable-date">
+											{formatGameDate(row.startsAt, now)}
+										</span>
+									</>
+								)}
+								{formatGameTime(row.startsAt)}
+							</span>
+						)}
 					</>
 				)
 				// The row's link to the game; its hit area covers the row
@@ -1460,6 +1481,26 @@ export function toReplayLinks(
 		surfaceId: link.surfaceId,
 		href: link.vodUrl,
 		title: LIVEBARN_TITLES.replay(link.surfaceName),
+	}))
+}
+
+/**
+ * LiveBarn replays from about when a goal or penalty happened, one per
+ * surface of the game's rink; none for shootouts.
+ */
+export function toEventReplayLinks(
+	game: {startsAt: string},
+	livebarn: LiveBarnLink[],
+	event: {period: string; time: string},
+): GameTableRow["livebarn"] {
+	const at = getGameEventClockTime(game, event.period, event.time)
+	if (!at) {
+		return []
+	}
+	return livebarn.map((link) => ({
+		surfaceId: link.surfaceId,
+		href: getLiveBarnVodUrl(link.surfaceId, at.localDate, at.localTime),
+		title: LIVEBARN_TITLES.moment(link.surfaceName),
 	}))
 }
 

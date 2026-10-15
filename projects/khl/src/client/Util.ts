@@ -113,10 +113,15 @@ const timeFormat = new Intl.DateTimeFormat("en-US", {
 	minute: "2-digit",
 })
 
+/** Whether the game falls in `now`'s league-time year, so its date can omit the year */
+export function isInCurrentYear(startsAt: string, now: Date): boolean {
+	return yearFormat.format(new Date(startsAt)) === yearFormat.format(now)
+}
+
 /** "Mon, Oct 19" in league time, or "Aug 28, 2024" outside the current year */
 export function formatGameDate(startsAt: string, now: Date): string {
 	const date = new Date(startsAt)
-	return yearFormat.format(date) === yearFormat.format(now)
+	return isInCurrentYear(startsAt, now)
 		? dateFormat.format(date)
 		: dateWithYearFormat.format(date)
 }
@@ -136,7 +141,7 @@ export const GOAL_TYPES: Record<string, string> = {
 /** "Oct 19" in league time, or "Aug 28, 2024" outside the current year */
 export function formatShortGameDate(startsAt: string, now: Date): string {
 	const date = new Date(startsAt)
-	return yearFormat.format(date) === yearFormat.format(now)
+	return isInCurrentYear(startsAt, now)
 		? shortDateFormat.format(date)
 		: dateWithYearFormat.format(date)
 }

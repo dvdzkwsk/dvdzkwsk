@@ -118,7 +118,6 @@ const RinkPage = ({params}: RouteProps) => {
 
 							<GameTableCard
 								title="Upcoming games"
-								count={rink.games.length}
 								emptyText="No games scheduled."
 								// About five games, then they scroll inside the card
 								maxHeight="20rem"

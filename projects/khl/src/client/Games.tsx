@@ -26,6 +26,7 @@ import {
 	formatGameDay,
 	formatGameTime,
 	formatShortGameDate,
+	isInCurrentYear,
 	formatRelative,
 	formatScore,
 	getEndOfMonthDayKey,
@@ -273,8 +274,7 @@ export const PastGames = ({
 	const past = games.filter((g) => getGameEndsAt(g.game) <= now).reverse()
 	return (
 		<GameTableCard
-			title="Past games"
-			count={past.length}
+			title="Recent games"
 			emptyText="No games played yet."
 			// Long histories scroll inside the card, under a fixed header
 			maxHeight="24rem"
@@ -289,23 +289,19 @@ export const PastGames = ({
 	)
 }
 
-/** A titled card around a GameTable: "Past games · 7", or `emptyText`. */
+/** A titled card around a GameTable, or `emptyText` when it has no rows. */
 export const GameTableCard = ({
 	title,
-	count,
 	emptyText,
 	...tableProps
 }: React.ComponentProps<typeof GameTable> & {
 	title: string
-	/** Shown after the title when there are any */
-	count?: number
 	emptyText: string
 }) => {
 	return (
 		<section className="GameTableCard">
 			<h2 className={cx("GameTableCard-title", "SectionLabel")}>
 				{title}
-				{!!count && ` · ${count}`}
 			</h2>
 			{tableProps.rows.length === 0 ? (
 				<div className="GameTableCard-empty">{emptyText}</div>
@@ -1197,6 +1193,9 @@ export const GameTable = ({
 	// Both team columns as wide as the longest name here, so a table of short
 	// names doesn't spread them out
 	const teamChars = scoreboard ? getTeamColumnChars(rows) : null
+	// Short dates ("Oct 19") need less room than ones with a year
+	const shortDates =
+		dateOnly && rows.every((row) => isInCurrentYear(row.startsAt, now))
 	const columns: StatsTableColumn<GameTableRow>[] = [
 		...(showResult
 			? [
@@ -1225,7 +1224,10 @@ export const GameTable = ({
 			className: !showDay
 				? "GameTable-col--time"
 				: dateOnly
-					? "GameTable-col--date"
+					? cx(
+							"GameTable-col--date",
+							shortDates && "GameTable-col--date-short",
+						)
 					: "GameTable-col--when",
 			sortValue: (row) => row.startsAt,
 			render: (row) => {

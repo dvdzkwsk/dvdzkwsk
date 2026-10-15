@@ -120,7 +120,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 										player.unavailableSchedules.length === 1
 											? "this schedule, so its"
 											: "these schedules, so their"
-									} games aren't in Past games. Season and career totals come from the player's stats and aren't affected.`}
+									} games aren't in Recent games. Season and career totals come from the player's stats and aren't affected.`}
 									items={player.unavailableSchedules.map(
 										(schedule) => ({
 											key: `${schedule.teamId}:${schedule.seasonId}`,

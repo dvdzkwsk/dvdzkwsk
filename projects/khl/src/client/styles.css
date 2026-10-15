@@ -51,6 +51,14 @@
 	--subtle-bg: #f2f5f9;
 	--accent: #0a0a0b;
 	--accent-fg: #ffffff;
+	/* Home/away badges, in the jerseys' colors whatever the theme: away
+	   wears dark, home wears light */
+	--jersey-away-bg: #0a0a0b;
+	--jersey-away-fg: #ffffff;
+	--jersey-away-border: #0a0a0b;
+	--jersey-home-bg: transparent;
+	--jersey-home-fg: var(--muted-fg);
+	--jersey-home-border: var(--subtle-fg);
 	--link: #2563eb;
 	--live: #e5484d;
 	--live-fg: #ffffff;
@@ -117,6 +125,12 @@
 	--subtle-bg: #1b222b;
 	--accent: #ececef;
 	--accent-fg: #0a0a0b;
+	--jersey-away-bg: #0a0a0b;
+	--jersey-away-fg: #ececef;
+	--jersey-away-border: var(--subtle-fg);
+	--jersey-home-bg: #ececef;
+	--jersey-home-fg: #0a0a0b;
+	--jersey-home-border: #ececef;
 	--link: #6ea8fe;
 	--live-bg: #3a1618;
 	--win: #4ade80;
@@ -4320,14 +4334,15 @@ a.Compare-chip:hover {
 }
 
 .HomeAwayBadge--home {
-	background: transparent;
-	border: 1px solid var(--subtle-fg);
-	color: var(--muted-fg);
+	background: var(--jersey-home-bg);
+	border: 1px solid var(--jersey-home-border);
+	color: var(--jersey-home-fg);
 }
 
 .HomeAwayBadge--away {
-	background: var(--accent);
-	color: var(--accent-fg);
+	background: var(--jersey-away-bg);
+	border: 1px solid var(--jersey-away-border);
+	color: var(--jersey-away-fg);
 }
 
 .GameTable-team {

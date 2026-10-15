@@ -19,6 +19,11 @@ const FEATURES: Feature[] = [
 		art: LiveBarnArt,
 	},
 	{
+		title: "Replay any goal",
+		text: "Every goal and penalty links to that moment on LiveBarn, so you can rewatch it in one tap.",
+		art: ReplayArt,
+	},
+	{
 		title: "Improved player profiles",
 		text: "Career stats across every team a player has been on, not one team at a time.",
 		art: PlayerArt,
@@ -326,6 +331,97 @@ function LiveBarnArt() {
 					/>
 				</g>
 			))}
+		</Art>
+	)
+}
+
+/** Goals and penalties, one jumping to its moment in a LiveBarn replay */
+function ReplayArt() {
+	const events: [y: number, side: "a" | "b", w: number][] = [
+		[10, "a", 56],
+		[45, "b", 44],
+		[80, "a", 50],
+	]
+	const picked = 45
+	return (
+		<Art>
+			<path
+				className="AboutArt-link"
+				d={`M128 ${picked + 15} C 140 ${picked + 15}, 136 55, 148 55`}
+			/>
+			{events.map(([y, side, w]) => (
+				<g key={y}>
+					<rect
+						className="AboutArt-surface"
+						x="8"
+						y={y}
+						width="124"
+						height="30"
+						rx="6"
+					/>
+					<circle
+						className={`AboutArt-${side}`}
+						cx="24"
+						cy={y + 15}
+						r="5"
+					/>
+					<rect
+						className="AboutArt-muted"
+						x="36"
+						y={y + 13}
+						width={w}
+						height="4"
+						rx="2"
+					/>
+					{y === picked ? (
+						<circle
+							className="AboutArt-ink"
+							cx="116"
+							cy={y + 15}
+							r="8"
+						/>
+					) : (
+						<circle
+							className="AboutArt-outline"
+							cx="116"
+							cy={y + 15}
+							r="7.5"
+						/>
+					)}
+					<path
+						className={
+							y === picked ? "AboutArt-on-ink" : "AboutArt-muted"
+						}
+						d={`M113.5 ${y + 11} L120.5 ${y + 15} L113.5 ${y + 19} Z`}
+					/>
+				</g>
+			))}
+			<rect
+				className="AboutArt-ink"
+				x="148"
+				y="28"
+				width="84"
+				height="54"
+				rx="6"
+			/>
+			<path className="AboutArt-on-ink" d="M184 46 L198 55 L184 64 Z" />
+			<rect
+				className="AboutArt-track"
+				x="148"
+				y="90"
+				width="84"
+				height="4"
+				rx="2"
+			/>
+			<rect
+				className="AboutArt-live"
+				x="148"
+				y="90"
+				width="52"
+				height="4"
+				rx="2"
+			/>
+			<circle className="AboutArt-live" cx="200" cy="92" r="5" />
 		</Art>
 	)
 }

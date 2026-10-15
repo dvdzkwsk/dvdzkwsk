@@ -4561,6 +4561,12 @@ a.Compare-chip:hover {
 	line-height: 1;
 }
 
+/* About an emoji's width, at the flag's 3:2 */
+.BadgeIcon-flag {
+	width: 1.2em;
+	height: 0.8em;
+}
+
 .BadgeHint {
 	display: flex;
 	flex-direction: column;

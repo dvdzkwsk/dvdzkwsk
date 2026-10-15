@@ -14,13 +14,31 @@ export interface BadgeStats {
 
 export interface Badge {
 	id: string
-	/** An emoji */
-	icon: string
+	/** An emoji, or an inline SVG where an emoji doesn't render everywhere */
+	icon: React.ReactNode
 	label: string
 	description: string
 	/** Hand-given badges: who has it, by name */
 	players?: string[]
 	earned: (stats: BadgeStats) => boolean
+}
+
+/** Windows draws the 🇯🇵 emoji as the letters "JP", so the flag is drawn here */
+function JapanFlag() {
+	return (
+		<svg className="BadgeIcon-flag" viewBox="0 0 30 20">
+			<rect
+				x="0.5"
+				y="0.5"
+				width="29"
+				height="19"
+				rx="2"
+				fill="#fff"
+				stroke="rgb(0 0 0 / 0.15)"
+			/>
+			<circle cx="15" cy="10" r="6" fill="#bc002d" />
+		</svg>
+	)
 }
 
 const {BADGE_TREND_WINDOW, BADGE_TREND_MIN_GAMES} = LIMITS
@@ -52,7 +70,7 @@ const gamesMilestone = (
 /** Given out by hand, matched on the player's name */
 const customBadge = (
 	id: string,
-	icon: string,
+	icon: React.ReactNode,
 	label: string,
 	description: string,
 	players: string[],
@@ -77,6 +95,9 @@ export const BADGES: Badge[] = [
 		"A founding member of the Red Gloves Gang.",
 		["Gabey Lucas", "David Zukowski", "Emily Olan"],
 	),
+	customBadge("japanese", <JapanFlag />, "日本語", "Speaks Japanese.", [
+		"Emily Sorg",
+	]),
 	{
 		id: "angel",
 		icon: "😇",

@@ -2,4 +2,4 @@
 
 ## Installing packages
 
-Always use `bun add -d <package>` (devDependencies) unless a package is explicitly a runtime production dependency.
+Always use `pnpm add -D -w <package>` (devDependencies) unless a package is explicitly a runtime production dependency.

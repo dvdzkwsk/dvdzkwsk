@@ -5,7 +5,7 @@ import * as path from "path"
 import {input} from "@inquirer/prompts"
 import {createCliTool} from "../pkg/util/CliUtil.js"
 import {toError} from "../pkg/util/ErrorUtil.js"
-import {Logger} from "../pkg/util/Logger.js"
+import {Logger} from "../pkg/logger/Logger.js"
 
 const logger = new Logger("SetupMac")
 const PROJECT_ROOT = path.resolve(
@@ -919,6 +919,7 @@ async function ensureBrewPackages(ctx: SetupContext) {
 	brewInstall("up") // write pipes with instant live preview
 	brewInstall("watch") // run command repeatedly
 	brewInstall("mkcert") // local HTTPS certs
+	brewInstall("flyctl") // Fly.io CLI (deploys projects/khl)
 	brewInstall("zoxide") // better `cd`
 	brewInstall("neovim")
 

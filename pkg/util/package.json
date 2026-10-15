@@ -1,0 +1,8 @@
+{
+	"name": "@dvdzkwsk/util",
+	"type": "module",
+	"exports": {
+		"./ReactUtil": "./ReactUtil.tsx",
+		"./*": "./*.ts"
+	}
+}

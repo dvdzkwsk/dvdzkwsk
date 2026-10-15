@@ -3,7 +3,7 @@ import * as fs from "fs"
 import * as path from "path"
 import * as url from "url"
 import {createCliTool} from "../pkg/util/CliUtil.js"
-import {Logger} from "../pkg/util/Logger.js"
+import {Logger} from "../pkg/logger/Logger.js"
 
 const logger = new Logger("SetupCron")
 

@@ -1,0 +1,9 @@
+packages:
+  - pkg/*
+  - projects/*
+
+allowBuilds:
+  esbuild: true
+  netlify-cli: true
+  sharp: true
+  unix-dgram: true

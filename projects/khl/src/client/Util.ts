@@ -1,0 +1,515 @@
+import {
+	ConsoleTransport,
+	LogMessage,
+	Logger,
+	LoggerTransport,
+	setLoggerTransports,
+} from "@dvdzkwsk/logger"
+import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {FetchError} from "@dvdzkwsk/util/FetchUtil"
+import {History, Location} from "history"
+import * as React from "react"
+import {ClientLog, LOG_ENDPOINT} from "../shared/ApiJson.js"
+import {LEAGUE} from "../shared/KHLConfig.js"
+import {KHLGame} from "../shared/KHLJson.js"
+
+// --- App context and routes
+
+export interface AppContextValue {
+	history: History
+}
+
+export const AppContext = React.createContext<AppContextValue>(null!)
+
+export function createAppContext(history: History): AppContextValue {
+	return {
+		history,
+	}
+}
+
+export interface Route {
+	/** e.g. "/players/:playerId" */
+	path: string
+	title: string
+	description?: string
+	content: React.FC<RouteProps>
+}
+
+export interface RouteProps {
+	params: Record<string, string>
+	query: URLSearchParams
+}
+
+// --- Links
+
+/** In-app links, matching the paths in Routes.tsx */
+export function getPlayerHref(playerId: string): string {
+	return `/players/${playerId}`
+}
+
+export function getGameHref(gameId: string): string {
+	return `/games/${gameId}`
+}
+
+export function getRinkHref(arenaId: string): string {
+	return `/rinks/${arenaId}`
+}
+
+export function getTeamHref(team: {id: string; seasonId: string}): string {
+	return `/teams/${team.id}?${new URLSearchParams({season: team.seasonId})}`
+}
+
+// --- Game timing
+
+export function getGameEndsAt(game: KHLGame): Date {
+	return new Date(
+		Date.parse(game.startsAt) + LEAGUE.GAME_DURATION_MINUTES * 60_000,
+	)
+}
+
+export function isGameInProgress(game: KHLGame, now: Date): boolean {
+	const startsAt = Date.parse(game.startsAt)
+	return startsAt <= now.getTime() && now < getGameEndsAt(game)
+}
+
+// --- Formatting (league-local time)
+
+const dateFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	weekday: "short",
+	month: "short",
+	day: "numeric",
+})
+
+const dateWithYearFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	month: "short",
+	day: "numeric",
+	year: "numeric",
+})
+
+const yearFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	year: "numeric",
+})
+
+const timeFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	hour: "numeric",
+	minute: "2-digit",
+})
+
+/** "Mon, Oct 19" in league time, or "Aug 28, 2024" outside the current year */
+export function formatGameDate(startsAt: string, now: Date): string {
+	const date = new Date(startsAt)
+	return yearFormat.format(date) === yearFormat.format(now)
+		? dateFormat.format(date)
+		: dateWithYearFormat.format(date)
+}
+
+/**
+ * "4 – 2". Every score in the app goes through this (or formatKHLScore), so
+ * they all read the same.
+ */
+export function formatScore(first: number, second: number): string {
+	return `${first} – ${second}`
+}
+
+/** The league's own "4 - 2" (or "4-2"), via formatScore; anything else as is */
+export function formatKHLScore(score: string): string {
+	const match = score.match(/^\s*(\d+)\s*-\s*(\d+)\s*$/)
+	return match ? formatScore(Number(match[1]), Number(match[2])) : score
+}
+
+/** "9:05 PM" in league time */
+export function formatGameTime(startsAt: string): string {
+	return timeFormat.format(new Date(startsAt))
+}
+
+const relativeFormat = new Intl.RelativeTimeFormat("en-US", {numeric: "auto"})
+
+/** "in 5 days", "in 3 hours", "tomorrow" */
+export function formatRelative(target: string, now: Date): string {
+	const diffMinutes = (Date.parse(target) - now.getTime()) / 60_000
+	if (Math.abs(diffMinutes) < 60) {
+		return relativeFormat.format(Math.round(diffMinutes), "minute")
+	}
+	if (Math.abs(diffMinutes) < 24 * 60) {
+		return relativeFormat.format(Math.round(diffMinutes / 60), "hour")
+	}
+	return relativeFormat.format(Math.round(diffMinutes / (24 * 60)), "day")
+}
+
+const dayKeyFormat = new Intl.DateTimeFormat("en-CA", {
+	timeZone: LEAGUE.TIME_ZONE,
+	year: "numeric",
+	month: "2-digit",
+	day: "2-digit",
+})
+
+/** "Today", "Tomorrow", or "Mon, Oct 19" in league time */
+export function formatGameDay(startsAt: string, now: Date): string {
+	const day = dayKeyFormat.format(new Date(startsAt))
+	if (day === dayKeyFormat.format(now)) {
+		return "Today"
+	}
+	const tomorrow = new Date(now.getTime() + 24 * 60 * 60_000)
+	if (day === dayKeyFormat.format(tomorrow)) {
+		return "Tomorrow"
+	}
+	return formatGameDate(startsAt, now)
+}
+
+const shortWeekdayFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	weekday: "short",
+})
+
+const shortDateFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	month: "short",
+	day: "numeric",
+})
+
+/** Compact day for tight spaces: "Today", "Tomorrow", "Sun", or "Oct 25" */
+export function formatShortGameDay(startsAt: string, now: Date): string {
+	const day = formatGameDay(startsAt, now)
+	if (day === "Today" || day === "Tomorrow") {
+		return day
+	}
+	const daysAway = (Date.parse(startsAt) - now.getTime()) / (24 * 60 * 60_000)
+	const date = new Date(startsAt)
+	return daysAway < 6
+		? shortWeekdayFormat.format(date)
+		: shortDateFormat.format(date)
+}
+
+/** "yyyy-MM-dd" of the league-local (Pacific) day `date` falls on */
+export function getLeagueDayKey(date: Date): string {
+	return dayKeyFormat.format(date)
+}
+
+const weekdayFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	weekday: "short",
+})
+
+/** League-local day key of the Sunday ending the week containing `now` */
+export function getEndOfWeekDayKey(now: Date): string {
+	const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+	const daysLeft = 6 - weekdays.indexOf(weekdayFormat.format(now))
+	return getLeagueDayKey(
+		new Date(now.getTime() + daysLeft * 24 * 60 * 60_000),
+	)
+}
+
+// --- Hooks
+
+export type AsyncState<T> = (
+	| {status: "loading"}
+	| {status: "error"; error: Error}
+	| {status: "success"; data: T}
+) & {
+	/** Runs `load` again, e.g. from a "Try again" button */
+	reload: () => void
+}
+
+const asyncLogger = new Logger("useAsync")
+
+/**
+ * Runs `load` on mount and whenever `deps` change, ignoring stale results.
+ * Failures are logged here, once per failed load.
+ */
+export function useAsync<T>(
+	load: () => Promise<T>,
+	deps: React.DependencyList,
+): AsyncState<T> {
+	type Result =
+		| {status: "loading"}
+		| {status: "error"; error: Error}
+		| {status: "success"; data: T}
+	const [result, setResult] = React.useState<Result>({status: "loading"})
+	const [attempt, setAttempt] = React.useState(0)
+	React.useEffect(() => {
+		let current = true
+		setResult({status: "loading"})
+		load().then(
+			(data) => current && setResult({status: "success", data}),
+			(cause: unknown) => {
+				const error =
+					cause instanceof Error ? cause : new Error(String(cause))
+				asyncLogger.error("load", "load failed", {error})
+				if (current) {
+					setResult({status: "error", error})
+				}
+			},
+		)
+		return () => {
+			current = false
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [...deps, attempt])
+	const reload = React.useCallback(() => setAttempt((n) => n + 1), [])
+	return {...result, reload}
+}
+
+/** The current location, re-rendering whenever it changes. */
+export function useLocation(): Location {
+	const {history} = React.useContext(AppContext)
+	const [location, setLocation] = React.useState(history.location)
+	React.useEffect(() => {
+		const unlisten = history.listen((update) =>
+			setLocation(update.location),
+		)
+		// The URL may have changed between render and subscribing; catch up
+		setLocation(history.location)
+		return unlisten
+	}, [history])
+	return location
+}
+
+/** League-wide pages' filters: which season, and which of its divisions. */
+export interface SeasonFilterValues {
+	/** KHL season id; null for the current season */
+	season: string | null
+	/** Division names, e.g. "Division 4B"; empty means every division */
+	divisions: string[]
+}
+
+/**
+ * Season filters, kept in the URL so they survive reloads and can be shared.
+ * Changes replace the history entry so filter tweaks don't fill it up.
+ */
+export function useSeasonFilters(
+	query: URLSearchParams,
+): [SeasonFilterValues, (changes: Partial<SeasonFilterValues>) => void] {
+	const {history} = React.useContext(AppContext)
+	const filters: SeasonFilterValues = {
+		season: query.get("season"),
+		divisions: query.get("divisions")?.split(",").filter(Boolean) ?? [],
+	}
+	const setFilters = (changes: Partial<SeasonFilterValues>) => {
+		const next = {...filters, ...changes}
+		const search = new URLSearchParams()
+		if (next.season) {
+			search.set("season", next.season)
+		}
+		if (next.divisions.length > 0) {
+			search.set("divisions", next.divisions.join(","))
+		}
+		history.replace({
+			pathname: history.location.pathname,
+			search: search.size > 0 ? `?${search}` : "",
+		})
+	}
+	return [filters, setFilters]
+}
+
+/**
+ * The selected divisions that exist in `divisions`, or all of `divisions` when
+ * none do: a season's division names differ (e.g. "40+ Fall 26"), so a filter
+ * carried over from another season may match nothing.
+ */
+export function getVisibleDivisions(
+	divisions: string[],
+	selected: string[],
+): Set<string> {
+	const matching = divisions.filter((d) => selected.includes(d))
+	return new Set(matching.length > 0 ? matching : divisions)
+}
+
+/** The current time, updated every `intervalMs`. */
+export function useNow(intervalMs = 30_000): Date {
+	const [now, setNow] = React.useState(() => new Date())
+	React.useEffect(() => {
+		const id = setInterval(() => setNow(new Date()), intervalMs)
+		return () => clearInterval(id)
+	}, [intervalMs])
+	return now
+}
+
+export function useDebouncedValue<T>(value: T, delayMs: number): T {
+	const [debounced, setDebounced] = React.useState(value)
+	React.useEffect(() => {
+		const id = setTimeout(() => setDebounced(value), delayMs)
+		return () => clearTimeout(id)
+	}, [value, delayMs])
+	return debounced
+}
+
+// --- Logging
+//
+// Every client log goes to the console and, batched, to the server
+// (LOG_ENDPOINT), which writes them to its own log output.
+
+const LOG_FLUSH_INTERVAL_MS = 5_000
+const LOG_MAX_RETRY_INTERVAL_MS = 60_000
+const LOG_BATCH_SIZE = 20
+/** Logs kept while the server is unreachable; the oldest are dropped first */
+const LOG_MAX_BUFFERED = 200
+const LOG_MAX_PER_REQUEST = 100
+
+/**
+ * Buffers log messages and sends them in batches. Its own failures go to
+ * console.warn, never through the logger, so an outage can't feed itself.
+ */
+class BatchingLogTransport implements LoggerTransport {
+	private buffer: ClientLog[] = []
+	private timer: ReturnType<typeof setTimeout> | null = null
+	private sending = false
+	private retryIntervalMs = LOG_FLUSH_INTERVAL_MS
+
+	constructor(private sessionId: string) {}
+
+	log(message: LogMessage) {
+		this.buffer.push(toClientLog(message))
+		if (this.buffer.length > LOG_MAX_BUFFERED) {
+			this.buffer.splice(0, this.buffer.length - LOG_MAX_BUFFERED)
+		}
+		if (this.buffer.length >= LOG_BATCH_SIZE) {
+			void this.flush()
+		} else {
+			this.schedule(LOG_FLUSH_INTERVAL_MS)
+		}
+	}
+
+	/** Sends what's buffered now; `keepalive` lets it finish as the page closes. */
+	async flush(options: {keepalive?: boolean} = {}) {
+		if (this.timer) {
+			clearTimeout(this.timer)
+			this.timer = null
+		}
+		if (this.sending || this.buffer.length === 0) {
+			return
+		}
+		const batch = this.buffer.splice(0, LOG_MAX_PER_REQUEST)
+		this.sending = true
+		try {
+			await doRequest(
+				LOG_ENDPOINT,
+				{
+					sessionId: this.sessionId,
+					userAgent: navigator.userAgent,
+					logs: batch,
+				},
+				options,
+			)
+			this.retryIntervalMs = LOG_FLUSH_INTERVAL_MS
+		} catch (error) {
+			console.warn(
+				"[logging] couldn't send logs to the server; will retry",
+				error,
+			)
+			this.buffer.unshift(...batch)
+			this.buffer.splice(
+				0,
+				Math.max(0, this.buffer.length - LOG_MAX_BUFFERED),
+			)
+			this.retryIntervalMs = Math.min(
+				this.retryIntervalMs * 2,
+				LOG_MAX_RETRY_INTERVAL_MS,
+			)
+		} finally {
+			this.sending = false
+		}
+		if (this.buffer.length > 0) {
+			this.schedule(this.retryIntervalMs)
+		}
+	}
+
+	private schedule(delayMs: number) {
+		this.timer ??= setTimeout(() => void this.flush(), delayMs)
+	}
+}
+
+function toClientLog(message: LogMessage): ClientLog {
+	return {
+		timestamp: message.timestamp.toISOString(),
+		level: message.level,
+		context: message.context,
+		subcontext: message.subcontext,
+		message: message.message,
+		aux: message.aux ? toJsonSafe(message.aux) : null,
+		url: location.href,
+	}
+}
+
+/** Flattens Errors (which serialize to {}) and anything else JSON can't hold. */
+function toJsonSafe(aux: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {}
+	for (const [key, value] of Object.entries(aux)) {
+		if (value instanceof Error) {
+			out[key] = serializeError(value)
+			continue
+		}
+		try {
+			out[key] = JSON.parse(JSON.stringify(value) ?? "null")
+		} catch {
+			out[key] = String(value)
+		}
+	}
+	return out
+}
+
+function serializeError(error: Error): Record<string, unknown> {
+	return {
+		name: error.name,
+		message: error.message,
+		stack: error.stack,
+		...(error instanceof FetchError && {
+			status: error.status,
+			url: error.url,
+			method: error.method,
+			serverMessage: error.serverMessage,
+		}),
+	}
+}
+
+/**
+ * Sends client logs to the console and the server, and logs anything that
+ * escapes: uncaught exceptions and unhandled promise rejections. Call once,
+ * before rendering.
+ */
+export function initClientLogging() {
+	const transport = new BatchingLogTransport(crypto.randomUUID())
+	setLoggerTransports([new ConsoleTransport({verbose: true}), transport])
+
+	const logger = new Logger("window")
+	window.addEventListener("error", (event) => {
+		logger.error("onerror", "uncaught error", {
+			error: event.error instanceof Error ? event.error : event.message,
+			source: `${event.filename}:${event.lineno}:${event.colno}`,
+		})
+	})
+	window.addEventListener("unhandledrejection", (event) => {
+		logger.error("onunhandledrejection", "unhandled promise rejection", {
+			error:
+				event.reason instanceof Error
+					? event.reason
+					: String(event.reason),
+		})
+	})
+	// Don't lose the last batch when the tab is closed or backgrounded
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState === "hidden") {
+			void transport.flush({keepalive: true})
+		}
+	})
+}
+
+/** A short, human explanation of what went wrong, for error messages. */
+export function describeError(error: Error): string {
+	if (error instanceof FetchError) {
+		if (error.status === null) {
+			return "Couldn't reach the server. Check your connection and try again."
+		}
+		if (error.status === 404) {
+			return "We couldn't find that. It may have been moved or removed."
+		}
+		if (error.status >= 500) {
+			return `The server ran into a problem (${error.status}). This is usually temporary.`
+		}
+		return `The request was rejected (${error.status}).`
+	}
+	return "Something unexpected went wrong."
+}

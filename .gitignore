@@ -14,3 +14,7 @@ dist
 tsconfig.tsbuildinfo
 _generated
 **/static/assets/
+# local databases
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

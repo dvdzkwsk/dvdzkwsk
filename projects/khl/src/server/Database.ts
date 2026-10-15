@@ -1,0 +1,237 @@
+import {Database as SQLiteDatabase} from "bun:sqlite"
+import * as fs from "fs"
+import * as path from "path"
+import {Logger} from "@dvdzkwsk/logger"
+import {KHLPlayerSearchResult} from "../shared/KHLJson.js"
+
+const logger = new Logger("Database")
+
+/**
+ * KHL has no person-level id: every team registration gets its own player id,
+ * and even the same team sometimes issues a new one. We give each person a
+ * UUID and attach their KHL player ids ("registrations") to it.
+ */
+export interface Player {
+	id: string
+	name: string
+}
+
+/** One KHL player id, which is always on a single team. */
+export interface Registration {
+	khlPlayerId: string
+	playerId: string
+	name: string
+	position: string | null
+	teamId: string
+	teamName: string
+	teamLogoUrl: string | null
+	/** Seasons the registration has appeared in, oldest first */
+	seasonIds: string[]
+}
+
+/** Schema changes, applied in order. Append only; never edit a shipped one. */
+const MIGRATIONS = [
+	`
+	CREATE TABLE players (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		-- normalized name used to match new registrations to a player
+		name_key TEXT NOT NULL,
+		created_at TEXT NOT NULL
+	);
+	CREATE INDEX players_name_key ON players (name_key);
+
+	CREATE TABLE registrations (
+		khl_player_id TEXT PRIMARY KEY,
+		player_id TEXT NOT NULL REFERENCES players (id),
+		name TEXT NOT NULL,
+		position TEXT,
+		team_id TEXT NOT NULL,
+		team_name TEXT NOT NULL,
+		team_logo_url TEXT,
+		updated_at TEXT NOT NULL
+	);
+	CREATE INDEX registrations_player_id ON registrations (player_id);
+
+	CREATE TABLE registration_seasons (
+		khl_player_id TEXT NOT NULL REFERENCES registrations (khl_player_id),
+		season_id TEXT NOT NULL,
+		PRIMARY KEY (khl_player_id, season_id)
+	);
+	`,
+]
+
+export function openDatabase(filepath: string) {
+	fs.mkdirSync(path.dirname(filepath), {recursive: true})
+	const db = new SQLiteDatabase(filepath, {create: true, strict: true})
+	db.exec("PRAGMA journal_mode = WAL")
+	db.exec("PRAGMA foreign_keys = ON")
+	migrate(db)
+	return new KHLDatabase(db)
+}
+
+function migrate(db: SQLiteDatabase) {
+	const {user_version: version} = db
+		.query<{user_version: number}, []>("PRAGMA user_version")
+		.get()!
+	for (let i = version; i < MIGRATIONS.length; i++) {
+		db.transaction(() => {
+			db.exec(MIGRATIONS[i]!)
+			db.exec(`PRAGMA user_version = ${i + 1}`)
+		})()
+		logger.info("migrate", "applied migration", {version: i + 1})
+	}
+}
+
+export function normalizePlayerName(name: string): string {
+	return name
+		.normalize("NFKD")
+		.replace(/[̀-ͯ]/g, "")
+		.trim()
+		.replace(/\s+/g, " ")
+		.toLowerCase()
+}
+
+interface RegistrationRow {
+	khl_player_id: string
+	player_id: string
+	name: string
+	position: string | null
+	team_id: string
+	team_name: string
+	team_logo_url: string | null
+	season_ids: string | null
+}
+
+export class KHLDatabase {
+	constructor(private db: SQLiteDatabase) {}
+
+	getPlayer(id: string): Player | null {
+		return (
+			this.db
+				.query<Player, {id: string}>(
+					"SELECT id, name FROM players WHERE id = $id",
+				)
+				.get({id}) ?? null
+		)
+	}
+
+	getRegistrations(playerId: string): Registration[] {
+		const rows = this.db
+			.query<RegistrationRow, {playerId: string}>(
+				`SELECT r.*, group_concat(s.season_id) AS season_ids
+				FROM registrations r
+				LEFT JOIN registration_seasons s USING (khl_player_id)
+				WHERE r.player_id = $playerId
+				GROUP BY r.khl_player_id`,
+			)
+			.all({playerId})
+		return rows.map(toRegistration)
+	}
+
+	/**
+	 * Records KHL search results, attaching each new KHL player id to the
+	 * player with the same normalized name (or a new player). Returns the
+	 * player UUID for each KHL player id.
+	 */
+	recordRegistrations(results: KHLPlayerSearchResult[]): Map<string, string> {
+		const playerIds = new Map<string, string>()
+		this.db.transaction(() => {
+			const now = new Date().toISOString()
+			for (const result of results) {
+				const playerId =
+					this.findPlayerIdForRegistration(result.playerId) ??
+					this.assignPlayer(result.name, now)
+				this.db
+					.query(
+						`INSERT INTO registrations
+							(khl_player_id, player_id, name, position, team_id, team_name, team_logo_url, updated_at)
+						VALUES ($khlPlayerId, $playerId, $name, $position, $teamId, $teamName, $teamLogoUrl, $now)
+						ON CONFLICT (khl_player_id) DO UPDATE SET
+							name = excluded.name,
+							position = coalesce(excluded.position, position),
+							team_name = excluded.team_name,
+							team_logo_url = coalesce(excluded.team_logo_url, team_logo_url),
+							updated_at = excluded.updated_at`,
+					)
+					.run({
+						khlPlayerId: result.playerId,
+						playerId,
+						name: result.name,
+						position: result.position,
+						teamId: result.teamId,
+						teamName: result.teamName,
+						teamLogoUrl: result.teamLogoUrl,
+						now,
+					})
+				this.db
+					.query(
+						`INSERT OR IGNORE INTO registration_seasons (khl_player_id, season_id)
+						VALUES ($khlPlayerId, $seasonId)`,
+					)
+					.run({
+						khlPlayerId: result.playerId,
+						seasonId: result.seasonId,
+					})
+				playerIds.set(result.playerId, playerId)
+			}
+		})()
+		return playerIds
+	}
+
+	private findPlayerIdForRegistration(khlPlayerId: string): string | null {
+		const row = this.db
+			.query<{player_id: string}, {khlPlayerId: string}>(
+				"SELECT player_id FROM registrations WHERE khl_player_id = $khlPlayerId",
+			)
+			.get({khlPlayerId})
+		return row?.player_id ?? null
+	}
+
+	private assignPlayer(name: string, now: string): string {
+		const nameKey = normalizePlayerName(name)
+		const candidates = this.db
+			.query<{id: string}, {nameKey: string}>(
+				"SELECT id FROM players WHERE name_key = $nameKey",
+			)
+			.all({nameKey})
+		if (candidates.length === 1) {
+			return candidates[0]!.id
+		}
+		if (candidates.length > 1) {
+			// Namesakes were split by hand; a new registration can't be placed
+			// automatically, so it becomes its own player until it's merged.
+			logger.warn(
+				"assignPlayer",
+				"ambiguous name, creating a new player",
+				{
+					name,
+					candidates: candidates.map((c) => c.id),
+				},
+			)
+		}
+		const id = crypto.randomUUID()
+		this.db
+			.query(
+				`INSERT INTO players (id, name, name_key, created_at)
+				VALUES ($id, $name, $nameKey, $now)`,
+			)
+			.run({id, name, nameKey, now})
+		return id
+	}
+}
+
+function toRegistration(row: RegistrationRow): Registration {
+	return {
+		khlPlayerId: row.khl_player_id,
+		playerId: row.player_id,
+		name: row.name,
+		position: row.position,
+		teamId: row.team_id,
+		teamName: row.team_name,
+		teamLogoUrl: row.team_logo_url,
+		seasonIds: (row.season_ids?.split(",") ?? []).sort(
+			(a, b) => Number(a) - Number(b),
+		),
+	}
+}

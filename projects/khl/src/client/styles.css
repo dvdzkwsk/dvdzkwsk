@@ -1,0 +1,2848 @@
+/* All of the app's styles. Classes are prefixed with their component's name. */
+
+/* === Theme === */
+
+:root {
+	--spacing: 0.25rem;
+	--radius: 14px;
+	--radius-sm: 8px;
+
+	/* Neutral, near-monochrome palette; red is reserved for "live" */
+	--site-bg: #eef3f8; /* "ice": a faint blue-white */
+	--site-fg: #0a0a0b;
+	--muted-fg: #71717a;
+	--subtle-fg: #a1a1aa;
+	--panel-bg: #ffffff;
+	--panel-border: #d8dee7;
+	--subtle-bg: #f2f5f9;
+	--accent: #0a0a0b;
+	--accent-fg: #ffffff;
+	--link: #2563eb;
+	--live: #e5484d;
+	--live-bg: #fdecec;
+	--win: #15803d;
+	--win-bg: #e7f6ec;
+	--loss: #b91c1c;
+	--loss-bg: #fdeaea;
+	--tie: #52525b;
+	--tie-bg: #f0f0f2;
+	/* The two sides of a comparison (validated as a pair for color vision
+	   deficiency and contrast on --panel-bg) */
+	--team-a: #2a78d6;
+	--team-b: #eb6834;
+
+	--header-bg: rgb(255 255 255 / 0.85);
+	--chip-bg: rgb(10 10 11 / 0.06);
+	--focus-ring: rgb(10 10 11 / 0.06);
+	--error-border: #f3c7c7;
+	--kind-player-bg: #e8f0fe;
+	--kind-player-fg: #1d4ed8;
+	--kind-team-bg: #f3e8ff;
+	--kind-team-fg: #7e22ce;
+	--kind-rink-bg: #e6f6f1;
+	--kind-rink-fg: #0f766e;
+
+	--shadow-sm: 0 1px 2px rgb(10 10 11 / 0.07), 0 2px 8px rgb(10 10 11 / 0.05);
+	--shadow-md:
+		0 10px 28px rgb(10 10 11 / 0.12), 0 2px 6px rgb(10 10 11 / 0.07);
+
+	--font-sans:
+		"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+		sans-serif;
+
+	color-scheme: light;
+}
+
+/* Set on <html> by the script in index.html and by ThemeSwitch */
+:root[data-theme="dark"] {
+	--site-bg: #0b0f14; /* "ice" at night: a deep blue-black */
+	--site-fg: #ececef;
+	--muted-fg: #a1a1aa;
+	--subtle-fg: #71717a;
+	--panel-bg: #141a21;
+	--panel-border: #262f3a;
+	--subtle-bg: #1b222b;
+	--accent: #ececef;
+	--accent-fg: #0a0a0b;
+	--link: #6ea8fe;
+	--live-bg: #3a1618;
+	--win: #4ade80;
+	--win-bg: #12301d;
+	--loss: #f87171;
+	--loss-bg: #3a1618;
+	--tie: #a1a1aa;
+	--tie-bg: #24272d;
+	--team-a: #3987e5;
+	--team-b: #d95926;
+
+	--header-bg: rgb(11 15 20 / 0.85);
+	--chip-bg: rgb(255 255 255 / 0.08);
+	--focus-ring: rgb(255 255 255 / 0.1);
+	--error-border: #5c2326;
+	--kind-player-bg: #172554;
+	--kind-player-fg: #93c5fd;
+	--kind-team-bg: #3b0764;
+	--kind-team-fg: #d8b4fe;
+	--kind-rink-bg: #042f2e;
+	--kind-rink-fg: #5eead4;
+
+	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
+	--shadow-md: 0 10px 28px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.4);
+
+	color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background: var(--site-bg);
+	color: var(--site-fg);
+	font-family: var(--font-sans);
+	line-height: 1.45;
+	letter-spacing: -0.006em;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	/* Numbers line up in scores and stats without a monospace font */
+	font-variant-numeric: tabular-nums;
+}
+
+a {
+	color: var(--link);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+	margin: 0;
+	line-height: 1.2;
+	letter-spacing: -0.02em;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+/* Small muted heading used for card and section titles */
+.SectionLabel {
+	margin: 0;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	color: var(--muted-fg);
+}
+
+/* === Shell === */
+
+.PageShell {
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+}
+
+.PageShell-header {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	margin-bottom: calc(var(--spacing) * 6);
+}
+
+.PageShell-home {
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+	margin-left: calc(var(--spacing) * -3);
+	border-radius: 999px;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+.PageShell-home:hover {
+	background: var(--subtle-bg);
+	color: var(--site-fg);
+	text-decoration: none;
+}
+
+.PageShell-message {
+	padding: calc(var(--spacing) * 6);
+	color: var(--muted-fg);
+	text-align: center;
+}
+
+/* === Links === */
+
+/* A link whose hit area covers its game row or card (the nearest positioned
+   ancestor). The row's other links and buttons sit above it. */
+.StretchedLink {
+	color: inherit;
+}
+
+.StretchedLink:hover {
+	text-decoration: none;
+}
+
+.StretchedLink::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+}
+
+.GameList-game :is(a, button):not(.StretchedLink),
+.RinkCard :is(a, button):not(.StretchedLink),
+.RinkRoute-status :is(a, button):not(.StretchedLink) {
+	position: relative;
+	z-index: 1;
+}
+
+.InlineLink {
+	color: inherit;
+}
+
+.InlineLink:hover {
+	text-decoration: underline;
+}
+
+/* === Team avatar === */
+
+.TeamAvatar {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: var(--TeamAvatar-size, 36px);
+	height: var(--TeamAvatar-size, 36px);
+	overflow: hidden;
+	border-radius: 50%;
+	/* White in both themes: logos are drawn for a light background */
+	background: #fff;
+	border: 1px solid var(--panel-border);
+	vertical-align: middle;
+}
+
+.TeamAvatar-image {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.TeamAvatar-fallback {
+	font-size: calc(var(--TeamAvatar-size, 36px) * 0.36);
+	font-weight: 700;
+	color: var(--muted-fg);
+}
+
+/* === Stats table === */
+
+.StatsTable-wrapper {
+	overflow-x: auto;
+}
+
+.StatsTable {
+	width: 100%;
+	font-size: 0.875rem;
+}
+
+.StatsTable th,
+.StatsTable td {
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+	border-bottom: 1px solid var(--panel-border);
+	text-align: right;
+	white-space: nowrap;
+}
+
+.StatsTable th {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--subtle-fg);
+}
+
+.StatsTable tbody tr:hover td {
+	background: var(--subtle-bg);
+}
+
+.StatsTable th:first-child,
+.StatsTable td:first-child {
+	text-align: left;
+}
+
+.StatsTable .StatsTable-label {
+	text-align: left;
+}
+
+.StatsTable tbody tr:last-child td {
+	border-bottom: none;
+}
+
+/* === Filter bar === */
+
+.FilterBar {
+	overflow: hidden;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.FilterBar-row {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+	min-height: 56px;
+	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 4);
+}
+
+.FilterBar-row + .FilterBar-row {
+	border-top: 1px solid var(--panel-border);
+}
+
+.FilterBar-label {
+	flex: none;
+	width: 72px;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--muted-fg);
+}
+
+.FilterBar-controls {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+}
+
+/* Shared pill used by toggles and buttons inside the bar */
+.FilterPill {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+	border: 1px solid var(--panel-border);
+	border-radius: 999px;
+	background: var(--panel-bg);
+	font: inherit;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--site-fg);
+	cursor: pointer;
+	white-space: nowrap;
+	transition:
+		background 120ms,
+		border-color 120ms,
+		color 120ms;
+}
+
+.FilterPill:hover {
+	background: var(--subtle-bg);
+}
+
+.FilterPill:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+.FilterPill[data-pressed] {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+.FilterPill[data-disabled],
+.FilterPill:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.FilterPill-count {
+	font-size: 0.75rem;
+	color: var(--subtle-fg);
+}
+
+.FilterPill[data-pressed] .FilterPill-count {
+	color: color-mix(in srgb, var(--accent-fg) 60%, transparent);
+}
+
+.FilterPill-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+@media (max-width: 640px) {
+	.FilterBar-row {
+		flex-wrap: wrap;
+	}
+
+	.FilterBar-label {
+		width: 100%;
+	}
+}
+
+/* === Game cards === */
+
+.RinkCards-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+	gap: calc(var(--spacing) * 3);
+}
+
+.RinkCard {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4)
+		calc(var(--spacing) * 3.5);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	transition:
+		box-shadow 150ms,
+		border-color 150ms;
+}
+
+.RinkCard:hover {
+	box-shadow: var(--shadow-md);
+}
+
+.RinkCard--live {
+	border-color: rgb(229 72 77 / 0.45);
+	box-shadow:
+		0 0 0 3px rgb(229 72 77 / 0.08),
+		var(--shadow-sm);
+}
+
+.RinkCard-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 2);
+	min-height: 22px;
+}
+
+.RinkCard-name {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 0.875rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.RinkCard-badges {
+	flex: none;
+	display: flex;
+	gap: calc(var(--spacing) * 1);
+}
+
+.LiveBarnBadge {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1);
+	padding: 2px calc(var(--spacing) * 2);
+	border-radius: 999px;
+	background: var(--subtle-bg);
+	font-size: 0.6875rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+.LiveBarnBadge:hover {
+	background: var(--accent);
+	color: var(--accent-fg);
+	text-decoration: none;
+}
+
+.LiveBarnBadge svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* No feed at this rink: looks like the badge, but greyed out; hovering or
+   tapping explains why */
+.LiveBarnBadge--unavailable {
+	border: none;
+	font-family: inherit;
+	color: var(--subtle-fg);
+	text-decoration: line-through;
+	cursor: help;
+}
+
+.LiveBarnBadge--unavailable:hover,
+.LiveBarnBadge--unavailable[data-popup-open] {
+	background: var(--subtle-bg);
+	color: var(--muted-fg);
+}
+
+.LiveBarnBadge--unavailable:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+}
+
+.RinkCard-body {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+}
+
+/* Big at-a-glance start time (or LIVE) */
+.RinkCard-time {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	width: 76px;
+	height: 76px;
+	border-radius: 12px;
+	background: var(--subtle-bg);
+	text-align: center;
+}
+
+.RinkCard-time-main {
+	font-size: 1.375rem;
+	font-weight: 650;
+	letter-spacing: -0.03em;
+	line-height: 1.1;
+}
+
+.RinkCard-time-sub {
+	margin-top: 2px;
+	font-size: 0.6875rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+.RinkCard-time--live {
+	background: var(--live);
+	color: #fff;
+}
+
+.RinkCard-time--live .RinkCard-time-main {
+	font-size: 1rem;
+	letter-spacing: 0.02em;
+}
+
+.RinkCard-time--live .RinkCard-time-main::before {
+	content: "";
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	margin-right: 5px;
+	vertical-align: 2px;
+	border-radius: 50%;
+	background: currentColor;
+	animation: RinkCard-pulse 1.5s ease-in-out infinite;
+}
+
+.RinkCard-time--live .RinkCard-time-sub {
+	color: rgb(255 255 255 / 0.85);
+}
+
+@keyframes RinkCard-pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+
+.RinkCard-teams {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.RinkCard-team {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	min-width: 0;
+	font-size: 0.9375rem;
+	font-weight: 550;
+}
+
+.RinkCard-team-name {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.RinkCard-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 2);
+	padding-top: calc(var(--spacing) * 3);
+	border-top: 1px solid var(--panel-border);
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.RinkCard-division {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.RinkCard-empty {
+	color: var(--muted-fg);
+	font-size: 0.875rem;
+}
+
+/* During a game the LIVE block links to the rink's feed */
+.RinkCard-started {
+	color: var(--live);
+	font-weight: 600;
+}
+
+/* === Past games === */
+
+.GameFeed-card {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.GameFeed-title {
+	flex: none;
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4)
+		calc(var(--spacing) * 2);
+}
+
+.GameFeed-scroll {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.GameFeed-viewport {
+	max-height: 100%;
+	overscroll-behavior: contain;
+}
+
+.GameFeed-viewport:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: -2px;
+}
+
+.GameFeed-scrollbar {
+	display: flex;
+	width: 6px;
+	margin: 2px;
+	border-radius: 3px;
+	opacity: 0;
+	transition: opacity 150ms;
+}
+
+.GameFeed-scrollbar[data-hovering],
+.GameFeed-scrollbar[data-scrolling] {
+	opacity: 1;
+	transition-duration: 0ms;
+}
+
+.GameFeed-thumb {
+	width: 100%;
+	border-radius: 3px;
+	background: rgb(0 0 0 / 0.25);
+}
+
+.GameFeed-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.GameFeed-empty {
+	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 4);
+	color: var(--muted-fg);
+	font-size: 0.875rem;
+}
+
+.GameFeed-item {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: calc(var(--spacing) * 0.5) calc(var(--spacing) * 3);
+	margin: 0 calc(var(--spacing) * 2);
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 2);
+	border-top: 1px solid var(--panel-border);
+}
+
+.GameFeed-item:first-child {
+	border-top-color: transparent;
+}
+
+.GameFeed-item--live {
+	border-radius: var(--radius-sm);
+	border-top-color: transparent;
+	background: var(--live-bg);
+}
+
+.GameFeed-item--live + .GameFeed-item {
+	border-top-color: transparent;
+}
+
+.GameFeed-when {
+	font-size: 0.78rem;
+	color: var(--muted-fg);
+}
+
+.GameFeed-matchup {
+	font-weight: 600;
+	color: var(--site-fg);
+}
+
+.GameFeed-opponent {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	min-width: 0;
+}
+
+.GameFeed-vs {
+	flex: none;
+	min-width: 1.25em;
+	color: var(--muted-fg);
+	font-weight: 500;
+}
+
+.GameFeed-team {
+	margin-top: calc(var(--spacing) * 0.5);
+	font-size: 0.8rem;
+	color: var(--muted-fg);
+}
+
+.GameFeed-outcome {
+	grid-row: span 2;
+	align-self: center;
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	font-size: 0.875rem;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+/* Fixed width, right-aligned, so the W/L badges line up across rows */
+.GameFeed-score {
+	min-width: 3rem;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.GameFeed-result {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	font-size: 0.75rem;
+	font-weight: 700;
+}
+
+.GameFeed-result--W {
+	background: var(--win-bg);
+	color: var(--win);
+}
+
+.GameFeed-result--L {
+	background: var(--loss-bg);
+	color: var(--loss);
+}
+
+.GameFeed-result--T {
+	background: var(--tie-bg);
+	color: var(--tie);
+}
+
+.GameFeed-links {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 3);
+	margin-top: calc(var(--spacing) * 1);
+	font-size: 0.8125rem;
+	font-weight: 500;
+}
+
+.GameFeed-boxscore:empty {
+	display: none;
+}
+
+.GameFeed-live {
+	color: var(--live);
+	font-weight: 700;
+}
+
+/* Long histories scroll inside the card instead of stretching the page.
+   Short enough that the stats below stay in view: about six wide rows. */
+.GameFeed-card {
+	max-height: 440px;
+	container-type: inline-size;
+}
+
+/* Wide cards fit each game on one row: when | matchup | links | outcome */
+@container (min-width: 720px) {
+	.GameFeed-item {
+		/* Fixed side columns so links and scores line up from row to row */
+		grid-template-columns: 14rem minmax(0, 1fr) 15rem 7rem;
+		grid-template-areas: "when matchup links outcome";
+		align-items: center;
+		padding-top: calc(var(--spacing) * 2.5);
+		padding-bottom: calc(var(--spacing) * 2.5);
+	}
+
+	.GameFeed-when {
+		grid-area: when;
+	}
+
+	.GameFeed-matchup {
+		grid-area: matchup;
+		min-width: 0;
+	}
+
+	.GameFeed-links {
+		grid-area: links;
+		margin-top: 0;
+		align-items: center;
+	}
+
+	/* Holds its width even when empty, so LiveBarn links line up */
+	.GameFeed-boxscore,
+	.GameFeed-boxscore:empty {
+		display: block;
+		flex: none;
+		width: 4.75rem;
+	}
+
+	.GameFeed-outcome {
+		grid-area: outcome;
+		grid-row: auto;
+		justify-content: flex-end;
+	}
+}
+
+/* === Home page, game filters and game list (and shared select popups) === */
+
+.HomePage {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 5);
+}
+
+.HomePage-section-title {
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+/* The trigger reports data-pressed while open; it isn't a selected filter */
+.Detail-select[data-pressed],
+.Detail-select[data-popup-open],
+.FilterPill[data-popup-open] {
+	border-color: var(--subtle-fg);
+	background: var(--subtle-bg);
+	color: var(--site-fg);
+}
+
+.SelectPopup {
+	max-height: var(--available-height);
+	overflow-y: auto;
+	padding: calc(var(--spacing) * 1);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-sm);
+	box-shadow: var(--shadow-md);
+	outline: none;
+}
+
+.SelectOption {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3)
+		calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+	border-radius: 6px;
+	font-size: 0.875rem;
+	cursor: default;
+	outline: none;
+	user-select: none;
+}
+
+.SelectOption[data-highlighted] {
+	background: var(--subtle-bg);
+}
+
+.SelectOption-check {
+	width: 14px;
+	visibility: hidden;
+}
+
+.SelectOption[data-selected] .SelectOption-check,
+.SelectOption[data-checked] .SelectOption-check {
+	visibility: visible;
+}
+
+/* === Picker === */
+
+.Picker-trigger {
+	min-width: 0;
+}
+
+.Picker-value {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.Picker-item-label {
+	min-width: 0;
+}
+
+.Picker-group-label {
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--muted-fg);
+}
+
+.SelectPopup [role="group"] + [role="group"] {
+	margin-top: calc(var(--spacing) * 2);
+}
+
+.SelectOption[data-disabled] {
+	opacity: 0.4;
+}
+
+/* The search box stays put while the list scrolls */
+.Picker-popup {
+	display: flex;
+	flex-direction: column;
+	min-width: max(var(--anchor-width), 240px);
+	max-height: min(var(--available-height), 440px);
+	overflow: hidden;
+}
+
+.Picker-search {
+	position: relative;
+	flex: none;
+	margin-bottom: calc(var(--spacing) * 1);
+}
+
+.Picker-search-icon {
+	position: absolute;
+	top: 50%;
+	left: 10px;
+	width: 14px;
+	height: 14px;
+	translate: 0 -50%;
+	color: var(--subtle-fg);
+	pointer-events: none;
+}
+
+.Picker-search-input {
+	width: 100%;
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2)
+		calc(var(--spacing) * 2) 32px;
+	border: 1px solid var(--panel-border);
+	border-radius: 6px;
+	background: var(--subtle-bg);
+	font: inherit;
+	font-size: 0.875rem;
+	color: var(--site-fg);
+	outline: none;
+}
+
+.Picker-search-input:focus {
+	border-color: var(--subtle-fg);
+}
+
+.Picker-list {
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.Picker-empty:empty {
+	display: none;
+}
+
+.Picker-empty {
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 2);
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+/* A pill that toggles a group, plus a chevron that opens its sub-choices */
+.FilterPill--split {
+	gap: 0;
+	padding: 0;
+	overflow: hidden;
+}
+
+/* The halves highlight on their own; the pill itself stays put (and keeps
+   its pressed background) */
+.FilterPill--split:not([data-pressed]):hover {
+	background: var(--panel-bg);
+}
+
+/* Ring the whole pill: an inset ring on a half gets clipped by the rounding */
+.FilterPill--split:has(:focus-visible) {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+.FilterPill-main,
+.FilterPill-menu {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	border: none;
+	background: none;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+}
+
+.FilterPill-main {
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2)
+		calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+}
+
+.FilterPill-menu {
+	align-self: stretch;
+	padding: 0 calc(var(--spacing) * 2.5) 0 calc(var(--spacing) * 1.5);
+	border-left: 1px solid var(--panel-border);
+}
+
+.FilterPill-main:hover,
+.FilterPill-menu:hover,
+.FilterPill-menu[data-popup-open] {
+	background: var(--subtle-bg);
+}
+
+.FilterPill-main:focus-visible,
+.FilterPill-menu:focus-visible {
+	outline: none;
+}
+
+.FilterPill--split[data-pressed] .FilterPill-menu {
+	border-left-color: color-mix(in srgb, var(--accent-fg) 25%, transparent);
+}
+
+.FilterPill--split[data-pressed] svg {
+	color: inherit;
+}
+
+.FilterPill--split[data-pressed] .FilterPill-main:hover,
+.FilterPill--split[data-pressed] .FilterPill-menu:hover,
+.FilterPill--split[data-pressed] .FilterPill-menu[data-popup-open] {
+	background: color-mix(in srgb, var(--accent-fg) 15%, transparent);
+}
+
+.GameList-days {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 5);
+}
+
+.GameList-day-title {
+	margin-bottom: calc(var(--spacing) * 2);
+}
+
+.GameList-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	overflow: hidden;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.GameList-game {
+	position: relative;
+	display: grid;
+	/* Fixed outer columns so every row lines up, whatever it contains */
+	grid-template-columns: 84px minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(
+			0,
+			0.9fr
+		) 132px;
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+}
+
+.GameList-game + .GameList-game {
+	border-top: 1px solid var(--panel-border);
+}
+
+/* A red edge marks live games; a tinted fill made the rows hard to read */
+.GameList-game--live {
+	box-shadow: inset 3px 0 0 var(--live);
+}
+
+.GameList-game:has(.StretchedLink:hover) {
+	background: var(--subtle-bg);
+}
+
+.GameList-time {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+/* Under LIVE: when the game started */
+.GameList-started {
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--site-fg);
+}
+
+.GameList-live {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.8125rem;
+	font-weight: 700;
+	color: var(--live);
+}
+
+.GameList-live::before {
+	content: "";
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.GameList-rink {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2.5);
+	min-width: 0;
+}
+
+.GameList-rink-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.GameList-rink-name {
+	overflow: hidden;
+	font-size: 0.9375rem;
+	font-weight: 550;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.GameList-rink-city {
+	font-size: 0.75rem;
+	color: var(--muted-fg);
+}
+
+.GameList-teams {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 1);
+	min-width: 0;
+}
+
+.GameList-team {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	min-width: 0;
+	font-size: 0.9375rem;
+	font-weight: 550;
+}
+
+.GameList-team a {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.GameList-divisions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 1);
+}
+
+.GameList-division {
+	padding: 2px calc(var(--spacing) * 2);
+	border-radius: 6px;
+	background: var(--chip-bg);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--site-fg);
+	white-space: nowrap;
+}
+
+.GameList-links {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: calc(var(--spacing) * 1);
+}
+
+.GameList-empty {
+	padding: calc(var(--spacing) * 8);
+	text-align: center;
+	color: var(--muted-fg);
+}
+
+@media (max-width: 760px) {
+	.GameList-game {
+		grid-template-columns: 72px minmax(0, 1fr);
+		row-gap: calc(var(--spacing) * 1.5);
+	}
+
+	.GameList-game > :nth-child(n + 3) {
+		grid-column: 2;
+	}
+
+	.GameList-links {
+		align-items: flex-start;
+	}
+}
+
+/* === Rink page === */
+
+.RinkRoute {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 4);
+}
+
+.RinkRoute-panel {
+	padding: calc(var(--spacing) * 6);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+/* Name/address/LiveBarn, with the live or next game beside it */
+.RinkRoute-hero {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 6);
+}
+
+.RinkRoute-address-link {
+	color: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--panel-border);
+	text-underline-offset: 3px;
+}
+
+.RinkRoute-address-link:hover {
+	color: var(--site-fg);
+	text-decoration-color: currentColor;
+}
+
+.RinkRoute-info {
+	flex: 1;
+	min-width: 0;
+}
+
+/* The live or next game, as the hero's right-hand column */
+.RinkRoute-status {
+	position: relative;
+	flex: 0 1 340px;
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 3);
+	min-width: 0;
+	padding-left: calc(var(--spacing) * 6);
+	border-left: 1px solid var(--panel-border);
+}
+
+.RinkRoute-status--live .SectionLabel {
+	color: var(--live);
+}
+
+@media (max-width: 900px) {
+	.RinkRoute-hero {
+		flex-wrap: wrap;
+	}
+
+	.RinkRoute-status {
+		flex-basis: 100%;
+		padding: calc(var(--spacing) * 4) 0 0;
+		border-left: none;
+		border-top: 1px solid var(--panel-border);
+	}
+}
+
+.RinkRoute-name {
+	font-size: 2rem;
+	font-weight: 650;
+	letter-spacing: -0.03em;
+}
+
+.RinkRoute-address {
+	margin-top: calc(var(--spacing) * 1);
+	font-style: normal;
+	color: var(--muted-fg);
+}
+
+.RinkRoute-livebarn {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 1);
+	margin-top: calc(var(--spacing) * 3);
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+.RinkRoute-section-title {
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+.RinkRoute-empty {
+	color: var(--muted-fg);
+}
+
+/* Only the day and time go red, so the rest of the row stays readable */
+.RinkRoute-live-row td:nth-child(-n + 2) {
+	color: var(--live);
+	font-weight: 600;
+}
+
+.RinkRoute-live-row td:first-child {
+	box-shadow: inset 3px 0 0 var(--live);
+}
+
+/* === Team and player pages === */
+
+/* Header, then upcoming game cards, past games, and roster/stats */
+.Detail {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 6);
+}
+
+.Detail-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+	padding: calc(var(--spacing) * 6);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+/* Name and totals on the left, team picker in the top right */
+.Detail-header--player {
+	align-items: flex-start;
+}
+
+/* Narrow screens wrap the picker below rather than squeezing the name */
+.Detail-header--player .Detail-heading {
+	flex-basis: 320px;
+}
+
+.Detail-header--player .Detail-note {
+	flex-basis: 100%;
+}
+
+.Detail-heading {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 1.5);
+}
+
+.Detail-name {
+	font-size: 2rem;
+	font-weight: 650;
+	letter-spacing: -0.03em;
+}
+
+.Detail-meta,
+.Detail-totals {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 4);
+	color: var(--muted-fg);
+}
+
+.Detail-totals {
+	font-size: 0.875rem;
+	color: var(--site-fg);
+}
+
+.Detail-meta-hint {
+	color: var(--subtle-fg);
+}
+
+.Detail-form {
+	display: inline-flex;
+	gap: 3px;
+}
+
+.Detail-select {
+	justify-content: space-between;
+	min-width: 240px;
+}
+
+.Detail-select svg,
+.FilterPill svg {
+	width: 14px;
+	height: 14px;
+	color: var(--muted-fg);
+}
+
+.Detail-note {
+	margin: 0;
+	font-size: 0.8rem;
+	color: var(--muted-fg);
+}
+
+.Detail-section-title {
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+.Detail-columns {
+	display: grid;
+	grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+	align-items: start;
+	gap: calc(var(--spacing) * 4);
+}
+
+@media (max-width: 900px) {
+	.Detail-columns {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.Detail-panel {
+	min-width: 0;
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5)
+		calc(var(--spacing) * 5);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.Detail-panel-title {
+	margin-bottom: calc(var(--spacing) * 2);
+}
+
+.Detail-subtitle {
+	margin: calc(var(--spacing) * 5) 0 calc(var(--spacing) * 2);
+}
+
+.Detail-empty {
+	margin: 0;
+	color: var(--muted-fg);
+}
+
+/* Menu items reuse the select option look; they also hold an avatar */
+.SelectOption .Detail-meta-hint {
+	margin-left: auto;
+	padding-left: calc(var(--spacing) * 4);
+	font-size: 0.75rem;
+}
+
+/* === Game page === */
+
+/* Away | score, time and rink | home */
+.BoxScore-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: center;
+}
+
+.BoxScore-team {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	text-align: center;
+}
+
+.BoxScore-team-name {
+	font-size: 1.125rem;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+.BoxScore-center {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 1);
+	text-align: center;
+}
+
+.BoxScore-center .Detail-meta {
+	justify-content: center;
+	font-size: 0.875rem;
+}
+
+.BoxScore-score {
+	font-size: 2.75rem;
+	font-weight: 700;
+	letter-spacing: -0.03em;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.BoxScore-links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: calc(var(--spacing) * 3);
+	margin-top: calc(var(--spacing) * 1);
+	font-size: 0.8125rem;
+	font-weight: 500;
+}
+
+.BoxScore-official {
+	color: var(--muted-fg);
+}
+
+.BoxScore-official:hover {
+	color: var(--site-fg);
+}
+
+@media (max-width: 600px) {
+	.BoxScore-header {
+		padding: calc(var(--spacing) * 4);
+		gap: calc(var(--spacing) * 2);
+	}
+
+	.BoxScore-team .TeamAvatar {
+		--TeamAvatar-size: 44px !important;
+	}
+
+	.BoxScore-team-name {
+		font-size: 0.9375rem;
+	}
+
+	.BoxScore-score {
+		font-size: 2rem;
+	}
+}
+
+.Timeline-title {
+	margin-bottom: calc(var(--spacing) * 4);
+}
+
+/* Both teams' rosters, side by side until the screen gets narrow */
+.GamePage-rosters {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+	gap: calc(var(--spacing) * 4);
+}
+
+@media (max-width: 900px) {
+	.GamePage-rosters {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.GamePage-roster-title {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	margin-top: 0;
+	font-size: 1rem;
+	font-weight: 650;
+}
+
+.GamePage-roster-title .SectionLabel {
+	margin-left: auto;
+}
+
+/* The series: team, wins – wins, team; the note underneath */
+.HeadToHead-series {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+	align-items: center;
+	gap: 0 calc(var(--spacing) * 3);
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+.HeadToHead-series-team {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+
+.HeadToHead-series-team:first-child {
+	text-align: right;
+}
+
+.HeadToHead-series-wins {
+	font-size: 2rem;
+	font-weight: 700;
+	line-height: 1.1;
+	color: var(--subtle-fg);
+}
+
+.HeadToHead-series-wins--leader {
+	color: var(--site-fg);
+}
+
+.HeadToHead-series-sep {
+	font-size: 1.25rem;
+	color: var(--subtle-fg);
+}
+
+.HeadToHead-series-note {
+	grid-column: 1 / -1;
+	text-align: center;
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.HeadToHead-list {
+	list-style: none;
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 0;
+}
+
+/* Left team, score, right team; date and rink under the score */
+.HeadToHead-item {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 4.5rem minmax(0, 1fr);
+	align-items: center;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2.5) 0;
+	border-top: 1px solid var(--panel-border);
+	font-size: 0.875rem;
+}
+
+.HeadToHead-team {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	min-width: 0;
+	color: var(--muted-fg);
+}
+
+.HeadToHead-team:first-child {
+	flex-direction: row-reverse;
+}
+
+.HeadToHead-team-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.HeadToHead-team--won {
+	font-weight: 650;
+	color: var(--site-fg);
+}
+
+.HeadToHead-score {
+	padding: calc(var(--spacing) * 1) 0;
+	border-radius: 6px;
+	background: var(--subtle-bg);
+	text-align: center;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	color: var(--site-fg);
+}
+
+a.HeadToHead-score:hover {
+	text-decoration: none;
+	background: var(--chip-bg);
+}
+
+.HeadToHead-when {
+	grid-column: 1 / -1;
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	font-size: 0.75rem;
+	color: var(--subtle-fg);
+}
+
+.Timeline-period + .Timeline-period {
+	margin-top: calc(var(--spacing) * 4);
+}
+
+.Timeline-period-title {
+	padding-bottom: calc(var(--spacing) * 1);
+}
+
+.Timeline-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.Timeline-item {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2.5) 0;
+	border-top: 1px solid var(--panel-border);
+	font-size: 0.875rem;
+}
+
+.Timeline-time {
+	flex: none;
+	width: 3rem;
+	color: var(--muted-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.Timeline-body {
+	flex: 1;
+	min-width: 0;
+}
+
+.Timeline-item--goal .Timeline-scorer {
+	font-weight: 600;
+}
+
+.Timeline-item--penalty {
+	color: var(--muted-fg);
+}
+
+.Timeline-item--penalty .TeamAvatar {
+	opacity: 0.8;
+}
+
+.Timeline-detail {
+	font-weight: 400;
+	color: var(--muted-fg);
+}
+
+.Timeline-type {
+	margin-left: calc(var(--spacing) * 2);
+	padding: 1px 6px;
+	border-radius: 6px;
+	background: var(--kind-player-bg);
+	color: var(--kind-player-fg);
+	font-size: 0.6875rem;
+	font-weight: 700;
+	vertical-align: 1px;
+}
+
+.Timeline-tag {
+	flex: none;
+	padding: 2px 8px;
+	border-radius: 6px;
+	background: var(--chip-bg);
+	font-size: 0.75rem;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.Timeline-score {
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+/* === Matchup page === */
+
+/* Team A | vs | team B, like the game page's header */
+.Matchup-header {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: start;
+}
+
+.Matchup-side {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	min-width: 0;
+	text-align: center;
+}
+
+.Matchup-side .Detail-meta {
+	justify-content: center;
+	font-size: 0.875rem;
+}
+
+.Matchup-picker {
+	justify-content: space-between;
+	width: 100%;
+	max-width: 260px;
+	font-size: 1rem;
+	font-weight: 650;
+}
+
+.Matchup-picker[data-placeholder] {
+	color: var(--muted-fg);
+	font-weight: 500;
+}
+
+/* Secondary to the team, below it */
+.Matchup-season {
+	max-width: 220px;
+	padding-block: calc(var(--spacing) * 1);
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+.Matchup-center {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	/* Line the "vs" up with the logos */
+	padding-top: calc(var(--spacing) * 4);
+}
+
+.Matchup-vs {
+	font-size: 1.5rem;
+	font-weight: 700;
+	color: var(--subtle-fg);
+}
+
+/* Comparison: a header naming each team, then groups of rows */
+.Compare-head {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+	padding-bottom: calc(var(--spacing) * 4);
+	border-bottom: 1px solid var(--panel-border);
+}
+
+.Compare-title {
+	text-align: center;
+}
+
+/* Each team's color, used by its key, bars and top scorers */
+.Compare-team--a {
+	--team: var(--team-a);
+}
+
+.Compare-team--b {
+	--team: var(--team-b);
+}
+
+.Compare-team {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	min-width: 0;
+}
+
+.Compare-head .Compare-team--b {
+	flex-direction: row-reverse;
+	text-align: right;
+}
+
+.Compare-team-text {
+	min-width: 0;
+}
+
+.Compare-team-name {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	font-weight: 650;
+}
+
+.Compare-head .Compare-team--b .Compare-team-name {
+	flex-direction: row-reverse;
+}
+
+.Compare-team-name .InlineLink {
+	color: var(--site-fg);
+}
+
+/* Legend swatch: which color is which team */
+.Compare-key {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	border-radius: 3px;
+	background: var(--team);
+}
+
+.Compare-team-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.Compare-group {
+	padding: calc(var(--spacing) * 3) 0 calc(var(--spacing) * 1);
+}
+
+.Compare-group + .Compare-group {
+	border-top: 1px solid var(--panel-border);
+}
+
+.Compare-group-label {
+	margin-bottom: calc(var(--spacing) * 1);
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--subtle-fg);
+}
+
+/* Team A | label | team B; each side's content hugs the label */
+.Compare-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 9rem minmax(0, 1fr);
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	min-height: 36px;
+	padding: calc(var(--spacing) * 1) 0;
+}
+
+.Compare-label {
+	text-align: center;
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.Compare-cell {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	min-width: 0;
+}
+
+.Compare-cell--a {
+	--team: var(--team-a);
+	flex-direction: row-reverse;
+}
+
+.Compare-cell--b {
+	--team: var(--team-b);
+}
+
+.Compare-value {
+	flex: none;
+	width: 3.25rem;
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+.Compare-cell--a .Compare-value {
+	text-align: right;
+}
+
+.Compare-value--leader {
+	font-weight: 700;
+	color: var(--site-fg);
+}
+
+/* Bars start beside the value and grow outward, on a shared scale */
+.Compare-track {
+	display: flex;
+	flex: 1;
+	height: 8px;
+}
+
+.Compare-cell--a .Compare-track {
+	justify-content: flex-end;
+}
+
+.Compare-fill {
+	height: 100%;
+	background: var(--team);
+}
+
+/* Square at the baseline (the value), rounded at the data end */
+.Compare-cell--a .Compare-fill {
+	border-radius: 4px 0 0 4px;
+}
+
+.Compare-cell--b .Compare-fill {
+	border-radius: 0 4px 4px 0;
+}
+
+.Compare-fill--trailing {
+	opacity: 0.4;
+}
+
+.Compare-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px;
+}
+
+.Compare-cell--a .Compare-chips {
+	justify-content: flex-end;
+}
+
+a.Compare-chip:hover {
+	text-decoration: none;
+	filter: brightness(0.95);
+}
+
+.Compare-streak {
+	width: auto;
+	padding: 0 calc(var(--spacing) * 2);
+}
+
+.Compare-empty {
+	margin: 0;
+	font-size: 0.8125rem;
+	color: var(--subtle-fg);
+}
+
+/* One message for both sides, under the label */
+.Compare-row--note .Compare-label {
+	grid-column: 2;
+}
+
+.Compare-note {
+	grid-column: 1 / -1;
+	margin: 0;
+	text-align: center;
+	font-size: 0.875rem;
+}
+
+/* Top scorers: each team's top three, side by side */
+.TopScorers {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: calc(var(--spacing) * 6);
+}
+
+.TopScorers-list {
+	list-style: none;
+	margin: calc(var(--spacing) * 2) 0 0;
+	padding: 0;
+}
+
+.TopScorers-row {
+	display: grid;
+	grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2.5) 0;
+	border-top: 1px solid var(--panel-border);
+}
+
+.TopScorers-rank {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: var(--subtle-bg);
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: var(--muted-fg);
+}
+
+.TopScorers-row:first-child .TopScorers-rank {
+	background: var(--team);
+	color: #ffffff;
+}
+
+.TopScorers-player {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.TopScorers-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+	color: var(--site-fg);
+}
+
+.TopScorers-line {
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.TopScorers-points {
+	font-size: 1.25rem;
+	font-weight: 700;
+}
+
+.TopScorers-unit {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+@media (max-width: 700px) {
+	.TopScorers {
+		grid-template-columns: minmax(0, 1fr);
+		gap: calc(var(--spacing) * 4);
+	}
+}
+
+@media (max-width: 600px) {
+	.Matchup-header {
+		padding: calc(var(--spacing) * 4);
+		gap: calc(var(--spacing) * 2);
+	}
+
+	.Matchup-side .TeamAvatar {
+		--TeamAvatar-size: 44px !important;
+	}
+
+	.Matchup-picker {
+		font-size: 0.875rem;
+	}
+
+	.Matchup-center {
+		padding-top: calc(var(--spacing) * 2);
+	}
+
+	.Compare-head {
+		gap: calc(var(--spacing) * 2);
+	}
+
+	.Compare-head .TeamAvatar {
+		display: none;
+	}
+
+	.Compare-row {
+		grid-template-columns: minmax(0, 1fr) 5.5rem minmax(0, 1fr);
+		gap: calc(var(--spacing) * 2);
+	}
+
+	.Compare-label {
+		font-size: 0.75rem;
+	}
+
+	.Compare-cell {
+		gap: calc(var(--spacing) * 2);
+	}
+
+	.Compare-value {
+		width: 2.5rem;
+		font-size: 0.9375rem;
+	}
+}
+
+/* === Tabs === */
+
+.Tabs-list {
+	position: relative;
+	z-index: 0;
+	display: flex;
+	gap: calc(var(--spacing) * 1);
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+.Tabs-tab {
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
+	border: none;
+	background: none;
+	font: inherit;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+	cursor: pointer;
+}
+
+.Tabs-tab:hover,
+.Tabs-tab[data-active] {
+	color: var(--site-fg);
+}
+
+.Tabs-tab:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: -2px;
+	border-radius: 6px;
+}
+
+/* Base UI positions the indicator under the active tab */
+.Tabs-indicator {
+	position: absolute;
+	z-index: -1;
+	left: 0;
+	top: 50%;
+	translate: var(--active-tab-left) -50%;
+	width: var(--active-tab-width);
+	height: calc(var(--active-tab-height) - 4px);
+	border-radius: 6px;
+	background: var(--subtle-bg);
+	transition:
+		translate 150ms ease,
+		width 150ms ease;
+}
+
+.StatsTable-total td {
+	font-weight: 700;
+}
+
+/* === Errors === */
+
+.ErrorState {
+	display: flex;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+	background: var(--panel-bg);
+	border: 1px solid var(--error-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	text-align: left;
+}
+
+.ErrorState--page {
+	max-width: 560px;
+	margin: calc(var(--spacing) * 12) auto;
+	padding: calc(var(--spacing) * 6);
+}
+
+.ErrorState-icon {
+	flex: none;
+	width: 22px;
+	height: 22px;
+	margin-top: 1px;
+	color: var(--live);
+}
+
+.ErrorState-body {
+	min-width: 0;
+	flex: 1;
+}
+
+.ErrorState-title {
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+.ErrorState-description {
+	margin: calc(var(--spacing) * 1) 0 0;
+	color: var(--muted-fg);
+	font-size: 0.9375rem;
+}
+
+.ErrorState-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
+	margin-top: calc(var(--spacing) * 3);
+}
+
+.ErrorState-retry {
+	appearance: none;
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 4);
+	border: none;
+	border-radius: 999px;
+	background: var(--accent);
+	color: var(--accent-fg);
+	font: inherit;
+	font-size: 0.875rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.ErrorState-retry:hover {
+	filter: brightness(1.25);
+}
+
+.ErrorState-retry:focus-visible,
+.ErrorState-details-toggle:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+}
+
+/* Let the toggle and panel sit in the actions row; the panel wraps below */
+.ErrorState-collapsible {
+	display: contents;
+}
+
+.ErrorState-details-toggle {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: calc(var(--spacing) * 1.5) 0;
+	border: none;
+	background: none;
+	font: inherit;
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+	cursor: pointer;
+}
+
+.ErrorState-details-toggle svg {
+	width: 14px;
+	height: 14px;
+	transition: rotate 150ms;
+}
+
+.ErrorState-details-toggle[data-panel-open] svg {
+	rotate: 180deg;
+}
+
+.ErrorState-details {
+	flex-basis: 100%;
+	overflow: hidden;
+}
+
+.ErrorState-details code {
+	display: block;
+	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+	border-radius: var(--radius-sm);
+	background: var(--subtle-bg);
+	font-size: 0.8125rem;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--muted-fg);
+}
+
+/* === Site header and search === */
+
+.SiteHeader {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background: var(--header-bg);
+	backdrop-filter: blur(12px);
+	border-bottom: 1px solid var(--panel-border);
+}
+
+.SiteHeader-inner {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 6);
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+}
+
+.SiteHeader-brand {
+	flex: none;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	color: var(--site-fg);
+}
+
+.SiteHeader-brand:hover {
+	text-decoration: none;
+}
+
+.SiteNav {
+	flex: none;
+	display: flex;
+	gap: calc(var(--spacing) * 1);
+}
+
+.SiteNav-link {
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
+	border-radius: 999px;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+.SiteNav-link:hover {
+	text-decoration: none;
+	color: var(--site-fg);
+}
+
+.SiteNav-link--active {
+	background: var(--chip-bg);
+	color: var(--site-fg);
+}
+
+/* Nav and theme switch, pushed to the right */
+.SiteHeader-end {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	margin-left: auto;
+}
+
+/* Sun/moon switch: the knob slides over the active mode's icon */
+.ThemeSwitch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 60px;
+	height: 32px;
+	padding: 0 8px;
+	border: 1px solid var(--panel-border);
+	border-radius: 999px;
+	background: var(--subtle-bg);
+	color: var(--muted-fg);
+	cursor: pointer;
+}
+
+.ThemeSwitch:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+}
+
+.ThemeSwitch-icon {
+	position: relative;
+	z-index: 1;
+	width: 14px;
+	height: 14px;
+	transition: color 150ms;
+}
+
+.ThemeSwitch[data-unchecked] .ThemeSwitch-icon--sun,
+.ThemeSwitch[data-checked] .ThemeSwitch-icon--moon {
+	color: var(--site-fg);
+}
+
+.ThemeSwitch-thumb {
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--panel-bg);
+	box-shadow: var(--shadow-sm);
+	transition: translate 150ms ease;
+}
+
+.ThemeSwitch-thumb[data-checked] {
+	translate: 28px 0;
+}
+
+/* "Not on LiveBarn", with an info icon that explains why on hover or tap */
+.InfoPopup {
+	z-index: 30;
+	max-width: 260px;
+	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-sm);
+	box-shadow: var(--shadow-md);
+	font-size: 0.8125rem;
+	line-height: 1.45;
+	color: var(--site-fg);
+	outline: none;
+}
+
+.SiteSearch {
+	position: relative;
+	flex: 1;
+	max-width: 520px;
+}
+
+.SiteSearch-icon {
+	position: absolute;
+	top: 50%;
+	left: 12px;
+	width: 16px;
+	height: 16px;
+	translate: 0 -50%;
+	color: var(--subtle-fg);
+	pointer-events: none;
+}
+
+.SiteSearch-input {
+	width: 100%;
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3)
+		calc(var(--spacing) * 2) 36px;
+	border: 1px solid var(--panel-border);
+	border-radius: 999px;
+	background: var(--panel-bg);
+	color: inherit;
+	font: inherit;
+	font-size: 0.9375rem;
+}
+
+.SiteSearch-input:focus {
+	outline: none;
+	border-color: var(--subtle-fg);
+	box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+.SiteSearch-positioner {
+	z-index: 20;
+	width: var(--anchor-width);
+	min-width: 360px;
+}
+
+.SiteSearch-popup {
+	max-height: min(70vh, 520px);
+	overflow-y: auto;
+	padding: calc(var(--spacing) * 1);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-md);
+}
+
+.SiteSearch-popup .ErrorState {
+	border: none;
+	box-shadow: none;
+}
+
+.SiteSearch-message {
+	padding: calc(var(--spacing) * 3);
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+.SiteSearch-item {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2.5);
+	border-radius: var(--radius-sm);
+	color: inherit;
+	cursor: pointer;
+	outline: none;
+}
+
+.SiteSearch-item:hover {
+	text-decoration: none;
+}
+
+.SiteSearch-item[data-highlighted] {
+	background: var(--subtle-bg);
+}
+
+.SiteSearch-icon-circle {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: var(--subtle-bg);
+	color: var(--muted-fg);
+}
+
+.SiteSearch-icon-circle svg {
+	width: 16px;
+	height: 16px;
+}
+
+.SiteSearch-item-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.SiteSearch-item-label {
+	font-weight: 600;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.SiteSearch-item-detail {
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.SiteSearch-kind {
+	flex: none;
+	padding: 2px calc(var(--spacing) * 2);
+	border-radius: 999px;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	background: var(--subtle-bg);
+	color: var(--muted-fg);
+}
+
+.SiteSearch-kind--player {
+	background: var(--kind-player-bg);
+	color: var(--kind-player-fg);
+}
+
+.SiteSearch-kind--team {
+	background: var(--kind-team-bg);
+	color: var(--kind-team-fg);
+}
+
+.SiteSearch-kind--rink {
+	background: var(--kind-rink-bg);
+	color: var(--kind-rink-fg);
+}
+
+@media (max-width: 640px) {
+	.SiteHeader-inner {
+		gap: calc(var(--spacing) * 3);
+	}
+
+	.SiteHeader-brand {
+		display: none;
+	}
+}
+
+/* === Home/away badge === */
+
+.HomeAwayBadge {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 16px;
+	padding: 0 calc(var(--spacing) * 1.5);
+	border-radius: 4px;
+	font-size: 0.625rem;
+	font-weight: 700;
+	line-height: 1;
+	vertical-align: middle;
+	letter-spacing: 0;
+}
+
+.HomeAwayBadge--truncated {
+	width: 16px;
+	padding: 0;
+}
+
+.HomeAwayBadge--home {
+	background: transparent;
+	border: 1px solid var(--subtle-fg);
+	color: var(--muted-fg);
+}
+
+.HomeAwayBadge--away {
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+.RinkRoute-matchup {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+}
+
+.RinkRoute-at {
+	margin: 0 calc(var(--spacing) * 0.5);
+	color: var(--subtle-fg);
+}
+
+/* === Team leaders === */
+
+.Leaders-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 4);
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+.Leaders-header .Tabs-list {
+	margin-bottom: 0;
+}
+
+.Leaders-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: calc(var(--spacing) * 3);
+}
+
+.LeaderCard {
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.LeaderCard-title {
+	margin-bottom: calc(var(--spacing) * 2);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	color: var(--muted-fg);
+}
+
+.LeaderCard-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.LeaderCard-row {
+	display: grid;
+	grid-template-columns: 40px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	padding: calc(var(--spacing) * 2.5) 0;
+	border-top: 1px solid var(--panel-border);
+}
+
+.LeaderCard-number {
+	font-size: 0.8125rem;
+	color: var(--subtle-fg);
+}
+
+.LeaderCard-name {
+	overflow: hidden;
+	font-weight: 550;
+	color: var(--site-fg);
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.LeaderCard-value {
+	font-size: 1.25rem;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+/* The leader in each category stands out a little */
+.LeaderCard-row:first-child .LeaderCard-value {
+	font-size: 1.5rem;
+}
+
+/* === Teams page === */
+
+.TeamsGrid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: calc(var(--spacing) * 3);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.TeamCard {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	height: 100%;
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	color: var(--site-fg);
+}
+
+.TeamCard:hover {
+	text-decoration: none;
+	border-color: var(--subtle-fg);
+}
+
+.TeamCard-body {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.TeamCard-name {
+	overflow: hidden;
+	font-weight: 600;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.TeamCard-record {
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+/* === Standings page === */
+
+.Standings-team {
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+}
+
+.Standings-rank {
+	min-width: 1.5em;
+	color: var(--subtle-fg);
+}
+
+.Standings-team-name {
+	font-weight: 550;
+	color: var(--site-fg);
+}
+
+/* Same team column width in every division, so the stat columns line up */
+.Standings-table .StatsTable th:first-child {
+	width: 32%;
+}
+
+/* Keep team names in view while the stats scroll sideways on phones. No
+   z-index: being positioned already paints them over the scrolling cells, and
+   one would lift them above popups too. */
+.Standings-table .StatsTable td:first-child,
+.Standings-table .StatsTable th:first-child {
+	position: sticky;
+	left: 0;
+	background: var(--panel-bg);
+}
+
+.Standings-table .StatsTable tbody tr:hover td:first-child {
+	background: var(--subtle-bg);
+}
+
+/* Three nav links don't fit beside search on phones: give them their own row */
+@media (max-width: 640px) {
+	.SiteHeader-inner {
+		flex-wrap: wrap;
+		row-gap: calc(var(--spacing) * 2);
+	}
+
+	.SiteHeader-end {
+		display: contents;
+	}
+
+	.SiteNav {
+		order: 1;
+		width: 100%;
+	}
+}

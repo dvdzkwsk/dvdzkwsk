@@ -73,23 +73,11 @@ export default [
 		},
 	},
 	{
-		files: [
-			"pkg/backend/**/*.ts",
-			"tools/**/*.ts",
-			"pkg/webapp/Main.dev.ts",
-		],
+		files: ["tools/**/*.ts"],
 		languageOptions: {
 			globals: {
 				...globals.node,
 				Bun: "readonly",
-			},
-		},
-	},
-	{
-		files: ["**/*.js"],
-		languageOptions: {
-			globals: {
-				...globals.node,
 			},
 		},
 	},

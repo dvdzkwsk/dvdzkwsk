@@ -2,8 +2,8 @@
 
 ```sh
 # install dependencies
-bun install
+pnpm install
 
 # start the development server
-bun dev
+pnpm start
 ```

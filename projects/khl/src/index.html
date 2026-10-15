@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en-us">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<script>
+			// Apply the theme before first paint so it doesn't flash.
+			// Keep in sync with applyTheme in Components.tsx.
+			;(function () {
+				var theme
+				try {
+					theme = localStorage.getItem("khl-theme")
+				} catch (e) {}
+				// No saved choice: start from the OS setting
+				if (theme !== "light" && theme !== "dark") {
+					theme = matchMedia("(prefers-color-scheme: dark)").matches
+						? "dark"
+						: "light"
+				}
+				document.documentElement.dataset.theme = theme
+			})()
+		</script>
+	</head>
+	<body>
+		<div id="root"></div>
+		<script type="module" src="./client/App.tsx"></script>
+	</body>
+</html>

@@ -1,7 +1,11 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as url from "url"
-import {ConsoleTransport, Logger, setLoggerTransports} from "./Logger.js"
+import {
+	ConsoleTransport,
+	Logger,
+	setLoggerTransports,
+} from "../logger/Logger.js"
 
 const logger = new Logger("CliUtil")
 
@@ -25,10 +29,15 @@ function isMainModule(importMeta: ImportMeta) {
 	return path.resolve(process.argv[1]) === url.fileURLToPath(importMeta.url)
 }
 
+// Package scripts run from their project's directory, so also read the
+// repo-level .env. The current directory's .env wins on conflicts.
+const REPO_ROOT = path.join(import.meta.dirname, "../..")
+
 async function loadEnvFile() {
-	const env = await readEnvFile(".env")
-	if (env) {
-		for (const [key, value] of Object.entries(env)) {
+	const filepaths = [path.join(REPO_ROOT, ".env"), path.resolve(".env")]
+	for (const filepath of new Set(filepaths)) {
+		const env = await readEnvFile(filepath)
+		for (const [key, value] of Object.entries(env ?? {})) {
 			process.env[key] = value
 		}
 	}
@@ -48,7 +57,16 @@ async function readEnvFile(
 			if (kv.startsWith("#")) {
 				continue
 			}
-			const [key, value] = kv.split("=")
+			// Split on the first "=" only; values (e.g. tokens) may contain "="
+			const i = kv.indexOf("=")
+			if (i === -1) {
+				continue
+			}
+			const key = kv.slice(0, i).trim()
+			let value = kv.slice(i + 1).trim()
+			if (/^(["']).*\1$/.test(value)) {
+				value = value.slice(1, -1)
+			}
 			result[key] = value
 		}
 	} catch {

@@ -1,0 +1,40 @@
+# Fly.io config for projects/khl. Deploy with `pnpm run deploy`, which also
+# creates the app and volume below if they don't exist yet. Requires a
+# `fly auth login` session (or FLY_API_TOKEN).
+app = "dvdzkwsk-khl"
+primary_region = "sjc"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+KHL_API_PORT = "8080"
+KHL_STATIC_DIR = "/app/website"
+# On the volume below, so player UUIDs survive deploys and restarts
+KHL_DB_PATH = "/data/khl.sqlite"
+
+# SQLite on a volume means exactly one machine
+[[mounts]]
+source = "khl_data"
+destination = "/data"
+initial_size = "1gb"
+
+[http_service]
+internal_port = 8080
+force_https = true
+# Stay up: the server's caches live in memory, and a cold start would also
+# make the first player page load slowly
+auto_stop_machines = "off"
+auto_start_machines = true
+min_machines_running = 1
+
+[[http_service.checks]]
+grace_period = "10s"
+interval = "30s"
+method = "GET"
+path = "/api/health"
+timeout = "5s"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "512mb"

@@ -1,5 +1,5 @@
 {
-	"name": "dvdzkwsk",
+	"name": "@dvdzkwsk/dvdzkwsk",
 	"version": "0.0.0",
 	"description": "",
 	"main": "README.md",
@@ -10,11 +10,15 @@
 	},
 	"scripts": {
 		"build": "bun ./tools/Build.ts",
-		"dev": "bun ./tools/Build.ts --dev"
+		"start": "bun ./tools/Build.ts --dev",
+		"deploy": "bun ./tools/Build.ts --deploy"
 	},
 	"devDependencies": {
+		"@base-ui/react": "^1.9.0",
 		"@inquirer/prompts": "^8.3.0",
+		"@types/bun": "^1.4.3",
 		"@types/cross-spawn": "^6.0.6",
+		"@types/express": "^5.0.6",
 		"@types/node": "^25.3.5",
 		"@types/react": "^19.1.13",
 		"@types/react-dom": "^19.1.9",
@@ -27,9 +31,11 @@
 		"eslint-plugin-import": "^2.32.0",
 		"eslint-plugin-prettier": "^5.5.4",
 		"eslint-plugin-unused-imports": "^4.3.0",
+		"express": "^5.3.0",
 		"globals": "^17.5.0",
 		"history": "^5.3.0",
 		"netlify-cli": "^24.0.1",
+		"node-html-parser": "^9.0.4",
 		"prettier": "^3.4.2",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",

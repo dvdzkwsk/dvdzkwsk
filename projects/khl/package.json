@@ -1,0 +1,14 @@
+{
+	"name": "@dvdzkwsk/khl",
+	"type": "module",
+	"scripts": {
+		"build": "bun ../../tools/Build.ts",
+		"start": "bun ../../tools/Build.ts --dev",
+		"deploy": "bun ../../tools/Build.ts --deploy"
+	},
+	"dependencies": {
+		"@dvdzkwsk/logger": "workspace:*",
+		"@dvdzkwsk/util": "workspace:*",
+		"zod": "^4.6.7"
+	}
+}

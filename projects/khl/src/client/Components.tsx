@@ -36,7 +36,7 @@ import {
 } from "../shared/ApiJson.js"
 import {getCity} from "../shared/Cities.js"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
-import {KHLSeason} from "../shared/KHLJson.js"
+import {KHLPlayerRef, KHLSeason} from "../shared/KHLJson.js"
 import {DAY_MS, toLeagueInstant} from "../shared/LeagueTime.js"
 import {
 	getLiveBarnVodDate,
@@ -90,6 +90,28 @@ export const TeamLink = ({team, seasonId, className}: TeamLinkProps) => {
 		>
 			{team.name}
 		</Link>
+	)
+}
+
+/**
+ * A scoresheet player's name, linking to their player page when `playerIds`
+ * has our UUID for them. Inherits surrounding styles.
+ */
+export const PlayerName = ({
+	player,
+	playerIds,
+}: {
+	player: KHLPlayerRef
+	/** Our player UUID for each KHL player id */
+	playerIds: Record<string, string>
+}) => {
+	const playerId = playerIds[player.id]
+	return playerId ? (
+		<Link className="InlineLink" href={getPlayerHref(playerId)}>
+			{player.name}
+		</Link>
+	) : (
+		<>{player.name}</>
 	)
 }
 

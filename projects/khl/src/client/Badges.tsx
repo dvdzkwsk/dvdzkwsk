@@ -41,7 +41,7 @@ function JapanFlag() {
 	)
 }
 
-const {BADGE_TREND_WINDOW, BADGE_TREND_MIN_GAMES} = LIMITS
+const {BADGE_TREND_LOOKBACK_DAYS, BADGE_TREND_MIN_GAMES} = LIMITS
 
 /** Penalties per game over the trend window, once it has enough games */
 function getPenaltiesPerGame(stats: BadgeStats): number | null {
@@ -52,7 +52,9 @@ function getPenaltiesPerGame(stats: BadgeStats): number | null {
 	return recent.penalties / recent.games
 }
 
-const TREND_NOTE = `over their last ${BADGE_TREND_WINDOW} games (at least ${BADGE_TREND_MIN_GAMES} played)`
+const TREND_MONTHS = Math.round(BADGE_TREND_LOOKBACK_DAYS / 30.4)
+
+const TREND_NOTE = `over their last ${TREND_MONTHS} months of games (at least ${BADGE_TREND_MIN_GAMES} played)`
 
 const gamesMilestone = (
 	games: number,

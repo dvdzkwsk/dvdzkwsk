@@ -65,7 +65,7 @@ everything looks cut off on the right. Use 500 as the "phone" width.
 
 Useful pages: `/` (home), `/teams/:id?season=:seasonId`, `/players/:uuid`,
 `/rinks/:arenaId`, `/games/:gameId`. Get real ids from the API responses
-above. Team page "Past games" link to `/games/:id`.
+above. Team page "Recent games" link to `/games/:id`.
 
 ## 4. Stop
 

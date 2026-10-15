@@ -58,35 +58,58 @@ export function isGameInProgress(game: {startsAt: string}, now: Date): boolean {
 }
 
 /**
- * When a scoresheet event (period, and clock time remaining) happened, as a
- * league-local date and time, or null for shootouts and unparseable times.
- * Only an estimate: the scoresheet has no wall-clock times. Stop-time periods
- * run longer than their clock, so for those this is the earliest the event
- * could have happened, and overtime (whose length we don't know) goes to its
- * earliest start. Rounded down to the minute, so a replay from here starts
- * before the event.
+ * Estimates when a scoresheet event (period, and clock time remaining)
+ * happened, as a league-local date and time, or null for shootouts and
+ * unparseable times.
+ *
+ * The league only publishes when a game was scheduled to start, and the
+ * scoresheet only has game-clock times, so this walks forward from the
+ * scheduled start: warmup until puck drop, then each earlier period and the
+ * intermission after it, then the time elapsed in the event's own period.
+ * Stop-time periods run longer than their clock, so their clock time is
+ * scaled by an estimated stoppage factor. Overtime (whose length we don't
+ * know) goes to its start. Rounded down to the minute.
  */
-export function getGameEventLocalTime(
+export function getGameEventClockTime(
 	game: {startsAt: string},
 	period: string,
 	timeRemaining: string,
 ): {localDate: string; localTime: string} | null {
-	const {PERIOD_MINUTES, WARMUP_MINUTES, INTERMISSION_MINUTES} = LEAGUE
+	const {
+		PERIOD_MINUTES,
+		WARMUP_MINUTES,
+		INTERMISSION_MINUTES,
+		FIRST_STOP_TIME_PERIOD,
+		STOP_TIME_FACTOR,
+	} = LEAGUE
+	// Wall-clock time for `clockMs` of game clock in period `n`
+	const toWallMs = (n: number, clockMs: number) => {
+		return n >= FIRST_STOP_TIME_PERIOD
+			? clockMs * STOP_TIME_FACTOR
+			: clockMs
+	}
 	const clock = /^(\d+):(\d{2})$/.exec(timeRemaining)
 	// "1st", "2nd", "3rd", then "OT"; a shootout has no clock
 	const periodNumber = period === "OT" ? 4 : parseInt(period, 10)
 	if (!clock || Number.isNaN(periodNumber)) {
 		return null
 	}
-	const remainingMs = (Number(clock[1]) * 60 + Number(clock[2])) * 1000
-	const elapsedMs =
-		period === "OT"
-			? 0
-			: Math.max(0, PERIOD_MINUTES * MINUTE_MS - remainingMs)
-	const periodStartMs =
-		(WARMUP_MINUTES +
-			(periodNumber - 1) * (PERIOD_MINUTES + INTERMISSION_MINUTES)) *
-		MINUTE_MS
-	const at = Date.parse(game.startsAt) + periodStartMs + elapsedMs
+
+	// The league's scheduled start
+	let at = Date.parse(game.startsAt)
+	// Warmup, until puck drop
+	at += WARMUP_MINUTES * MINUTE_MS
+	// Each earlier period, then the intermission after it
+	for (let n = 1; n < periodNumber; n++) {
+		at += toWallMs(n, PERIOD_MINUTES * MINUTE_MS)
+		at += INTERMISSION_MINUTES * MINUTE_MS
+	}
+	// Time elapsed in the event's own period: the clock counts down from the
+	// period's length. Overtime's length is unknown, so it stays at its start.
+	if (period !== "OT") {
+		const remainingMs = (Number(clock[1]) * 60 + Number(clock[2])) * 1000
+		const elapsedMs = Math.max(0, PERIOD_MINUTES * MINUTE_MS - remainingMs)
+		at += toWallMs(periodNumber, elapsedMs)
+	}
 	return getLeagueLocalTime(new Date(at).toISOString())
 }

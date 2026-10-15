@@ -2,11 +2,13 @@ import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
+	GET_TEAM_ACTIVITY_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	RosterPlayer,
 	TeamResponse,
 } from "../../shared/ApiJson.js"
 import {getGoalsByTeam} from "../../shared/KHLJson.js"
+import {ActivityFeed} from "../Activity.js"
 import {
 	AsyncContent,
 	Link,
@@ -33,6 +35,11 @@ const TeamPage = ({params, query}: RouteProps) => {
 	const seasonId = query.get("season") ?? undefined
 	const state = useAsync(
 		() => doRequest(GET_TEAM_ENDPOINT, {teamId, season: seasonId}),
+		[teamId, seasonId],
+	)
+	// Separate from the team, since it reads a box score per recent game
+	const activity = useAsync(
+		() => doRequest(GET_TEAM_ACTIVITY_ENDPOINT, {teamId, season: seasonId}),
 		[teamId, seasonId],
 	)
 	const now = useNow()
@@ -63,11 +70,18 @@ const TeamPage = ({params, query}: RouteProps) => {
 								emptyMessage={`No upcoming games in ${team.season.name}.`}
 							/>
 						</section>
-						<PastGames
-							games={team.games}
-							now={now}
-							getTeamLogoUrl={() => team.team.logoUrl}
-						/>
+						<div className="Detail-columns">
+							<PastGames
+								games={team.games}
+								now={now}
+								getTeamLogoUrl={() => team.team.logoUrl}
+							/>
+							<ActivityFeed
+								state={activity}
+								subject="team"
+								now={now}
+							/>
+						</div>
 						{/* Leaders beside the roster on wide screens, above it on narrow */}
 						<div className="TeamPage-people">
 							<TeamLeaders roster={team.roster} />

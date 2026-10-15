@@ -8,13 +8,13 @@ import {
 } from "../../shared/ApiJson.js"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {
+	compareGameEvents,
+	getPeriodOrder,
 	KHLBoxScoreTeam,
 	KHLGoal,
 	KHLPenalty,
-	KHLPlayerRef,
 } from "../../shared/KHLJson.js"
-import {getGameEndsAt, getGameEventLocalTime} from "../../shared/LeagueTime.js"
-import {getLiveBarnVodUrl} from "../../shared/LiveBarn.js"
+import {getGameEndsAt} from "../../shared/LeagueTime.js"
 import {Comparison} from "../Compare.js"
 import {
 	AsyncContent,
@@ -26,6 +26,7 @@ import {
 	NotOnLiveBarn,
 	PageShell,
 	PageTitle,
+	PlayerName,
 	RinkLink,
 	RosterPanels,
 	SegmentedControl,
@@ -34,14 +35,20 @@ import {
 	TeamAvatar,
 	TeamLink,
 } from "../Components.js"
-import {HeadToHeadGames, TeamForm} from "../Games.js"
+import {
+	GameTableRow,
+	HeadToHeadGames,
+	TeamForm,
+	toEventReplayLinks,
+} from "../Games.js"
 import {
 	AppContext,
 	formatGameDate,
 	formatGameTime,
+	formatPeriodName,
 	formatScore,
-	getPlayerHref,
 	getScoresheetUrl,
+	GOAL_TYPES,
 	Route,
 	RouteProps,
 	useAsync,
@@ -441,8 +448,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 			penalty,
 		})),
 	]
-	// The clock counts down, so more time remaining means earlier. Goals and
-	// penalties are each listed in order already; the sort is stable.
+	// Goals and penalties are each listed in order already; the sort is stable
 	const periods = [...new Set(events.map(getEventPeriod))].sort(
 		(a, b) => getPeriodOrder(a) - getPeriodOrder(b),
 	)
@@ -450,10 +456,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 		period,
 		events: events
 			.filter((e) => getEventPeriod(e) === period)
-			.sort(
-				(a, b) =>
-					parseClock(getEventTime(b)) - parseClock(getEventTime(a)),
-			),
+			.sort((a, b) => compareGameEvents(getEventAt(a), getEventAt(b))),
 	}))
 
 	return (
@@ -492,7 +495,11 @@ const Timeline = ({game}: {game: GameResponse}) => {
 											: "away"
 									}
 									playerIds={game.playerIds}
-									replays={getEventReplays(game, event)}
+									replays={toEventReplayLinks(
+										game.boxScore,
+										game.livebarn,
+										getEventAt(event),
+									)}
 								/>
 							))}
 						</ol>
@@ -515,7 +522,7 @@ const TimelineItem = ({
 	/** Whose goal or penalty: colors it with that team's accent */
 	side: "away" | "home"
 	playerIds: Record<string, string>
-	replays: EventReplay[]
+	replays: GameTableRow["livebarn"]
 }) => {
 	const avatar = team && (
 		<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={28} />
@@ -622,81 +629,13 @@ const TimelineItem = ({
 	)
 }
 
-const GOAL_TYPES: Record<string, string> = {
-	PPG: "Power-play goal",
-	SHG: "Short-handed goal",
-	ENG: "Empty-net goal",
-}
-
-const PlayerName = ({
-	player,
-	playerIds,
-}: {
-	player: KHLPlayerRef
-	playerIds: Record<string, string>
-}) => {
-	const playerId = playerIds[player.id]
-	return playerId ? (
-		<Link className="InlineLink" href={getPlayerHref(playerId)}>
-			{player.name}
-		</Link>
-	) : (
-		<>{player.name}</>
-	)
-}
-
-interface EventReplay {
-	surfaceId: number
-	href: string
-	title: string
-}
-
-/**
- * LiveBarn replays from about when a goal or penalty happened, one per
- * surface of the rink; none for shootouts.
- */
-function getEventReplays(
-	game: GameResponse,
-	event: TimelineEvent,
-): EventReplay[] {
-	const at = getGameEventLocalTime(
-		game.boxScore,
-		getEventPeriod(event),
-		getEventTime(event),
-	)
-	if (!at) {
-		return []
-	}
-	return game.livebarn.map((link) => ({
-		surfaceId: link.surfaceId,
-		href: getLiveBarnVodUrl(link.surfaceId, at.localDate, at.localTime),
-		title: LIVEBARN_TITLES.moment(link.surfaceName),
-	}))
+/** When a timeline event happened on the scoresheet */
+function getEventAt(event: TimelineEvent): {period: string; time: string} {
+	return event.kind === "goal" ? event.goal : event.penalty
 }
 
 function getEventPeriod(event: TimelineEvent): string {
-	return event.kind === "goal" ? event.goal.period : event.penalty.period
-}
-
-function getEventTime(event: TimelineEvent): string {
-	return event.kind === "goal" ? event.goal.time : event.penalty.time
-}
-
-/** "1st" -> 1, ...; overtime and shootouts ("OT", "SO") come after */
-function getPeriodOrder(period: string): number {
-	const number = parseInt(period, 10)
-	return Number.isNaN(number) ? 100 + (period === "SO" ? 1 : 0) : number
-}
-
-/** "16:16" -> seconds */
-function parseClock(time: string): number {
-	const [minutes, seconds] = time.split(":").map(Number)
-	return (minutes ?? 0) * 60 + (seconds ?? 0)
-}
-
-/** "1st" -> "1st period"; "OT" and "SO" stay as they are */
-function formatPeriodName(period: string): string {
-	return /^\d/.test(period) ? `${period} period` : period
+	return getEventAt(event).period
 }
 
 export const GameRoute = {

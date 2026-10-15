@@ -3,12 +3,14 @@ import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
+	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
+import {ActivityFeed} from "../Activity.js"
 import {BadgeHint, BadgeIcon, getBadges} from "../Badges.js"
 import {
 	AsyncContent,
@@ -24,7 +26,13 @@ import {
 	TeamLink,
 	Warnings,
 } from "../Components.js"
-import {GameCards, HeroLastResults, HeroStatGroup, PastGames} from "../Games.js"
+import {
+	GameCards,
+	HeroLastResults,
+	HeroStatGroup,
+	PastGames,
+	SkippedGames,
+} from "../Games.js"
 import {
 	AppContext,
 	getBadgesHref,
@@ -45,6 +53,28 @@ const PlayerPage = ({params, query}: RouteProps) => {
 		() => doRequest(GET_PLAYER_ENDPOINT, {playerId}),
 		[playerId],
 	)
+	// Separate from the player, since it reads a box score per recent game
+	const activity = useAsync(
+		() => doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {playerId}),
+		[playerId],
+	)
+	// The games the player sat out, from each recent game's lineup. Until
+	// they load, the lists that leave them out wait; if they fail, every
+	// team game shows.
+	const skippedState = useAsync(() => {
+		return doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {
+			playerId,
+			kinds: ["skipped"],
+		})
+	}, [playerId])
+	const skipped: SkippedGames =
+		skippedState.status === "loading"
+			? "loading"
+			: new Set(
+					skippedState.status === "success"
+						? skippedState.data.games.map((g) => g.gameId)
+						: [],
+				)
 	const now = useNow()
 
 	// ?team=<KHL player id> narrows the page to one of the player's teams. It's
@@ -101,7 +131,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									/>
 								</div>
 							)}
-							<PlayerHeader player={player} />
+							<PlayerHeader player={player} skipped={skipped} />
 							{player.unavailableSchedules.length > 0 && (
 								<Warnings
 									summary={`${
@@ -113,7 +143,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 										player.unavailableSchedules.length === 1
 											? "this schedule, so its"
 											: "these schedules, so their"
-									} games aren't in Past games. Season and career totals come from the player's stats and aren't affected.`}
+									} games aren't in Recent games. Season and career totals come from the player's stats and aren't affected.`}
 									items={player.unavailableSchedules.map(
 										(schedule) => ({
 											key: `${schedule.teamId}:${schedule.seasonId}`,
@@ -149,18 +179,26 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									now={now}
 								/>
 							</section>
-							<PastGames
-								// Reset the list's scroll position when switching teams
-								key={selected?.khlPlayerId ?? "all"}
-								games={games}
-								now={now}
-								getTeamLogoUrl={(teamId) =>
-									player.registrations.find(
-										(r) => r.teamId === teamId,
-									)?.teamLogoUrl ?? null
-								}
-								limit={MAX_PAST_GAMES}
-							/>
+							<div className="Detail-columns">
+								<PastGames
+									// Reset the list's scroll position when switching teams
+									key={selected?.khlPlayerId ?? "all"}
+									games={games}
+									now={now}
+									getTeamLogoUrl={(teamId) =>
+										player.registrations.find(
+											(r) => r.teamId === teamId,
+										)?.teamLogoUrl ?? null
+									}
+									limit={MAX_PAST_GAMES}
+									skipped={skipped}
+								/>
+								<ActivityFeed
+									state={activity}
+									subject="player"
+									now={now}
+								/>
+							</div>
 							<PlayerStats player={player} selected={selected} />
 						</div>
 					)
@@ -248,7 +286,13 @@ const PlayerTeamPicker = ({
 	)
 }
 
-const PlayerHeader = ({player}: {player: PlayerResponse}) => {
+const PlayerHeader = ({
+	player,
+	skipped,
+}: {
+	player: PlayerResponse
+	skipped: SkippedGames
+}) => {
 	const current = player.registrations.filter((r) => {
 		return isCurrentRegistration(player, r)
 	})
@@ -323,7 +367,8 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 						label="Career"
 						stats={totals(player.registrations, "Career Stats")}
 					/>
-					<HeroLastResults games={player.games} />
+					<HeroLastResults games={player.games} skipped={skipped} />
+
 					<PlayerBadges player={player} />
 				</div>
 			</div>

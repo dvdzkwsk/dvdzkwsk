@@ -8,7 +8,7 @@ const API_URL = "https://api.cloudflare.com/client/v4"
 
 /**
  * Cloudflare API client. The token needs, for the zone: Zone Read, DNS Edit,
- * and Config Settings Edit (for Configuration Rules).
+ * and Config Rules Edit (for Configuration Rules).
  */
 export class Cloudflare {
 	constructor(private readonly token: string) {}

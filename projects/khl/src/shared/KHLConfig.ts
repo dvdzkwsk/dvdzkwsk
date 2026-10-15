@@ -70,15 +70,18 @@ export const LIMITS = {
 	MATCHUP_RECENT_GAMES: 10,
 	/** How many of a season's meetings a matchup's head-to-head row shows */
 	MATCHUP_HEAD_TO_HEAD_GAMES: 5,
-	/** How many of a player's latest games the Angel and Devil badges judge */
-	BADGE_TREND_WINDOW: 50,
+	/**
+	 * How many days of a player's games, back from their latest, the Angel and
+	 * Devil badges judge
+	 */
+	BADGE_TREND_LOOKBACK_DAYS: 365,
 	/** The fewest games in that window for the Angel or Devil badge */
 	BADGE_TREND_MIN_GAMES: 10,
 	/** How many goals, assists, and penalties an activity feed shows */
 	ACTIVITY_EVENTS: 10,
 	/**
-	 * The most of a player's or team's latest games an activity feed reads
-	 * box scores from; a quiet player may have fewer events than that.
+	 * How many days of a player's or team's games, back from their latest, an
+	 * activity feed reads; a quiet player may have fewer events than that.
 	 */
-	ACTIVITY_MAX_GAMES: 30,
+	ACTIVITY_MAX_LOOKBACK_DAYS: 180,
 }

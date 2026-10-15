@@ -26,7 +26,13 @@ import {
 	TeamLink,
 	Warnings,
 } from "../Components.js"
-import {GameCards, HeroLastResults, HeroStatGroup, PastGames} from "../Games.js"
+import {
+	GameCards,
+	HeroLastResults,
+	HeroStatGroup,
+	PastGames,
+	SkippedGames,
+} from "../Games.js"
 import {
 	AppContext,
 	getBadgesHref,
@@ -52,6 +58,23 @@ const PlayerPage = ({params, query}: RouteProps) => {
 		() => doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {playerId}),
 		[playerId],
 	)
+	// The games the player sat out, from each recent game's lineup. Until
+	// they load, the lists that leave them out wait; if they fail, every
+	// team game shows.
+	const skippedState = useAsync(() => {
+		return doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {
+			playerId,
+			kinds: ["skipped"],
+		})
+	}, [playerId])
+	const skipped: SkippedGames =
+		skippedState.status === "loading"
+			? "loading"
+			: new Set(
+					skippedState.status === "success"
+						? skippedState.data.games.map((g) => g.gameId)
+						: [],
+				)
 	const now = useNow()
 
 	// ?team=<KHL player id> narrows the page to one of the player's teams. It's
@@ -108,7 +131,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									/>
 								</div>
 							)}
-							<PlayerHeader player={player} />
+							<PlayerHeader player={player} skipped={skipped} />
 							{player.unavailableSchedules.length > 0 && (
 								<Warnings
 									summary={`${
@@ -168,6 +191,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 										)?.teamLogoUrl ?? null
 									}
 									limit={MAX_PAST_GAMES}
+									skipped={skipped}
 								/>
 								<ActivityFeed
 									state={activity}
@@ -262,7 +286,13 @@ const PlayerTeamPicker = ({
 	)
 }
 
-const PlayerHeader = ({player}: {player: PlayerResponse}) => {
+const PlayerHeader = ({
+	player,
+	skipped,
+}: {
+	player: PlayerResponse
+	skipped: SkippedGames
+}) => {
 	const current = player.registrations.filter((r) => {
 		return isCurrentRegistration(player, r)
 	})
@@ -337,7 +367,8 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 						label="Career"
 						stats={totals(player.registrations, "Career Stats")}
 					/>
-					<HeroLastResults games={player.games} />
+					<HeroLastResults games={player.games} skipped={skipped} />
+
 					<PlayerBadges player={player} />
 				</div>
 			</div>

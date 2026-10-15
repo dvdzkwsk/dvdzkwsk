@@ -270,7 +270,7 @@ export const TeamRosterSchema = z.object({
 
 /** Penalties a player took in their latest games, for the badges */
 export interface RecentPenalties {
-	/** Games the player dressed for, at most LIMITS.BADGE_TREND_WINDOW */
+	/** Games the player dressed for in LIMITS.BADGE_TREND_LOOKBACK_DAYS */
 	games: number
 	penalties: number
 }
@@ -312,6 +312,46 @@ export const ActivityEventSchema = z.union([
 	z.object({kind: z.literal("penalty"), penalty: KHLPenaltySchema}),
 ]) satisfies z.ZodType<ActivityEvent>
 
+/**
+ * Whether a player dressed for a game. A team always played its own games, and
+ * a game whose lineup isn't posted yet counts as played.
+ */
+export type ActivityAttendance = "played" | "skipped"
+
+export const ActivityAttendanceSchema = z.enum([
+	"played",
+	"skipped",
+]) satisfies z.ZodType<ActivityAttendance>
+
+/**
+ * What an activity request asks for: events ("goal", "assist", "penalty")
+ * pick a game's events, and attendance ("played", "skipped") includes a game
+ * by attendance alone, even with no events. A game is in the response if it
+ * has a requested event or a requested attendance.
+ */
+export type ActivityKind = ActivityEvent["kind"] | ActivityAttendance
+
+export const ActivityKindSchema = z.enum([
+	"goal",
+	"assist",
+	"penalty",
+	"played",
+	"skipped",
+]) satisfies z.ZodType<ActivityKind>
+
+/** The feed: events only */
+export const DEFAULT_ACTIVITY_KINDS: ActivityKind[] = [
+	"goal",
+	"assist",
+	"penalty",
+]
+
+/** `kinds`: a list, sent in the query string as "goal,penalty" */
+const ActivityKindsSchema = z.preprocess(
+	(value) => (typeof value === "string" ? value.split(",") : value),
+	z.array(ActivityKindSchema).min(1),
+)
+
 /** A game in an activity feed, and the player's or team's events in it */
 export interface ActivityGame {
 	gameId: string
@@ -323,7 +363,8 @@ export interface ActivityGame {
 	opponent: ActivityTeam
 	/** The rink's LiveBarn surfaces; empty when it isn't on LiveBarn */
 	livebarn: LiveBarnLink[]
-	/** Latest first */
+	attendance: ActivityAttendance
+	/** Latest first; always empty for a skipped game */
 	events: ActivityEvent[]
 }
 
@@ -334,10 +375,15 @@ export const ActivityGameSchema = z.object({
 	team: ActivityTeamSchema,
 	opponent: ActivityTeamSchema,
 	livebarn: z.array(LiveBarnLinkSchema),
+	attendance: ActivityAttendanceSchema,
 	events: z.array(ActivityEventSchema),
 }) satisfies z.ZodType<ActivityGame>
 
-/** A player's or team's latest LIMITS.ACTIVITY_EVENTS events */
+/**
+ * A player's or team's games with the requested kinds, from the
+ * LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS before their latest game, and at most
+ * LIMITS.ACTIVITY_EVENTS events
+ */
 export interface ActivityResponse {
 	/** Newest first */
 	games: ActivityGame[]
@@ -439,13 +485,25 @@ export const GET_PLAYER_RECENT_PENALTIES_ENDPOINT = {
 	responseSchema: RecentPenaltiesSchema,
 } satisfies ApiEndpoint<GetPlayerRequest, RecentPenalties>
 
-/** The player's latest goals, assists, and penalties; slow on a cold cache. */
+export interface GetPlayerActivityRequest extends GetPlayerRequest {
+	/** Defaults to DEFAULT_ACTIVITY_KINDS */
+	kinds?: ActivityKind[]
+}
+
+export const GetPlayerActivityRequestSchema = GetPlayerRequestSchema.extend({
+	kinds: ActivityKindsSchema.optional(),
+}) satisfies z.ZodType<GetPlayerActivityRequest>
+
+/**
+ * The player's latest goals, assists, and penalties, or the games they played
+ * or skipped; slow on a cold cache.
+ */
 export const GET_PLAYER_ACTIVITY_ENDPOINT = {
 	method: "GET",
 	uri: "/api/players/:playerId/activity",
-	requestSchema: GetPlayerRequestSchema,
+	requestSchema: GetPlayerActivityRequestSchema,
 	responseSchema: ActivityResponseSchema,
-} satisfies ApiEndpoint<GetPlayerRequest, ActivityResponse>
+} satisfies ApiEndpoint<GetPlayerActivityRequest, ActivityResponse>
 
 export interface GetTeamRequest {
 	teamId: string
@@ -465,13 +523,22 @@ export const GET_TEAM_ENDPOINT = {
 	responseSchema: TeamResponseSchema,
 } satisfies ApiEndpoint<GetTeamRequest, TeamResponse>
 
+export interface GetTeamActivityRequest extends GetTeamRequest {
+	/** Defaults to DEFAULT_ACTIVITY_KINDS */
+	kinds?: ActivityKind[]
+}
+
+export const GetTeamActivityRequestSchema = GetTeamRequestSchema.extend({
+	kinds: ActivityKindsSchema.optional(),
+}) satisfies z.ZodType<GetTeamActivityRequest>
+
 /** The team's latest goals and penalties in the season; slow on a cold cache. */
 export const GET_TEAM_ACTIVITY_ENDPOINT = {
 	method: "GET",
 	uri: "/api/teams/:teamId/activity",
-	requestSchema: GetTeamRequestSchema,
+	requestSchema: GetTeamActivityRequestSchema,
 	responseSchema: ActivityResponseSchema,
-} satisfies ApiEndpoint<GetTeamRequest, ActivityResponse>
+} satisfies ApiEndpoint<GetTeamActivityRequest, ActivityResponse>
 
 /** An earlier game between the same two teams. */
 export interface HeadToHeadGame {

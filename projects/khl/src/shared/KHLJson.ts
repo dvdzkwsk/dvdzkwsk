@@ -404,6 +404,24 @@ export const KHLGameStatsSchema = z.object({
 	home: KHLGameTeamStatsSchema,
 }) satisfies z.ZodType<KHLGameStats>
 
+/**
+ * Whether a player (under any of their KHL player ids) dressed for a game,
+ * from their team's side of its stats page. Null until that side's lineup is
+ * posted.
+ */
+export function getLineupAttendance(
+	khlPlayerIds: Set<string>,
+	team: KHLGameTeamStats,
+): "played" | "skipped" | null {
+	const rows = [...team.skaters, ...team.goalies]
+	if (rows.length === 0) {
+		return null
+	}
+	return rows.some((row) => khlPlayerIds.has(row.playerId))
+		? "played"
+		: "skipped"
+}
+
 /** One row of a division's standings table. */
 export interface KHLStandingsRow {
 	teamId: string

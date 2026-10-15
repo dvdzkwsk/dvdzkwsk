@@ -8,6 +8,7 @@ import {
 	CityDot,
 	Hint,
 	HomeAwayBadge,
+	InlineLoader,
 	Link,
 	LIVEBARN_TITLES,
 	LiveBarnBadge,
@@ -15,6 +16,7 @@ import {
 	RinkLink,
 	ScoresheetLink,
 	SegmentedControl,
+	SegmentedOption,
 	SearchIcon,
 	StatsTable,
 	StatsTableColumn,
@@ -254,6 +256,19 @@ function getDivisionLabel(game: RinkGame): string {
 
 // --- Past games
 
+/**
+ * A player's games they didn't dress for, by game id, or "loading" until
+ * that's known. A team's lists leave it out.
+ */
+export type SkippedGames = Set<string> | "loading"
+
+type SkippedFilter = "played" | "all"
+
+const SKIPPED_FILTER_OPTIONS: SegmentedOption<SkippedFilter>[] = [
+	{value: "played", label: "Played"},
+	{value: "all", label: "All", hint: "Include games they didn't dress for"},
+]
+
 interface PastGamesProps {
 	/** Oldest first, as returned by the API */
 	games: FeedGame[]
@@ -262,6 +277,8 @@ interface PastGamesProps {
 	getTeamLogoUrl: (teamId: string) => string | null
 	/** Render at most this many of the most recent games */
 	limit?: number
+	/** Left out unless "All" is picked, then shown dimmed */
+	skipped?: SkippedGames
 }
 
 /** Finished games, most recent first, each linking to its LiveBarn replay. */
@@ -270,17 +287,36 @@ export const PastGames = ({
 	now,
 	getTeamLogoUrl,
 	limit,
+	skipped,
 }: PastGamesProps) => {
+	const [filter, setFilter] = React.useState<SkippedFilter>("played")
 	const past = games.filter((g) => getGameEndsAt(g.game) <= now).reverse()
+	const isSkipped = (g: FeedGame) => isSkippedGame(skipped, g)
+	const hasSkipped = past.some(isSkipped)
 	return (
 		<GameTableCard
 			title="Recent games"
 			emptyText="No games played yet."
+			loading={skipped === "loading"}
+			actions={
+				hasSkipped && (
+					<SegmentedControl<SkippedFilter>
+						label="Show skipped games"
+						options={SKIPPED_FILTER_OPTIONS}
+						value={filter}
+						onChange={setFilter}
+					/>
+				)
+			}
 			// Long histories scroll inside the card, under a fixed header
 			maxHeight="24rem"
 			rows={past
+				.filter((g) => filter === "all" || !isSkipped(g))
 				.slice(0, limit)
-				.map((g) => feedGameToRow(g, getTeamLogoUrl(g.game.team.id)))}
+				.map((g) => ({
+					...feedGameToRow(g, getTeamLogoUrl(g.game.team.id)),
+					skipped: isSkipped(g),
+				}))}
 			now={now}
 			showResult
 			showDay
@@ -289,21 +325,36 @@ export const PastGames = ({
 	)
 }
 
+function isSkippedGame(skipped: SkippedGames | undefined, {game}: FeedGame) {
+	return skipped instanceof Set && !!game.id && skipped.has(game.id)
+}
+
 /** A titled card around a GameTable, or `emptyText` when it has no rows. */
 export const GameTableCard = ({
 	title,
 	emptyText,
+	actions,
+	loading,
 	...tableProps
 }: React.ComponentProps<typeof GameTable> & {
 	title: string
 	emptyText: string
+	/** Controls beside the title, e.g. a filter */
+	actions?: React.ReactNode
+	/** A loader in place of the table, while what it shows isn't known yet */
+	loading?: boolean
 }) => {
 	return (
 		<section className="GameTableCard">
-			<h2 className={cx("GameTableCard-title", "SectionLabel")}>
-				{title}
-			</h2>
-			{tableProps.rows.length === 0 ? (
+			<div className="GameTableCard-header">
+				<h2 className="SectionLabel">{title}</h2>
+				{actions}
+			</div>
+			{loading ? (
+				<div className="GameTableCard-empty">
+					<InlineLoader label={`Loading ${title.toLowerCase()}…`} />
+				</div>
+			) : tableProps.rows.length === 0 ? (
 				<div className="GameTableCard-empty">{emptyText}</div>
 			) : (
 				<GameTable {...tableProps} />
@@ -1149,6 +1200,9 @@ export interface GameTableRow {
 	score: {away: number; home: number} | null
 	/** A team's own lists: its result ("W", "L", "T"), shown as a chip */
 	result?: string | null
+	/** A player's own lists: a game they didn't dress for, dimmed, with
+	    "DNP" in place of the team's result */
+	skipped?: boolean
 	/** The side whose perspective the list is from (a team's or player's own
 	    games): its name is highlighted */
 	highlight?: "away" | "home"
@@ -1204,15 +1258,30 @@ export const GameTable = ({
 						className: "GameTable-col--result",
 						sortable: false,
 						render: (row: GameTableRow) =>
-							row.result && (
-								<span
-									className={cx(
-										"GameFeed-result",
-										`GameFeed-result--${row.result}`,
-									)}
+							row.skipped ? (
+								<Hint
+									label={`Didn't dress${row.result ? ` (team ${RESULT_WORDS[row.result]?.toLowerCase() ?? row.result})` : ""}`}
 								>
-									{row.result}
-								</span>
+									<span
+										className={cx(
+											"GameFeed-result",
+											"GameFeed-result--DNP",
+										)}
+									>
+										DNP
+									</span>
+								</Hint>
+							) : (
+								row.result && (
+									<span
+										className={cx(
+											"GameFeed-result",
+											`GameFeed-result--${row.result}`,
+										)}
+									>
+										{row.result}
+									</span>
+								)
 							),
 					},
 				]
@@ -1356,7 +1425,11 @@ export const GameTable = ({
 			rows={rows}
 			rowKey={(row) => row.gameId ?? `${row.startsAt}:${row.away.id}`}
 			rowClassName={(row) =>
-				cx("GameTable-row", row.live && "GameTable-row--live")
+				cx(
+					"GameTable-row",
+					row.live && "GameTable-row--live",
+					row.skipped && "GameTable-row--skipped",
+				)
 			}
 			columns={columns}
 		/>
@@ -2011,14 +2084,22 @@ export const ResultChips = ({
 export const LastResults = ({
 	games,
 	showLabel = true,
+	skipped,
 }: {
 	games: FeedGame[]
 	/** Off where the caller labels it, e.g. a stats block's heading */
 	showLabel?: boolean
+	/** Left out, so a player's form is games they played; all empty slots
+	    while loading */
+	skipped?: SkippedGames
 }) => {
-	const recent = games
-		.filter((g) => g.game.isFinal && g.game.result)
-		.slice(-LIMITS.GAME_RECENT_GAMES)
+	const recent =
+		skipped === "loading"
+			? []
+			: games
+					.filter((g) => g.game.isFinal && g.game.result)
+					.filter((g) => !isSkippedGame(skipped, g))
+					.slice(-LIMITS.GAME_RECENT_GAMES)
 	return (
 		<Hint
 			label={`Last ${LIMITS.GAME_RECENT_GAMES} games, oldest to newest`}
@@ -2079,12 +2160,22 @@ export const HeroStatGroup = ({
 }
 
 /** "Last 5" as a hero stat block */
-export const HeroLastResults = ({games}: {games: FeedGame[]}) => {
+export const HeroLastResults = ({
+	games,
+	skipped,
+}: {
+	games: FeedGame[]
+	skipped?: SkippedGames
+}) => {
 	return (
 		<section className="PlayerHero-group" aria-label="Last 5">
 			<h2 className="PlayerHero-group-label">Last 5</h2>
 			<div className="PlayerHero-form">
-				<LastResults games={games} showLabel={false} />
+				<LastResults
+					games={games}
+					showLabel={false}
+					skipped={skipped}
+				/>
 			</div>
 		</section>
 	)

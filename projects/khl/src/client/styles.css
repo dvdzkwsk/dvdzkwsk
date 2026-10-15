@@ -1202,10 +1202,22 @@ table {
 	box-shadow: var(--shadow-sm);
 }
 
-.GameTableCard-title {
+/* The title, and any controls (e.g. a filter) at the other end */
+.GameTableCard-header {
 	flex: none;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 2);
 	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4)
 		calc(var(--spacing) * 2);
+}
+
+/* Overhangs the padding, so a filter doesn't push the table down past the
+   card beside it */
+.GameTableCard-header > .Segmented {
+	margin-block: calc(var(--spacing) * -2);
 }
 
 .GameTableCard-empty {
@@ -1249,6 +1261,15 @@ table {
 .GameFeed-result--T {
 	background: var(--tie-bg);
 	color: var(--tie);
+}
+
+/* A game the player didn't dress for: an outline, not a result */
+.GameFeed-result--DNP {
+	border: 1px dashed var(--panel-border);
+	/* Narrower than the other chips, so the border still fits the column */
+	padding: 0 calc(var(--spacing) * 0.5);
+	color: var(--muted-fg);
+	font-size: var(--text-3xs);
 }
 
 /* Inset like the other cards' tables */
@@ -4349,6 +4370,11 @@ a.Compare-chip:hover {
 
 .GameTable-row--live td:first-child {
 	box-shadow: inset 3px 0 0 var(--live);
+}
+
+/* A game the player didn't dress for: there, but out of the way */
+.GameTable-row--skipped td:not(.GameTable-col--result) {
+	opacity: 0.45;
 }
 
 .GameTable-team-division {

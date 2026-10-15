@@ -1,6 +1,6 @@
 import "./Text.css"
-import * as React from "react"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
+import * as React from "react"
 
 const FONT_MONO = [
 	"ui-monospace",

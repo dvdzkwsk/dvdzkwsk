@@ -16,15 +16,18 @@ interface FetchRequestBase<TResponseBody> {
 	keepalive?: boolean
 }
 
-export interface FetchRequestWithoutBody<TResponseBody>
-	extends FetchRequestBase<TResponseBody> {
+export interface FetchRequestWithoutBody<
+	TResponseBody,
+> extends FetchRequestBase<TResponseBody> {
 	method: HttpMethodWithoutBody
 	requestBody?: never
 	requestSchema?: never
 }
 
-export interface FetchRequestWithBody<TRequestBody, TResponseBody>
-	extends FetchRequestBase<TResponseBody> {
+export interface FetchRequestWithBody<
+	TRequestBody,
+	TResponseBody,
+> extends FetchRequestBase<TResponseBody> {
 	method: HttpMethodWithBody
 	requestBody: TRequestBody
 	requestSchema: z.ZodType<TRequestBody>
@@ -59,7 +62,9 @@ export async function doFetch<TRequestBody, TResponseBody>(
 
 	let requestBody: TRequestBody | undefined
 	if (request.requestSchema) {
-		const requestResult = request.requestSchema.safeParse(request.requestBody)
+		const requestResult = request.requestSchema.safeParse(
+			request.requestBody,
+		)
 		if (!requestResult.success) {
 			throw new Error(
 				`${label}: invalid request body\n${z.prettifyError(requestResult.error)}`,
@@ -78,7 +83,10 @@ export async function doFetch<TRequestBody, TResponseBody>(
 		response = await fetch(request.url, {
 			method: request.method,
 			headers,
-			body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
+			body:
+				requestBody === undefined
+					? undefined
+					: JSON.stringify(requestBody),
 			keepalive: request.keepalive,
 		})
 	} catch (error) {

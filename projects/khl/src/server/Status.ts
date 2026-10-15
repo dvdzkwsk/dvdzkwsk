@@ -2,11 +2,11 @@ import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {getGitRevision} from "@dvdzkwsk/util/GitUtil"
+import {KHLDatabase} from "./Database.js"
+import {LIVEBARN_VENUES_URL} from "./LiveBarn.js"
 import {DeployInfo, StatusCheck, StatusResponse} from "../shared/ApiJson.js"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {getLeagueDayKey, MINUTE_MS} from "../shared/LeagueTime.js"
-import {KHLDatabase} from "./Database.js"
-import {LIVEBARN_VENUES_URL} from "./LiveBarn.js"
 
 const logger = new Logger("Status")
 

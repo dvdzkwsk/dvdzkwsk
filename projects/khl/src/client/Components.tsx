@@ -1,5 +1,5 @@
-import * as React from "react"
 import {AlertDialog} from "@base-ui/react/alert-dialog"
+import {Autocomplete} from "@base-ui/react/autocomplete"
 import {Avatar} from "@base-ui/react/avatar"
 import {Button} from "@base-ui/react/button"
 import {Collapsible} from "@base-ui/react/collapsible"
@@ -10,27 +10,12 @@ import {Switch} from "@base-ui/react/switch"
 import {Toggle} from "@base-ui/react/toggle"
 import {ToggleGroup} from "@base-ui/react/toggle-group"
 import {Tooltip} from "@base-ui/react/tooltip"
-import {Autocomplete} from "@base-ui/react/autocomplete"
-import {Helmet} from "react-helmet"
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {
-	RosterPlayer,
-	SEARCH_ENDPOINT,
-	SearchResponse,
-	TeamRoster,
-} from "../shared/ApiJson.js"
-import {getCity} from "../shared/Cities.js"
-import {KHLSeason} from "../shared/KHLJson.js"
-import {DAY_MS, toLeagueInstant} from "../shared/LeagueTime.js"
-import {
-	getLiveBarnVodDate,
-	isLiveBarnVodExpired,
-	LIVEBARN_VOD_EXPIRY,
-} from "../shared/LiveBarn.js"
-import {STRINGS, URLS} from "../shared/KHLConfig.js"
+import * as React from "react"
+import {Helmet} from "react-helmet"
 import {
 	AppContext,
 	AsyncState,
@@ -41,9 +26,23 @@ import {
 	getScoresheetUrl,
 	getTeamHref,
 	IS_DEV,
-	useAsync,
 	useLocation,
 } from "./Util.js"
+import {
+	RosterPlayer,
+	SEARCH_ENDPOINT,
+	SearchResponse,
+	TeamRoster,
+} from "../shared/ApiJson.js"
+import {getCity} from "../shared/Cities.js"
+import {STRINGS, URLS} from "../shared/KHLConfig.js"
+import {KHLSeason} from "../shared/KHLJson.js"
+import {DAY_MS, toLeagueInstant} from "../shared/LeagueTime.js"
+import {
+	getLiveBarnVodDate,
+	isLiveBarnVodExpired,
+	LIVEBARN_VOD_EXPIRY,
+} from "../shared/LiveBarn.js"
 
 // --- Links
 
@@ -2147,7 +2146,11 @@ export const LiveBarnBadge = ({
 				/>
 			) : (
 				<Hint label={title}>
-					<Link className="LiveBarnBadge" href={href} onClick={onClick}>
+					<Link
+						className="LiveBarnBadge"
+						href={href}
+						onClick={onClick}
+					>
 						<CameraIcon />
 						{surfaceName ?? "LiveBarn"} ↗
 					</Link>
@@ -2188,8 +2191,8 @@ const ExpiredReplayDialog = ({
 					</AlertDialog.Title>
 					<AlertDialog.Description className="ReplayDialog-text">
 						LiveBarn only keeps recordings for{" "}
-						{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}. The video
-						may no longer be available.
+						{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}. The
+						video may no longer be available.
 					</AlertDialog.Description>
 					<div className="ReplayDialog-actions">
 						<AlertDialog.Close className="FilterPill">

@@ -3,9 +3,9 @@ import * as fs from "fs"
 import * as os from "os"
 import * as path from "path"
 import {input} from "@inquirer/prompts"
+import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool} from "../pkg/util/CliUtil.js"
 import {toError} from "../pkg/util/ErrorUtil.js"
-import {Logger} from "../pkg/logger/Logger.js"
 
 const logger = new Logger("SetupMac")
 const PROJECT_ROOT = path.resolve(
@@ -1061,7 +1061,7 @@ function createBrewInstallFn(ctx: SetupContext) {
 	}
 }
 
-async function ensureFonts(ctx: SetupContext) {
+async function _ensureFonts(_ctx: SetupContext) {
 	// logger.info("ensureFonts", "ensuring fonts...")
 	// brewInstall("font-source-code-pro", {cask: true}, ctx)
 	// brewInstall("font-hack-nerd-font", {cask: true}, ctx)

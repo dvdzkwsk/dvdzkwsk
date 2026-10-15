@@ -52,8 +52,8 @@ const FEATURES: Feature[] = [
 		title: "Search everything",
 		text: (
 			<>
-				Players, teams, and locations. Press <code>/</code> from anywhere
-				to search.
+				Players, teams, and locations. Press <code>/</code> from
+				anywhere to search.
 			</>
 		),
 		art: SearchArt,
@@ -72,9 +72,9 @@ const AboutPage = () => {
 					<p className="AboutPage-lede">
 						Find your next game, watch it on LiveBarn, and see your
 						stats from every team you've played on. Same data as{" "}
-						<Link href={URLS.KHL}>{leagueHost} ↗</Link>, but
-						faster to load, easier to read at a glance, and with
-						some cool new features requested by the community.
+						<Link href={URLS.KHL}>{leagueHost} ↗</Link>, but faster
+						to load, easier to read at a glance, and with some cool
+						new features requested by the community.
 					</p>
 					<p className="AboutPage-note">
 						*Unofficial and not run by the league. {leagueHost} is

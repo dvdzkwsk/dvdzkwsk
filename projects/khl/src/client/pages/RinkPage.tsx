@@ -100,7 +100,6 @@ const RinkPage = ({params}: RouteProps) => {
 									</h2>
 									{status.live || status.next ? (
 										<GameSummary
-											rink={rink}
 											game={(status.live ?? status.next)!}
 											seasonId={season.id}
 											now={now}

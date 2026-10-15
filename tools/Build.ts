@@ -2,9 +2,9 @@ import * as fs from "fs"
 import * as path from "path"
 import {search} from "@inquirer/prompts"
 import crossSpawn from "cross-spawn"
+import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
 import {getGitRevision} from "../pkg/util/GitUtil.js"
-import {Logger} from "../pkg/logger/Logger.js"
 
 const logger = new Logger("Build")
 

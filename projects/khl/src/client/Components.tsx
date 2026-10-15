@@ -2259,8 +2259,7 @@ export const NotOnLiveBarn = ({compact}: {compact?: boolean}) => {
 				</button>
 			}
 		>
-			<strong>No LiveBarn for this location.</strong> LiveBarn only
-			streams and records locations with its cameras. We couldn't find
+			<strong>No LiveBarn for this location.</strong> We couldn't find
 			this location on LiveBarn, so there's no live stream or replay for
 			its games.
 		</InfoPopover>

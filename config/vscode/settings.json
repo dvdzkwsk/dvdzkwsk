@@ -24,7 +24,7 @@
   "typescript.updateImportsOnFileMove.enabled": "always",
   "window.restoreWindows": "none",
   "workbench.editor.enablePreview": false,
-  "workbench.editor.showTabs": "none",
+  "workbench.editor.showTabs": "multiple",
   "workbench.startupEditor": "none",
   "[css]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",

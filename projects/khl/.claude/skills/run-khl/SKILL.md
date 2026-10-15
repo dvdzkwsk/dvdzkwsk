@@ -1,6 +1,6 @@
 ---
 name: run-khl
-description: Launch and drive the KHL+ app (projects/khl) locally - start the API server and Vite client on isolated ports, hit /api routes with curl, and take headless Chrome screenshots of pages at desktop and narrow widths. Use when asked to run, start, smoke-test or screenshot the KHL app, or to confirm a KHL change works in the real app.
+description: Launch and drive the KHL+ app (projects/khl) locally - start the API server and Vite client on isolated ports, hit /api routes with curl, and take headless Chrome screenshots of pages at desktop and narrow widths. Use when asked to run, start, smoke-test, or screenshot the KHL app, or to confirm a KHL change works in the real app.
 ---
 
 # Run KHL+
@@ -85,16 +85,6 @@ kill $(lsof -tiTCP:3999 -sTCP:LISTEN) $(lsof -tiTCP:3998 -sTCP:LISTEN)
 
 ## Checks
 
-The root `tsconfig.json` doesn't include `projects/`. To typecheck, use a
-temporary config that extends it:
-
-```json
-{
-	"extends": "<repo>/tsconfig.json",
-	"include": ["<repo>/projects/khl/src", "<repo>/types"],
-	"compilerOptions": {"typeRoots": ["<repo>/types", "<repo>/node_modules/@types"]}
-}
-```
-
-`node_modules/.bin/tsc -p <that file>`. ESLint currently crashes in
+The root `tsconfig.json` doesn't include `projects/`, so `projects/khl/tsconfig.json`
+extends it. To typecheck: `<repo>/node_modules/.bin/tsc -p <repo>/projects/khl`. ESLint currently crashes in
 `import/order` (eslint-plugin-import vs ESLint 10), so lint can't run.

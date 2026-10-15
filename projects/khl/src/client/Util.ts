@@ -48,6 +48,10 @@ export function getPlayerHref(playerId: string): string {
 	return `/players/${playerId}`
 }
 
+export function getBadgesHref(): string {
+	return "/badges"
+}
+
 export function getGameHref(gameId: string): string {
 	return `/games/${gameId}`
 }

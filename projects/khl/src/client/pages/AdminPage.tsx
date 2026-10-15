@@ -39,8 +39,7 @@ const AdminPage = () => {
 		<PageShell>
 			<div className="Admin">
 				<h1>Admin</h1>
-				<LoaderDemo />
-				<ErrorStatesDemo />
+				<StatesDemo />
 				<SimulatedLoadingPicker />
 				<BenchmarkRunner />
 			</div>
@@ -48,16 +47,29 @@ const AdminPage = () => {
 	)
 }
 
-type LoaderKind = "page" | "inline"
+type StateDemo =
+	| "page-loader"
+	| "inline-loader"
+	| "not-found"
+	| "page-error"
+	| "inline-error"
+	| "offline"
 
-const LOADER_KIND_OPTIONS: {value: LoaderKind; label: string}[] = [
-	{value: "page", label: "Page"},
-	{value: "inline", label: "Inline"},
+const STATE_DEMO_OPTIONS: {value: StateDemo; label: string}[] = [
+	{value: "page-loader", label: "Page loader"},
+	{value: "inline-loader", label: "Inline loader"},
+	{value: "not-found", label: "Not found"},
+	{value: "page-error", label: "Page error"},
+	{value: "inline-error", label: "Inline error"},
+	{value: "offline", label: "Offline"},
 ]
 
-/** Shows either loader in place, for a few seconds or until stopped. */
-const LoaderDemo = () => {
-	const [kind, setKind] = React.useState<LoaderKind>("page")
+/**
+ * Previews either loader (for a few seconds or until stopped), the not-found
+ * page, and ErrorState with sample errors.
+ */
+const StatesDemo = () => {
+	const [demo, setDemo] = React.useState<StateDemo>("page-loader")
 	const [loading, setLoading] = React.useState<"timed" | "hang" | null>(null)
 	const [runs, setRuns] = React.useState(0)
 	React.useEffect(() => {
@@ -70,75 +82,6 @@ const LoaderDemo = () => {
 		)
 		return () => clearTimeout(timer)
 	}, [loading, runs])
-	const start = (mode: "timed" | "hang") => {
-		setLoading(mode)
-		setRuns((n) => n + 1)
-	}
-	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Loaders
-			</h2>
-			<SegmentedControl<LoaderKind>
-				label="Loader"
-				options={LOADER_KIND_OPTIONS}
-				value={kind}
-				onChange={setKind}
-			/>
-			<div className="Admin-actions">
-				<button
-					type="button"
-					className="FilterPill"
-					onClick={() => start("timed")}
-				>
-					Load for {SIMULATED_LOADING_DELAY_MS / 1000}s
-				</button>
-				<button
-					type="button"
-					className="FilterPill"
-					onClick={() => start("hang")}
-				>
-					Load forever
-				</button>
-				<button
-					type="button"
-					className="FilterPill"
-					disabled={!loading}
-					onClick={() => setLoading(null)}
-				>
-					Stop
-				</button>
-			</div>
-			<div className="Admin-preview">
-				{loading ? (
-					// Keyed so each run replays the loader's fade-in
-					kind === "page" ? (
-						<PageLoader key={runs} />
-					) : (
-						<InlineLoader key={runs} />
-					)
-				) : (
-					<p className="Admin-note">
-						{runs ? "Loaded." : "Pick a button to show the loader."}
-					</p>
-				)}
-			</div>
-		</section>
-	)
-}
-
-type ErrorStateDemo = "not-found" | "page" | "inline" | "offline"
-
-const ERROR_STATE_OPTIONS: {value: ErrorStateDemo; label: string}[] = [
-	{value: "not-found", label: "Not found"},
-	{value: "page", label: "Page error"},
-	{value: "inline", label: "Inline error"},
-	{value: "offline", label: "Offline"},
-]
-
-/** Previews the not-found page and ErrorState, with sample errors. */
-const ErrorStatesDemo = () => {
-	const [demo, setDemo] = React.useState<ErrorStateDemo>("not-found")
 	// Made once, so ErrorState logs each sample only when it's first shown
 	const errors = React.useMemo(
 		() => ({
@@ -157,31 +100,77 @@ const ErrorStatesDemo = () => {
 		}),
 		[],
 	)
+	const isLoader = demo === "page-loader" || demo === "inline-loader"
+	const start = (mode: "timed" | "hang") => {
+		setLoading(mode)
+		setRuns((n) => n + 1)
+	}
 	return (
 		<section className="Detail-panel">
 			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Error states
+				Loading and error states
 			</h2>
 			<p className="Admin-note">
 				Errors are real ErrorStates, so showing one logs it like any
 				other.
 			</p>
-			<SegmentedControl<ErrorStateDemo>
-				label="Error state"
-				options={ERROR_STATE_OPTIONS}
+			<SegmentedControl<StateDemo>
+				label="State"
+				options={STATE_DEMO_OPTIONS}
 				value={demo}
 				onChange={setDemo}
 			/>
+			{isLoader && (
+				<div className="Admin-actions">
+					<button
+						type="button"
+						className="FilterPill"
+						onClick={() => start("timed")}
+					>
+						Load for {SIMULATED_LOADING_DELAY_MS / 1000}s
+					</button>
+					<button
+						type="button"
+						className="FilterPill"
+						onClick={() => start("hang")}
+					>
+						Load forever
+					</button>
+					<button
+						type="button"
+						className="FilterPill"
+						disabled={!loading}
+						onClick={() => setLoading(null)}
+					>
+						Stop
+					</button>
+				</div>
+			)}
 			<div className="Admin-preview">
+				{isLoader &&
+					(loading ? (
+						// Keyed so each run replays the loader's fade-in
+						demo === "page-loader" ? (
+							<PageLoader key={runs} />
+						) : (
+							<InlineLoader key={runs} />
+						)
+					) : (
+						<p className="Admin-note">
+							{runs
+								? "Loaded."
+								: "Pick a button to show the loader."}
+						</p>
+					))}
 				{demo === "not-found" && <NotFoundState size="inline" />}
-				{demo === "page" && (
+				{demo === "page-error" && (
 					<ErrorState
 						title="Couldn't load this page"
 						error={errors.server}
 						onRetry={() => {}}
 					/>
 				)}
-				{demo === "inline" && (
+				{demo === "inline-error" && (
 					<ErrorState
 						title="Couldn't load upcoming games"
 						error={errors.server}
@@ -250,7 +239,7 @@ function timingColumns<T>(
 		["open", "Open", "Until the search box shows"],
 		["results", "Results", "From typing the name until a result shows"],
 		["player", "Player", "From opening the result until stats show"],
-		["total", "Total", "Open, search and load the player"],
+		["total", "Total", "Open, search, and load the player"],
 	]
 	return steps.map(([step, header, title]) => ({
 		header,
@@ -317,7 +306,7 @@ const BenchmarkRunner = () => {
 			</h2>
 			<p className="Admin-note">
 				Opens khl.dvdzkwsk.com and the league's player search in
-				headless Chrome, searches each player and opens their page.
+				headless Chrome, searches each player, and opens their page.
 				Every run starts with an empty browser cache, but KHL+ caches on
 				its server: a player's first run is cold, so run again for warm
 				times. Takes about 5–15s per player.

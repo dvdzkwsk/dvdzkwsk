@@ -4,12 +4,16 @@ import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import {
 	GET_PLAYER_ENDPOINT,
+	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
+import {BadgeHint, BadgeIcon, getBadges} from "../Badges.js"
 import {
 	AsyncContent,
+	Hint,
+	Link,
 	PageShell,
 	PageTitle,
 	Picker,
@@ -21,7 +25,14 @@ import {
 	Warnings,
 } from "../Components.js"
 import {GameCards, HeroLastResults, HeroStatGroup, PastGames} from "../Games.js"
-import {AppContext, Route, RouteProps, useAsync, useNow} from "../Util.js"
+import {
+	AppContext,
+	getBadgesHref,
+	Route,
+	RouteProps,
+	useAsync,
+	useNow,
+} from "../Util.js"
 
 /** Keeps upcoming games to one row of cards */
 const MAX_UPCOMING_GAMES = 3
@@ -313,9 +324,56 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 						stats={totals(player.registrations, "Career Stats")}
 					/>
 					<HeroLastResults games={player.games} />
+					<PlayerBadges player={player} />
 				</div>
 			</div>
 		</header>
+	)
+}
+
+/**
+ * Recent penalties load separately, since they read a page per game; until
+ * they arrive (or if they fail), the Angel and Devil badges are left out.
+ */
+const PlayerBadges = ({player}: {player: PlayerResponse}) => {
+	const recent = useAsync(() => {
+		return doRequest(GET_PLAYER_RECENT_PENALTIES_ENDPOINT, {
+			playerId: player.playerId,
+		})
+	}, [player.playerId])
+	const badges = getBadges({
+		name: player.name,
+		gamesPlayed: sumStat(
+			player.registrations,
+			"Games Played",
+			"Career Stats",
+		),
+		recentPenalties: recent.status === "success" ? recent.data : null,
+	})
+	if (badges.length === 0) {
+		return null
+	}
+	return (
+		<section className="PlayerHero-group" aria-label="Badges">
+			<h2 className="PlayerHero-group-label">
+				<Link href={getBadgesHref()} className="PlayerBadges-link">
+					Badges
+				</Link>
+			</h2>
+			<ul className="PlayerBadges">
+				{badges.map((badge) => (
+					<Hint key={badge.id} label={<BadgeHint badge={badge} />}>
+						<li
+							className="PlayerBadges-badge"
+							tabIndex={0}
+							aria-label={`${badge.label}: ${badge.description}`}
+						>
+							<BadgeIcon badge={badge} />
+						</li>
+					</Hint>
+				))}
+			</ul>
+		</section>
 	)
 }
 
@@ -342,7 +400,7 @@ function toTeamItem(r: PlayerRegistration): PickerItem {
 const HISTORY_COLUMNS = ["GP", "G", "A", "PTS", "PIM"]
 
 interface HistoryRow extends KHLSeasonStatsRow {
-	/** "Regular Season", "Playoffs" or "Tournaments" */
+	/** "Regular Season", "Playoffs", or "Tournaments" */
 	type: string
 }
 

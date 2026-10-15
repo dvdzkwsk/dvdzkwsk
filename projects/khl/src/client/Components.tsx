@@ -1100,7 +1100,7 @@ export const ErrorState = ({
 	return (
 		<div className={cx("ErrorState", `ErrorState--${size}`)} role="alert">
 			{size === "page" ? (
-				<BrokenStick className="ErrorState-art" />
+				<MissedShot className="ErrorState-art" />
 			) : (
 				<AlertIcon />
 			)}
@@ -1179,33 +1179,6 @@ export const NotFoundState = ({
 	)
 }
 
-/** A hockey stick snapped in two, for a page that failed */
-const BrokenStick = ({className}: {className?: string}) => {
-	return (
-		<svg
-			className={cx("BrokenStick", className)}
-			viewBox="0 0 80 80"
-			aria-hidden="true"
-		>
-			<line className="BrokenStick-ice" x1="6" y1="72" x2="74" y2="72" />
-			{/* Handle, with tape on the knob */}
-			<path
-				className="BrokenStick-shaft"
-				d="M12.5 11.5L38.5 37.5L37 39.5L39.5 41.5L35.5 41L33.5 42.5L7.5 16.5Z"
-			/>
-			<path className="BrokenStick-tape" d="M11 15L17 21" />
-			{/* Lower shaft and blade */}
-			<path
-				className="BrokenStick-shaft"
-				d="M41.5 50.5L43 48.5L41 46.5L44.5 47L46.5 45.5L61 60H74Q77 60 77 62.5Q77 65 74 65H57Z"
-			/>
-			<g className="BrokenStick-splinters">
-				<path d="M38 46L35 49M44 42L47 39" />
-			</g>
-		</svg>
-	)
-}
-
 /**
  * A net, side on, mouth to the left: the front post is at x=168
  * and the ice at y=52.
@@ -1235,7 +1208,7 @@ export const GoalNet = ({className}: {className?: string}) => {
 	)
 }
 
-/** A shot that rang off the post and missed, for a page that isn't there */
+/** A shot that rang off the post and missed, for a page that isn't there or didn't load */
 const MissedShot = ({className}: {className?: string}) => {
 	return (
 		<svg
@@ -1375,7 +1348,7 @@ export function SegmentedControl<V extends string>({
 
 /**
  * Collapsed by default: a one-line summary of what's missing or wrong, which
- * expands into an explanation (`detail`), the affected `items` and an optional
+ * expands into an explanation (`detail`), the affected `items`, and an optional
  * retry.
  */
 export const Warnings = ({
@@ -1496,7 +1469,7 @@ export const ChevronIcon = () => {
 
 // --- Site header
 
-/** Brand (home link), search and nav, on every page. */
+/** Brand (home link), search, and nav, on every page. */
 export const SiteHeader = () => {
 	return (
 		<header className="SiteHeader">
@@ -1523,7 +1496,7 @@ const FOOTER_LINKS = [
 	{href: URLS.GITHUB, label: "GitHub ↗"},
 ]
 
-/** About, feedback and source links, on every page. */
+/** About, feedback, and source links, on every page. */
 export const SiteFooter = () => {
 	return (
 		<footer className="SiteFooter">
@@ -2094,7 +2067,7 @@ export const Hint = ({
 	label,
 	children,
 }: {
-	label: string | undefined
+	label: React.ReactNode
 	children: React.ReactElement
 }) => {
 	if (!label) {
@@ -2130,6 +2103,9 @@ export const LIVEBARN_TITLES = {
 	live: (surfaceName: string) => `Watch live on LiveBarn (${surfaceName})`,
 	replay: (surfaceName: string) =>
 		`Watch the replay on LiveBarn (${surfaceName})`,
+	/** A replay from about when a goal or penalty happened */
+	moment: (surfaceName: string) =>
+		`Watch this moment on LiveBarn (${surfaceName})`,
 }
 
 /** A pill linking out to a LiveBarn feed or replay. */

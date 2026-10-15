@@ -266,7 +266,7 @@ const MatchupContent = ({
 	)
 }
 
-/** One side's season and team pickers, logo and record. */
+/** One side's season and team pickers, logo, and record. */
 const MatchupSide = ({
 	side,
 	teams,

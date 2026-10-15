@@ -52,7 +52,7 @@ export const KHLTeamsPageSchema = z.object({
 	teams: z.array(KHLTeamSchema),
 }) satisfies z.ZodType<KHLTeamsPage>
 
-/** A name for matching: no accents, case or extra spaces */
+/** A name for matching: no accents, case, or extra spaces */
 export function normalizePlayerName(name: string): string {
 	return name
 		.normalize("NFKD")

@@ -35,6 +35,16 @@ export const LEAGUE = {
 	 * long.
 	 */
 	GAME_DURATION_MINUTES: 75,
+	/**
+	 * Three 18-minute periods: the first two on a running clock, the third
+	 * (and overtime) on stop time. Used to place scoresheet events in a
+	 * LiveBarn recording.
+	 */
+	PERIOD_MINUTES: 18,
+	/** From the scheduled start to puck drop */
+	WARMUP_MINUTES: 3,
+	/** Between periods; teams just change ends */
+	INTERMISSION_MINUTES: 1,
 }
 
 export const LIMITS = {
@@ -49,4 +59,8 @@ export const LIMITS = {
 	MATCHUP_RECENT_GAMES: 10,
 	/** How many of a season's meetings a matchup's head-to-head row shows */
 	MATCHUP_HEAD_TO_HEAD_GAMES: 5,
+	/** How many of a player's latest games the Angel and Devil badges judge */
+	BADGE_TREND_WINDOW: 50,
+	/** The fewest games in that window for the Angel or Devil badge */
+	BADGE_TREND_MIN_GAMES: 10,
 }

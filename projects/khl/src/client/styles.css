@@ -3,7 +3,7 @@
 /* === Theme === */
 
 :root {
-	/* Every spacing, size, weight and radius below comes from these scales.
+	/* Every spacing, size, weight, and radius below comes from these scales.
 	   Pick the nearest step rather than adding a one-off value. */
 	--spacing: 0.25rem;
 
@@ -606,8 +606,11 @@ table {
 	overflow-x: auto;
 }
 
+/* Separate borders so a hovered row's end cells can round their corners */
 .StatsTable {
 	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
 	font-size: var(--text-base);
 }
 
@@ -674,6 +677,20 @@ table {
 
 .StatsTable tbody tr:hover td {
 	background: var(--subtle-bg);
+}
+
+.StatsTable tbody tr:hover td:first-child {
+	border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+
+.StatsTable tbody tr:hover td:last-child {
+	border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* The rounded row replaces the dividers above and below it */
+.StatsTable tbody tr:hover td,
+.StatsTable tbody tr:has(+ tr:hover) td {
+	border-bottom-color: transparent;
 }
 
 .StatsTable th:first-child,
@@ -1526,10 +1543,6 @@ table {
 	margin-bottom: calc(var(--spacing) * 2);
 }
 
-.GameTable-row:has(.StretchedLink:hover) {
-	background: var(--subtle-bg);
-}
-
 .GameList-empty {
 	padding: calc(var(--spacing) * 8);
 	text-align: center;
@@ -1772,7 +1785,7 @@ table {
 .PlayerHero-identity {
 	display: flex;
 	flex-direction: column;
-	gap: calc(var(--spacing) * 2);
+	gap: calc(var(--spacing) * 4);
 }
 
 /* The name, with the position tagged on after it */
@@ -1838,6 +1851,37 @@ table {
 	font-size: var(--text-sm);
 	font-weight: var(--weight-regular);
 	color: var(--muted-fg);
+}
+
+/* Earned badges, after "Last 5": icons only, named in their popovers */
+.PlayerBadges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 2);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.PlayerBadges-badge {
+	display: flex;
+	border-radius: var(--radius-md);
+	cursor: default;
+}
+
+.PlayerBadges-badge:hover .BadgeIcon,
+.PlayerBadges-badge:focus-visible .BadgeIcon {
+	border-color: var(--card-hover-border);
+	background: var(--card-hover-bg);
+}
+
+.PlayerBadges-link {
+	color: inherit;
+	text-decoration: none;
+}
+
+.PlayerBadges-link:hover {
+	color: var(--site-fg);
 }
 
 .PlayerHero-stats {
@@ -2205,7 +2249,7 @@ table {
 
 /* === Game page === */
 
-/* Away | score, time and rink | home. Each side is tinted with its team's
+/* Away | score, time, and rink | home. Each side is tinted with its team's
    color (away blue, home orange), like the matchup page. */
 .BoxScore-header {
 	display: grid;
@@ -3057,7 +3101,7 @@ table {
 	justify-content: flex-end;
 }
 
-/* Hover card for a form chip: result and score, opponent, when and where */
+/* Hover card for a form chip: result and score, opponent, and when and where */
 .GamePreview {
 	display: flex;
 	flex-direction: column;
@@ -3201,7 +3245,7 @@ a.Compare-chip:hover {
 	font-weight: var(--weight-bold);
 }
 
-/* === Goal net, missed shot and broken stick === */
+/* === Goal net, missed shot, and broken stick === */
 
 .GoalNet-mesh {
 	stroke: var(--subtle-fg);
@@ -3226,8 +3270,7 @@ a.Compare-chip:hover {
 	overflow: visible;
 }
 
-.MissedShot-ice,
-.BrokenStick-ice {
+.MissedShot-ice {
 	stroke: var(--panel-border);
 	stroke-width: 2;
 	stroke-linecap: round;
@@ -3255,31 +3298,6 @@ a.Compare-chip:hover {
 
 .MissedShot-puck {
 	fill: var(--site-fg);
-}
-
-.BrokenStick {
-	height: auto;
-	aspect-ratio: 1;
-}
-
-.BrokenStick-shaft {
-	fill: var(--site-fg);
-	stroke: var(--site-fg);
-	stroke-width: 1;
-	stroke-linejoin: round;
-}
-
-/* Knob tape, a band across the handle */
-.BrokenStick-tape {
-	stroke: var(--live);
-	stroke-width: 9;
-}
-
-.BrokenStick-splinters {
-	fill: none;
-	stroke: var(--subtle-fg);
-	stroke-width: 1.5;
-	stroke-linecap: round;
 }
 
 /* === Not found state === */
@@ -3333,12 +3351,19 @@ a.Compare-chip:hover {
 	text-align: left;
 }
 
-/* A set width, so it doesn't grow when the details expand */
+/* Unboxed and stacked, art centered on top; a set width, so it doesn't grow
+   when the details expand */
 .ErrorState--page {
+	flex-direction: column;
+	align-items: center;
 	width: 560px;
 	max-width: 100%;
 	margin: calc(var(--spacing) * 12) auto;
-	padding: calc(var(--spacing) * 6);
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+	text-align: center;
 }
 
 .ErrorState-icon {
@@ -3350,15 +3375,25 @@ a.Compare-chip:hover {
 }
 
 .ErrorState-art {
-	flex: none;
-	width: 64px;
-	align-self: flex-start;
-	margin-right: calc(var(--spacing) * 2);
+	width: min(280px, 100%);
+	margin-bottom: calc(var(--spacing) * 2);
 }
 
 .ErrorState-body {
 	min-width: 0;
 	flex: 1;
+}
+
+.ErrorState--page .ErrorState-body {
+	width: 100%;
+}
+
+.ErrorState--page .ErrorState-actions {
+	justify-content: center;
+}
+
+.ErrorState--page .ErrorState-details code {
+	text-align: left;
 }
 
 .ErrorState-title {
@@ -3838,7 +3873,7 @@ a.Compare-chip:hover {
 }
 
 /* A scoreboard's team columns fit its longest name (set by GameTable): the
-   logo, its gap, the name and the cell's padding. The rink, or else the
+   logo, its gap, the name, and the cell's padding. The rink, or else the
    links, takes the rest. */
 .GameTable--scoreboard .GameTable-col--away,
 .GameTable--scoreboard .GameTable-col--home {
@@ -4508,6 +4543,108 @@ a.Compare-chip:hover {
 .AboutArt-key {
 	font-size: 10px;
 	fill: var(--muted-fg);
+}
+
+/* === Badges === */
+
+/* A badge's emoji in a rounded tile */
+.BadgeIcon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: calc(var(--spacing) * 10);
+	height: calc(var(--spacing) * 10);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-md);
+	background: var(--subtle-bg);
+	font-size: var(--text-2xl);
+	line-height: 1;
+}
+
+.BadgeHint {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 0.5);
+	color: var(--muted-fg);
+}
+
+.BadgeHint-label {
+	font-weight: var(--weight-semibold);
+	color: var(--site-fg);
+}
+
+/* === BadgesPage === */
+
+/* Sized like the help page, so the two read as a set */
+.BadgesPage {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 8);
+	max-width: 760px;
+}
+
+.BadgesPage-hero {
+	margin-top: calc(var(--spacing) * 6);
+}
+
+.BadgesPage-title {
+	margin: 0;
+	font-size: clamp(2rem, 5vw, 3rem);
+	font-weight: var(--weight-heavy);
+	line-height: 1.05;
+	letter-spacing: -0.025em;
+}
+
+.BadgesPage-lede {
+	margin: calc(var(--spacing) * 4) 0 0;
+	font-size: var(--text-xl);
+	line-height: 1.5;
+	color: var(--prose-fg);
+}
+
+.BadgesPage-section {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 3);
+}
+
+.BadgesPage-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.BadgesPage-badge {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+}
+
+.BadgesPage-badge + .BadgesPage-badge {
+	border-top: 1px solid var(--panel-border);
+}
+
+.BadgesPage-text {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 0.5);
+	min-width: 0;
+}
+
+.BadgesPage-label {
+	font-size: var(--text-md);
+	font-weight: var(--weight-semibold);
+}
+
+.BadgesPage-description,
+.BadgesPage-players {
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
 }
 
 /* === HelpPage === */

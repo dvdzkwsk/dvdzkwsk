@@ -263,6 +263,18 @@ export const TeamRosterSchema = z.object({
 	goalies: z.array(RosterPlayerSchema),
 }) satisfies z.ZodType<TeamRoster>
 
+/** Penalties a player took in their latest games, for the badges */
+export interface RecentPenalties {
+	/** Games the player dressed for, at most LIMITS.BADGE_TREND_WINDOW */
+	games: number
+	penalties: number
+}
+
+export const RecentPenaltiesSchema = z.object({
+	games: z.number().int().nonnegative(),
+	penalties: z.number().int().nonnegative(),
+}) satisfies z.ZodType<RecentPenalties>
+
 export interface PlayerResponse {
 	/** Our player UUID */
 	playerId: string
@@ -343,6 +355,14 @@ export const GET_PLAYER_ENDPOINT = {
 	requestSchema: GetPlayerRequestSchema,
 	responseSchema: PlayerResponseSchema,
 } satisfies ApiEndpoint<GetPlayerRequest, PlayerResponse>
+
+/** Penalties in the player's latest games; slow on a cold cache. */
+export const GET_PLAYER_RECENT_PENALTIES_ENDPOINT = {
+	method: "GET",
+	uri: "/api/players/:playerId/recent-penalties",
+	requestSchema: GetPlayerRequestSchema,
+	responseSchema: RecentPenaltiesSchema,
+} satisfies ApiEndpoint<GetPlayerRequest, RecentPenalties>
 
 export interface GetTeamRequest {
 	teamId: string
@@ -441,7 +461,7 @@ export const GetGameRequestSchema = z.object({
 	gameId: z.string().regex(/^\d+$/),
 }) satisfies z.ZodType<GetGameRequest>
 
-/** A game's box score: goals and shots by period, scoring and penalties. */
+/** A game's box score: goals and shots by period, scoring, and penalties. */
 export const GET_GAME_ENDPOINT = {
 	method: "GET",
 	uri: "/api/games/:gameId",
@@ -623,7 +643,7 @@ export interface RecentGame {
 	arena: KHLArenaRef | null
 	opponent: KHLTeamRef
 	homeAway: KHLHomeAway
-	/** "W", "L" or "T" */
+	/** "W", "L", or "T" */
 	result: string
 	goalsFor: number
 	goalsAgainst: number
@@ -642,7 +662,7 @@ export const RecentGameSchema = z.object({
 
 /**
  * A team's season (so far, if it's the current one, or up to a game), from
- * its schedule: record, goals and form.
+ * its schedule: record, goals, and form.
  */
 export interface SeasonSummary {
 	team: KHLTeam

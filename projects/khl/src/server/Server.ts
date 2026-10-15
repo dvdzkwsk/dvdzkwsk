@@ -20,6 +20,7 @@ import {
 	TeamsResponse,
 	HeadToHeadGame,
 	GET_PLAYER_ENDPOINT,
+	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	GET_RINK_ENDPOINT,
 	GET_STATUS_ENDPOINT,
@@ -42,6 +43,7 @@ import {
 	PlayerResponse,
 	PlayersResponse,
 	PlayerSearchGroup,
+	RecentPenalties,
 	SEARCH_ENDPOINT,
 	UnavailableSchedule,
 	SearchResponse,
@@ -58,7 +60,7 @@ import {
 } from "./Arenas.js"
 import {getCity} from "../shared/Cities.js"
 import {LIMITS} from "../shared/KHLConfig.js"
-import {openDatabase} from "./Database.js"
+import {openDatabase, Registration} from "./Database.js"
 import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
 import {
 	KHL_ALL_SEASONS,
@@ -81,6 +83,7 @@ import {
 	KHLBoxScoreTeam,
 	KHLGame,
 	KHLGamePreviewStats,
+	KHLGameStats,
 	KHLGameTeamStats,
 	KHLLeagueGame,
 	KHLScoreboardGame,
@@ -93,11 +96,7 @@ import {
 	KHLTeamsPage,
 	normalizePlayerName,
 } from "../shared/KHLJson.js"
-import {
-	getLiveBarnLiveUrl,
-	getLiveBarnVodUrl,
-	getLivebarnVenues,
-} from "./LiveBarn.js"
+import {getLivebarnVenues} from "./LiveBarn.js"
 import {
 	DAY_MS as DAY,
 	getLeagueDayKey,
@@ -105,6 +104,7 @@ import {
 	HOUR_MS as HOUR,
 	MINUTE_MS as MINUTE,
 } from "../shared/LeagueTime.js"
+import {getLiveBarnLiveUrl, getLiveBarnVodUrl} from "../shared/LiveBarn.js"
 import {LiveBarnSurface, LiveBarnVenue} from "../shared/LiveBarnJson.js"
 
 setLoggerTransports([new ConsoleTransport({verbose: true})])
@@ -214,6 +214,80 @@ registerEndpoint(app, SEARCH_ENDPOINT, async ({q}) => {
 })
 
 registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
+	const {player, registrations} = await getPlayerRegistrations(playerId)
+
+	const teamsPage = await getTeamsPage()
+	const currentSeason = teamsPage.season
+
+	// The KHL site 500s on some old pages, so one bad page shouldn't fail the
+	// whole player: missing profiles and schedules are skipped and reported.
+	const [profiles, schedules] = await Promise.all([
+		Promise.all(
+			registrations.map(async (r) => {
+				try {
+					return await getPlayer(
+						r.khlPlayerId,
+						r.teamId,
+						r.seasonIds.at(-1)!,
+					)
+				} catch (error) {
+					logger.warn("getPlayer", "KHL player page unavailable", {
+						khlPlayerId: r.khlPlayerId,
+						error,
+					})
+					return null
+				}
+			}),
+		),
+		getPlayerSchedules(registrations, teamsPage),
+	])
+
+	const response: PlayerResponse = {
+		playerId,
+		name: player.name,
+		currentSeason,
+		registrations: registrations.map((r, i) => {
+			return {
+				khlPlayerId: r.khlPlayerId,
+				teamId: r.teamId,
+				teamName: r.teamName,
+				teamLogoUrl: r.teamLogoUrl,
+				seasonIds: r.seasonIds,
+				profile: profiles[i] ?? null,
+			}
+		}),
+		games: await toFeedGames(schedules.games, [teamsPage]),
+		unavailableSchedules: schedules.unavailable,
+		upcoming: await getUpcomingGames(
+			new Set(
+				registrations
+					.filter((r) => r.seasonIds.includes(currentSeason.id))
+					.map((r) => r.teamId),
+			),
+		),
+	}
+	return response
+})
+
+// Separate from the player, since it reads a page per recent game
+registerEndpoint(
+	app,
+	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
+	async ({playerId}) => {
+		const {registrations} = await getPlayerRegistrations(playerId)
+		const schedules = await getPlayerSchedules(
+			registrations,
+			await getTeamsPage(),
+		)
+		return getRecentPenalties(
+			new Set(registrations.map((r) => r.khlPlayerId)),
+			schedules.games,
+		)
+	},
+)
+
+/** The player's registrations, most recently active first. */
+async function getPlayerRegistrations(playerId: string) {
 	const player = db.getPlayer(playerId)
 	if (!player) {
 		throw new ApiError(404, `player ${playerId} not found`)
@@ -232,30 +306,17 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 		.getRegistrations(playerId)
 		.filter((r) => r.seasonIds.length > 0)
 		.sort((a, b) => Number(b.seasonIds.at(-1)) - Number(a.seasonIds.at(-1)))
+	return {player, registrations}
+}
 
-	const teamsPage = await getTeamsPage()
-	const currentSeason = teamsPage.season
-
-	// The KHL site 500s on some old pages, so one bad page shouldn't fail the
-	// whole player: missing profiles and schedules are skipped and reported.
-	const profiles = await Promise.all(
-		registrations.map(async (r) => {
-			try {
-				return await getPlayer(
-					r.khlPlayerId,
-					r.teamId,
-					r.seasonIds.at(-1)!,
-				)
-			} catch (error) {
-				logger.warn("getPlayer", "KHL player page unavailable", {
-					khlPlayerId: r.khlPlayerId,
-					error,
-				})
-				return null
-			}
-		}),
-	)
-
+/**
+ * Every game of every team and season the player was on. A schedule the KHL
+ * site fails to load is skipped and reported in `unavailable`.
+ */
+async function getPlayerSchedules(
+	registrations: Registration[],
+	teamsPage: KHLTeamsPage,
+): Promise<{games: KHLGame[]; unavailable: UnavailableSchedule[]}> {
 	// One schedule per team per season the player was on it
 	const teamSeasons = new Map<
 		string,
@@ -270,14 +331,14 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 			})
 		}
 	}
-	const unavailableSchedules: UnavailableSchedule[] = []
+	const unavailable: UnavailableSchedule[] = []
 	const schedules = await Promise.all(
 		[...teamSeasons.values()].map(async ({teamId, teamName, seasonId}) => {
 			try {
 				return await getSchedule(
 					teamId,
 					seasonId,
-					seasonId === currentSeason.id,
+					seasonId === teamsPage.season.id,
 				)
 			} catch (error) {
 				logger.warn("getSchedule", "KHL schedule unavailable", {
@@ -285,7 +346,7 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 					seasonId,
 					error,
 				})
-				unavailableSchedules.push({
+				unavailable.push({
 					teamId,
 					teamName,
 					seasonId,
@@ -297,33 +358,84 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 			}
 		}),
 	)
+	return {games: schedules.flat(), unavailable}
+}
 
-	const response: PlayerResponse = {
-		playerId,
-		name: player.name,
-		currentSeason,
-		registrations: registrations.map((r, i) => {
-			return {
-				khlPlayerId: r.khlPlayerId,
-				teamId: r.teamId,
-				teamName: r.teamName,
-				teamLogoUrl: r.teamLogoUrl,
-				seasonIds: r.seasonIds,
-				profile: profiles[i] ?? null,
-			}
-		}),
-		games: await toFeedGames(schedules.flat(), [teamsPage]),
-		unavailableSchedules,
-		upcoming: await getUpcomingGames(
-			new Set(
-				registrations
-					.filter((r) => r.seasonIds.includes(currentSeason.id))
-					.map((r) => r.teamId),
-			),
+/**
+ * Penalties in the player's latest LIMITS.BADGE_TREND_WINDOW games. A team's
+ * schedule includes games the player sat out, so each game's stats page says
+ * whether they dressed. That's a fetch per game, so games are checked a window
+ * at a time, newest first, and at most two windows' worth. A game whose pages
+ * fail to load is skipped.
+ */
+async function getRecentPenalties(
+	khlPlayerIds: Set<string>,
+	games: KHLGame[],
+): Promise<RecentPenalties> {
+	const window = LIMITS.BADGE_TREND_WINDOW
+	const finalGameIds = [
+		...new Set(
+			games
+				.filter((game) => game.isFinal && game.id)
+				.sort((a, b) => b.startsAt.localeCompare(a.startsAt))
+				.map((game) => game.id!),
 		),
+	].slice(0, window * 2)
+	const isPlayer = (khlPlayerId: string) => khlPlayerIds.has(khlPlayerId)
+
+	const playedGameIds: string[] = []
+	for (
+		let i = 0;
+		i < finalGameIds.length && playedGameIds.length < window;
+		i += window
+	) {
+		const batch = finalGameIds.slice(i, i + window)
+		const played = await Promise.all(
+			batch.map(async (gameId) => {
+				const stats = await getGameStats(gameId).catch(
+					(error: unknown) => {
+						logger.warn(
+							"getRecentPenalties",
+							"game stats unavailable",
+							{gameId, error},
+						)
+						return null
+					},
+				)
+				return [stats?.away, stats?.home].some((team) => {
+					return [...(team?.skaters ?? []), ...(team?.goalies ?? [])]
+						.map((row) => row.playerId)
+						.some(isPlayer)
+				})
+			}),
+		)
+		playedGameIds.push(...batch.filter((_, j) => played[j]))
 	}
-	return response
-})
+
+	const boxScores = await Promise.all(
+		playedGameIds.slice(0, window).map((gameId) => {
+			return getBoxScore(gameId).catch((error: unknown) => {
+				logger.warn("getRecentPenalties", "box score unavailable", {
+					gameId,
+					error,
+				})
+				return null
+			})
+		}),
+	)
+	const counted = boxScores.filter((boxScore) => boxScore !== null)
+	return {
+		games: counted.length,
+		penalties: counted.reduce((total, boxScore) => {
+			return (
+				total +
+				boxScore.penalties.filter((penalty) => {
+					return penalty.player && isPlayer(penalty.player.id)
+				}).length
+			)
+		}, 0),
+	}
+}
 
 registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 	const [teamsPage, currentSeason] = await Promise.all([
@@ -1073,7 +1185,7 @@ type SeasonRecord = Pick<
 	| "streak"
 >
 
-/** Record, goals and form from a team's schedule (oldest first). */
+/** Record, goals, and form from a team's schedule (oldest first). */
 function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 	const record: SeasonRecord = {
 		gamesPlayed: 0,
@@ -1126,6 +1238,22 @@ function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 		record.streak = {result: last, count}
 	}
 	return record
+}
+
+function getGameStats(gameId: string): Promise<KHLGameStats> {
+	// Like box scores: check again soon until the lineups are posted
+	return cached(
+		`game-stats:${gameId}`,
+		10 * MINUTE,
+		() => {
+			return getKHLGameStats(gameId)
+		},
+		(stats) => {
+			const isPosted =
+				stats.away.skaters.length + stats.home.skaters.length > 0
+			return isPosted ? 6 * HOUR : 10 * MINUTE
+		},
+	)
 }
 
 function getBoxScore(gameId: string): Promise<KHLBoxScore> {
@@ -1346,11 +1474,7 @@ async function getGameLineups(
 	boxScore: KHLBoxScore,
 ): Promise<{away: TeamRoster; home: TeamRoster} | null> {
 	try {
-		const stats = await cached(
-			`game-stats:${boxScore.gameId}`,
-			10 * MINUTE,
-			() => getKHLGameStats(boxScore.gameId),
-		)
+		const stats = await getGameStats(boxScore.gameId)
 		const lineup = (team: KHLBoxScoreTeam, teamStats: KHLGameTeamStats) => {
 			return getRoster(team.id, team.name, team.logoUrl, {
 				...teamStats,

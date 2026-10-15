@@ -15,6 +15,7 @@ import {
 } from "./Components.js"
 import {AboutRoute} from "./pages/AboutPage.js"
 import {AdminRoute} from "./pages/AdminPage.js"
+import {BadgesRoute} from "./pages/BadgesPage.js"
 import {GameRoute} from "./pages/GamePage.js"
 import {HelpRoute} from "./pages/HelpPage.js"
 import {GamesRoute, HomeRoute} from "./pages/HomePage.js"
@@ -55,6 +56,7 @@ const ROUTES: Route[] = [
 	GameRoute,
 	PlayersRoute,
 	PlayerRoute,
+	BadgesRoute,
 	TeamsRoute,
 	TeamRoute,
 	RinkRoute,

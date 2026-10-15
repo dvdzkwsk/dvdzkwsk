@@ -57,7 +57,7 @@ const FAQ: Question[] = [
 		answer: (
 			<p>
 				No. It's run independently of the Kraken Hockey League. Every
-				schedule, score and stat comes from{" "}
+				schedule, score, and stat comes from{" "}
 				<Link href={URLS.KHL}>{LEAGUE_HOST} ↗</Link>, which is the
 				official record.
 			</p>
@@ -127,7 +127,7 @@ const FAQ: Question[] = [
 				<p>
 					Fill out the{" "}
 					<Link href={URLS.FEEDBACK_FORM}>feedback form ↗</Link>.
-					Bugs, wrong stats and ideas are all welcome.
+					Bugs, wrong stats, and ideas are all welcome.
 				</p>
 				<p>
 					For a problem, include a link to the page and what you

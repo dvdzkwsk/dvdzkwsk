@@ -47,7 +47,7 @@ const FEATURES: Feature[] = [
 		title: "Search everything",
 		text: (
 			<>
-				Players, teams and locations. Press <code>/</code> from anywhere
+				Players, teams, and locations. Press <code>/</code> from anywhere
 				to search.
 			</>
 		),
@@ -224,7 +224,7 @@ function FiltersArt() {
 	)
 }
 
-/** A player, a past game and a live game, each a tap from its feed */
+/** A player, a past game, and a live game, each a tap from its feed */
 function LiveBarnArt() {
 	const rows: [y: number, kind: "player" | "final" | "live"][] = [
 		[8, "player"],

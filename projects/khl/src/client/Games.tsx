@@ -1145,7 +1145,7 @@ export interface GameTableTeamInfo {
 
 /**
  * One game as a row of a GameTable. Every list of games (home page, rink,
- * team and player pages) maps its own data to this.
+ * team, and player pages) maps its own data to this.
  */
 export interface GameTableRow {
 	gameId: string | null
@@ -1800,7 +1800,7 @@ function headToHeadToRow(
 	}
 }
 
-/** Wins, ties and losses as one bar in the teams' colors, with a legend. */
+/** Wins, ties, and losses as one bar in the teams' colors, with a legend. */
 const SeriesRecord = ({
 	left,
 	right,

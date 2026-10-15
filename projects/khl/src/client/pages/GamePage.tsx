@@ -13,7 +13,11 @@ import {
 	KHLPlayerRef,
 } from "../../shared/KHLJson.js"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
-import {getGameEndsAt} from "../../shared/LeagueTime.js"
+import {
+	getGameEndsAt,
+	getGameEventLocalTime,
+} from "../../shared/LeagueTime.js"
+import {getLiveBarnVodUrl} from "../../shared/LiveBarn.js"
 import {
 	AsyncContent,
 	Hint,
@@ -138,7 +142,7 @@ const ResultView = ({game}: {game: GameResponse}) => {
 		return (
 			<>
 				<Notice title={STRINGS.SCORESHEET_NOT_POSTED}>
-					Scoring by period, goals, penalties and who played will show
+					Scoring by period, goals, penalties, and who played will show
 					here once it's up.
 				</Notice>
 				{game.rosters && (
@@ -491,6 +495,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 											: "away"
 									}
 									playerIds={game.playerIds}
+									replays={getEventReplays(game, event)}
 								/>
 							))}
 						</ol>
@@ -506,16 +511,26 @@ const TimelineItem = ({
 	team,
 	side,
 	playerIds,
+	replays,
 }: {
 	event: TimelineEvent
 	team: KHLBoxScoreTeam | undefined
 	/** Whose goal or penalty: colors it with that team's accent */
 	side: "away" | "home"
 	playerIds: Record<string, string>
+	replays: EventReplay[]
 }) => {
 	const avatar = team && (
 		<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={28} />
 	)
+	const replayLinks = replays.map((replay) => (
+		<LiveBarnBadge
+			key={replay.surfaceId}
+			compact
+			href={replay.href}
+			title={replay.title}
+		/>
+	))
 	if (event.kind === "penalty") {
 		const {penalty} = event
 		return (
@@ -544,6 +559,7 @@ const TimelineItem = ({
 					</div>
 				</div>
 				<span className="Timeline-tag">{penalty.duration}</span>
+				{replayLinks}
 			</li>
 		)
 	}
@@ -604,6 +620,7 @@ const TimelineItem = ({
 					{homeGoals}
 				</span>
 			</span>
+			{replayLinks}
 		</li>
 	)
 }
@@ -629,6 +646,35 @@ const PlayerName = ({
 	) : (
 		<>{player.name}</>
 	)
+}
+
+interface EventReplay {
+	surfaceId: number
+	href: string
+	title: string
+}
+
+/**
+ * LiveBarn replays from about when a goal or penalty happened, one per
+ * surface of the rink; none for shootouts.
+ */
+function getEventReplays(
+	game: GameResponse,
+	event: TimelineEvent,
+): EventReplay[] {
+	const at = getGameEventLocalTime(
+		game.boxScore,
+		getEventPeriod(event),
+		getEventTime(event),
+	)
+	if (!at) {
+		return []
+	}
+	return game.livebarn.map((link) => ({
+		surfaceId: link.surfaceId,
+		href: getLiveBarnVodUrl(link.surfaceId, at.localDate, at.localTime),
+		title: LIVEBARN_TITLES.moment(link.surfaceName),
+	}))
 }
 
 function getEventPeriod(event: TimelineEvent): string {

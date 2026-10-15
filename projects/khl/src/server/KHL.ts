@@ -176,7 +176,7 @@ export async function getKHLGamePreviewStats(
 	return KHLGamePreviewStatsSchema.parse(parseKHLGamePreviewStats(root))
 }
 
-/** The game's period-by-period score, goals and penalties. */
+/** The game's period-by-period score, goals, and penalties. */
 export async function getKHLBoxScore(gameId: string): Promise<KHLBoxScore> {
 	const url = new URL(`/game/${gameId}/summary`, URLS.KHL)
 	const root = await fetchKHLPage(url)
@@ -366,7 +366,7 @@ function parseKHLPlayer(
 		heading.parentNode?.querySelector(".text-tertiary")?.text.trim() || null
 
 	// Stat cards are grouped under the most recent "text-primary" heading:
-	// the selected season, "Career Highs" and "Career Stats".
+	// the selected season, "Career Highs", and "Career Stats".
 	const statSections: KHLStatSection[] = []
 	for (const el of root.querySelectorAll("h1.text-primary.p2, .card-body")) {
 		if (el.tagName === "H1") {
@@ -773,7 +773,7 @@ function parseKHLBoxScore(
 		throw newParseError(pageUrl, `missing main content`)
 	}
 
-	// The header lists away | time, rink and score | home. (Its mobile copy
+	// The header lists away | time, rink, and score | home. (Its mobile copy
 	// has broken markup that misnests the home team.)
 	const [awayCol, , homeCol] = main.querySelectorAll(".col.col_1")
 	const away = parseBoxScoreTeam(awayCol, pageUrl)

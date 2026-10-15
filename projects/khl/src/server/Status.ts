@@ -32,13 +32,13 @@ function getComponents(db: KHLDatabase): Component[] {
 		{
 			id: "app",
 			name: `${STRINGS.PRODUCT_NAME} website & API`,
-			description: "This site, its server and its database.",
+			description: "This site, its server, and its database.",
 			check: async () => db.ping(),
 		},
 		{
 			id: "league",
 			name: "Kraken Hockey League site",
-			description: `${new URL(URLS.KHL).host}, where every schedule, score and stat comes from.`,
+			description: `${new URL(URLS.KHL).host}, where every schedule, score, and stat comes from.`,
 			check: () => checkUrl(URLS.KHL),
 		},
 		{
@@ -150,7 +150,7 @@ function getHistoryDays(now: Date): string[] {
 }
 
 /**
- * Deploys set KHL_COMMIT_SHA, KHL_COMMIT_DIRTY and KHL_DEPLOYED_AT (see
+ * Deploys set KHL_COMMIT_SHA, KHL_COMMIT_DIRTY, and KHL_DEPLOYED_AT (see
  * tools/Build.ts). Without them, e.g. in dev, ask git directly.
  */
 function getDeployInfo(): DeployInfo {

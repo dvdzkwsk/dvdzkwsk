@@ -365,7 +365,7 @@ const Legend = () => {
 	)
 }
 
-/** A check, a dash or a cross in a circle, so status isn't color alone */
+/** A check, a dash, or a cross in a circle, so status isn't color alone */
 const StatusIcon = ({level, size}: {level: StatusLevel; size: number}) => {
 	return (
 		<svg

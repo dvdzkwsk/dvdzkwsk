@@ -19,7 +19,7 @@ import {
 import {AppContext, Route, RouteProps, useAsync, useNow} from "../Util.js"
 
 /**
- * Every upcoming game in the league, filterable by day, rink and division.
+ * Every upcoming game in the league, filterable by day, rink, and division.
  * Past days (or a range reaching into the past) show their results too.
  */
 const HomePage = ({query}: RouteProps) => {

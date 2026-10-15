@@ -1,12 +1,12 @@
 # KHL+ instructions
 
-To run, smoke-test, typecheck or screenshot the app, use the `run-khl` skill.
+To run, smoke-test, typecheck, or screenshot the app, use the `run-khl` skill.
 
 ## Layout
 
 - `src/server/KHL.ts` scrapes krakenhockeyleague.com: one `getKHL*` per page, each with a `parseKHL*` function. `Server.ts` caches those pages and builds API responses from them.
-- `src/shared/` is imported by both sides: API contracts (`ApiJson.ts`), scraped shapes (`KHLJson.ts`), settings (`KHLConfig.ts`) and league-local time (`LeagueTime.ts`).
-- `src/client/`: `Components.tsx` holds generic UI, `Games.tsx` holds game lists, cards and tables, `Util.ts` holds hooks, formatting and links, and `pages/` has one route per file.
+- `src/shared/` is imported by both sides: API contracts (`ApiJson.ts`), scraped shapes (`KHLJson.ts`), settings (`KHLConfig.ts`), league-local time (`LeagueTime.ts`), and LiveBarn watch URLs (`LiveBarn.ts`).
+- `src/client/`: `Components.tsx` holds generic UI, `Games.tsx` holds game lists, cards, and tables, `Util.ts` holds hooks, formatting, and links, and `pages/` has one route per file.
 
 ## Server
 
@@ -14,15 +14,15 @@ To run, smoke-test, typecheck or screenshot the app, use the `run-khl` skill.
 - Extras that a page can render without (preview stats, rosters, LiveBarn checks) are wrapped so that a KHL failure logs a `warn` and returns null or `[]` instead of failing the request.
 - Errors that reach the Express error middleware are logged there. A `FetchError` (the KHL or LiveBarn site failed) returns 502, and anything else returns 500.
 - Every KHL fetch goes through `cached(...)`. Use `getSeasonTtl(isCurrentSeason)` for season-scoped pages.
-- League-local dates and times come from `shared/LeagueTime.ts` (`getLeagueDayKey`, `toLeagueInstant`, `getGameEndsAt`, `isGameInProgress`, `DAY_MS` and the other duration constants). Don't build another `Intl.DateTimeFormat` for the league's time zone or write `24 * 60 * 60_000` inline.
-- Reuse the existing parsing helpers: `parseClockTime`, `parseArenaLink`, `readStatCells`, `parseSeasonMenus`, and the `TEAM_HREF`, `PLAYER_HREF`, `GAME_HREF` and `ARENA_HREF` patterns.
+- League-local dates and times come from `shared/LeagueTime.ts` (`getLeagueDayKey`, `toLeagueInstant`, `getGameEndsAt`, `isGameInProgress`, `getGameEventLocalTime`, `DAY_MS`, and the other duration constants). Don't build another `Intl.DateTimeFormat` for the league's time zone or write `24 * 60 * 60_000` inline.
+- Reuse the existing parsing helpers: `parseClockTime`, `parseArenaLink`, `readStatCells`, `parseSeasonMenus`, and the `TEAM_HREF`, `PLAYER_HREF`, `GAME_HREF`, and `ARENA_HREF` patterns.
 - Look up teams with `findListedTeam` and `getListedDivisionName`, the current season with `getCurrentSeason()`, and rinks with `getRinkInfoOrFallback`.
 
 ## Client
 
 - Async data loads through `useAsync` and renders with `AsyncContent`. `useAsync` and `ErrorState` already log failures, so don't add another log call.
 - Set a page's `<title>` with `<PageTitle>`, not with `Helmet` directly.
-- Make in-app links with `Link`, `TeamLink`, `RinkLink` and the `get*Href` helpers in `Util.ts`.
+- Make in-app links with `Link`, `TeamLink`, `RinkLink`, and the `get*Href` helpers in `Util.ts`.
 - Word LiveBarn link tooltips with `LIVEBARN_TITLES`. Build a finished game's replay links with `toReplayLinks`.
 - Render every list of games with `GameTable` by mapping the data to `GameTableRow`. For a few options, use `SegmentedControl`. For a dropdown, use `Picker`. For a tooltip, use `Hint` (never a native `title`).
 - Format scores through `formatScore` / `formatKHLScore`, and dates and times through the `format*` helpers in `Util.ts`.

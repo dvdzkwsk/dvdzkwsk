@@ -1,7 +1,6 @@
 import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {Helmet} from "react-helmet"
 import {
 	GET_MATCHUP_ENDPOINT,
 	LIST_TEAM_SEASONS_ENDPOINT,
@@ -11,20 +10,19 @@ import {
 	TeamsResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeason, KHLTeam} from "../../shared/KHLJson.js"
-import {STRINGS} from "../../shared/KHLConfig.js"
 import {
 	AsyncContent,
 	ErrorState,
 	Hint,
 	PageShell,
+	PageTitle,
 	Picker,
 	RosterPanels,
 	RosterTables,
 	TeamAvatar,
-	TopScorers,
 } from "../Components.js"
 import {Comparison} from "../Compare.js"
-import {GameCards, HeadToHead} from "../Games.js"
+import {GameCards, HeadToHeadGames, TeamForm} from "../Games.js"
 import {
 	AppContext,
 	AsyncState,
@@ -87,14 +85,11 @@ const MatchupPage = ({query}: RouteProps) => {
 	return (
 		<PageShell>
 			<div className="Detail">
-				<Helmet>
-					<title>
-						{teamA && teamB
-							? `${teamA.name} vs ${teamB.name}`
-							: "Matchup"}{" "}
-						| {STRINGS.PRODUCT_NAME}
-					</title>
-				</Helmet>
+				<PageTitle>
+					{teamA && teamB
+						? `${teamA.name} vs ${teamB.name}`
+						: "Matchup"}
+				</PageTitle>
 				<header className={cx("Detail-header", "Matchup-header")}>
 					<MatchupSide
 						side="a"
@@ -240,28 +235,20 @@ const MatchupContent = ({
 								/>
 							</section>
 						)}
-						<Comparison matchup={matchup} />
+						{/* The same sections as a game's preview */}
+						<Comparison
+							a={matchup.a}
+							b={matchup.b}
+							previewStats={matchup.previewStats}
+						/>
 						{matchup.a.team.id !== matchup.b.team.id && (
-							<HeadToHead
+							<HeadToHeadGames
 								left={matchup.a.team}
 								right={matchup.b.team}
 								games={matchup.headToHead}
 								now={now}
 							/>
 						)}
-						<TopScorers
-							title="Top scorers"
-							teams={[
-								{
-									name: matchup.a.team.name,
-									roster: matchup.a.roster,
-								},
-								{
-									name: matchup.b.team.name,
-									roster: matchup.b.roster,
-								},
-							]}
-						/>
 						<RosterPanels
 							teams={[matchup.a, matchup.b].map((side) => ({
 								team: side.team,
@@ -352,14 +339,9 @@ const MatchupSide = ({
 					)
 				}
 			/>
-			{stats && (
-				<div className="Detail-meta">
-					<span>{stats.divisionName}</span>
-					<span>
-						{stats.wins}-{stats.losses}-{stats.ties}
-					</span>
-				</div>
-			)}
+			{/* As under a team in a game's header, minus the division: the
+			    pickers above already say it */}
+			{stats && <TeamForm form={stats} showDivision={false} />}
 		</div>
 	)
 }
@@ -412,8 +394,8 @@ const MatchupEmpty = () => {
 						<span className="Matchup-feature-title">
 							Season stats
 						</span>
-						Record, goals for and against, form and streaks, side by
-						side.
+						Record and recent form, then goals, special teams and
+						shots, side by side.
 					</span>
 				</li>
 				<li className="Matchup-feature">
@@ -428,10 +410,8 @@ const MatchupEmpty = () => {
 				<li className="Matchup-feature">
 					<PlayersIcon />
 					<span>
-						<span className="Matchup-feature-title">
-							Leaders and rosters
-						</span>
-						Each team's top scorers and full roster.
+						<span className="Matchup-feature-title">Rosters</span>
+						Each team's players and goalies, by points.
 					</span>
 				</li>
 			</ul>

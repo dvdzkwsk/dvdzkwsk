@@ -3,6 +3,7 @@ import * as path from "path"
 import {search} from "@inquirer/prompts"
 import crossSpawn from "cross-spawn"
 import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
+import {getGitRevision} from "../pkg/util/GitUtil.js"
 import {Logger} from "../pkg/logger/Logger.js"
 
 const logger = new Logger("Build")
@@ -118,7 +119,11 @@ function devWebApp(project: Project) {
 function buildWebApp(project: Project): string {
 	const outdir = path.join(project.path, "dist/website")
 	fs.rmSync(outdir, {recursive: true, force: true})
-	run("vite", ["build", "--config", path.join(project.path, "vite.config.js")])
+	run("vite", [
+		"build",
+		"--config",
+		path.join(project.path, "vite.config.js"),
+	])
 	if (!fs.existsSync(path.join(outdir, "index.html"))) {
 		throw logger.newError("buildWebApp", "build produced no index.html", {
 			outdir,
@@ -178,10 +183,39 @@ function deployToFly(project: Project) {
 	buildWebApp(project)
 	run(
 		"bun",
-		["build", project.server, "--target", "bun", "--outfile", "dist/server.js"],
+		[
+			"build",
+			project.server,
+			"--target",
+			"bun",
+			"--outfile",
+			"dist/server.js",
+		],
 		{cwd: project.path},
 	)
-	run("fly", ["deploy", "--app", config.app], {cwd: project.path})
+	// The server reports these on /api/health and the status page. The
+	// project and the shared packages are what go into the build.
+	const revision = getGitRevision(project.path, [".", "../../pkg"])
+	if (!revision) {
+		throw logger.newError("deployToFly", "can't read the git commit", {
+			project: project.path,
+		})
+	}
+	run(
+		"fly",
+		[
+			"deploy",
+			"--app",
+			config.app,
+			"--env",
+			`KHL_COMMIT_SHA=${revision.commit}`,
+			"--env",
+			`KHL_COMMIT_DIRTY=${revision.dirty}`,
+			"--env",
+			`KHL_DEPLOYED_AT=${new Date().toISOString()}`,
+		],
+		{cwd: project.path},
+	)
 }
 
 interface FlyConfig {
@@ -230,7 +264,8 @@ function ensureFlyResources(config: FlyConfig) {
 	}
 
 	// flyctl's JSON casing differs between commands; accept either
-	const nameOf = (item: {Name?: string; name?: string}) => item.Name ?? item.name
+	const nameOf = (item: {Name?: string; name?: string}) =>
+		item.Name ?? item.name
 	const apps = JSON.parse(
 		capture("fly", ["apps", "list", "--json"]) ?? "[]",
 	) as {Name?: string; name?: string}[]
@@ -241,7 +276,13 @@ function ensureFlyResources(config: FlyConfig) {
 
 	if (config.volume) {
 		const volumes = JSON.parse(
-			capture("fly", ["volumes", "list", "--app", config.app, "--json"]) ?? "[]",
+			capture("fly", [
+				"volumes",
+				"list",
+				"--app",
+				config.app,
+				"--json",
+			]) ?? "[]",
 		) as {Name?: string; name?: string}[]
 		if (!volumes.some((v) => nameOf(v) === config.volume!.name)) {
 			logger.info("ensureFlyResources", "creating Fly volume", {

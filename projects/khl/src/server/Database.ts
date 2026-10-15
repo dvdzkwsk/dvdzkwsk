@@ -2,7 +2,8 @@ import {Database as SQLiteDatabase} from "bun:sqlite"
 import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
-import {KHLPlayerSearchResult} from "../shared/KHLJson.js"
+import {StatusCheck, StatusDay, StatusLevel} from "../shared/ApiJson.js"
+import {KHLPlayerSearchResult, normalizePlayerName} from "../shared/KHLJson.js"
 
 const logger = new Logger("Database")
 
@@ -59,6 +60,20 @@ const MIGRATIONS = [
 		PRIMARY KEY (khl_player_id, season_id)
 	);
 	`,
+	`
+	-- One row per component per run of the status checker (see Status.ts)
+	CREATE TABLE status_checks (
+		component TEXT NOT NULL,
+		checked_at TEXT NOT NULL,
+		-- League-local "yyyy-MM-dd", which the status page groups by
+		day TEXT NOT NULL,
+		status TEXT NOT NULL,
+		latency_ms INTEGER,
+		error TEXT
+	);
+	CREATE INDEX status_checks_day ON status_checks (day, component);
+	CREATE INDEX status_checks_component ON status_checks (component, checked_at);
+	`,
 ]
 
 export function openDatabase(filepath: string) {
@@ -83,15 +98,6 @@ function migrate(db: SQLiteDatabase) {
 	}
 }
 
-export function normalizePlayerName(name: string): string {
-	return name
-		.normalize("NFKD")
-		.replace(/[̀-ͯ]/g, "")
-		.trim()
-		.replace(/\s+/g, " ")
-		.toLowerCase()
-}
-
 interface RegistrationRow {
 	khl_player_id: string
 	player_id: string
@@ -101,6 +107,14 @@ interface RegistrationRow {
 	team_name: string
 	team_logo_url: string | null
 	season_ids: string | null
+}
+
+interface StatusCheckRow {
+	component: string
+	checked_at: string
+	status: string
+	latency_ms: number | null
+	error: string | null
 }
 
 export class KHLDatabase {
@@ -177,6 +191,84 @@ export class KHLDatabase {
 			}
 		})()
 		return playerIds
+	}
+
+	/** A database round trip, for the status checker */
+	ping(): void {
+		this.db.query("SELECT 1").get()
+	}
+
+	recordStatusCheck(check: StatusCheck & {component: string; day: string}) {
+		this.db
+			.query(
+				`INSERT INTO status_checks
+					(component, checked_at, day, status, latency_ms, error)
+				VALUES ($component, $checkedAt, $day, $status, $latencyMs, $error)`,
+			)
+			.run({
+				component: check.component,
+				checkedAt: check.checkedAt,
+				day: check.day,
+				status: check.status,
+				latencyMs: check.latencyMs,
+				error: check.error,
+			})
+	}
+
+	/** Each component's latest check */
+	getLatestStatusChecks(): Map<string, StatusCheck> {
+		const rows = this.db
+			.query<StatusCheckRow, []>(
+				`SELECT c.* FROM status_checks c
+				JOIN (
+					SELECT component, max(checked_at) AS checked_at
+					FROM status_checks GROUP BY component
+				) latest USING (component, checked_at)`,
+			)
+			.all()
+		return new Map(
+			rows.map((row) => [
+				row.component,
+				{
+					checkedAt: row.checked_at,
+					status: row.status as StatusLevel,
+					latencyMs: row.latency_ms,
+					error: row.error,
+				},
+			]),
+		)
+	}
+
+	/** Check counts by component and day, from `fromDay` on */
+	getStatusDays(fromDay: string): Map<string, StatusDay[]> {
+		const rows = this.db
+			.query<
+				{
+					component: string
+					day: string
+					checks: number
+					degraded: number
+					outages: number
+				},
+				{fromDay: string}
+			>(
+				`SELECT component, day, count(*) AS checks,
+					sum(status = 'degraded') AS degraded,
+					sum(status = 'outage') AS outages
+				FROM status_checks WHERE day >= $fromDay
+				GROUP BY component, day ORDER BY day`,
+			)
+			.all({fromDay})
+		const days = new Map<string, StatusDay[]>()
+		for (const {component, ...day} of rows) {
+			days.set(component, [...(days.get(component) ?? []), day])
+		}
+		return days
+	}
+
+	/** Drops checks from before `day`, which the status page no longer shows */
+	pruneStatusChecks(day: string): void {
+		this.db.query("DELETE FROM status_checks WHERE day < $day").run({day})
 	}
 
 	private findPlayerIdForRegistration(khlPlayerId: string): string | null {

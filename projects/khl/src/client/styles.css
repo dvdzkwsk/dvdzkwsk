@@ -3,15 +3,49 @@
 /* === Theme === */
 
 :root {
+	/* Every spacing, size, weight and radius below comes from these scales.
+	   Pick the nearest step rather than adding a one-off value. */
 	--spacing: 0.25rem;
-	--radius: 14px;
-	--radius-sm: 8px;
+
+	--radius-2xs: 3px; /* swatches, tiny keys */
+	--radius-xs: 4px; /* bars, small chips */
+	--radius-sm: 6px; /* buttons, inputs, chips */
+	--radius-md: 8px; /* popups, inner boxes */
+	--radius: 14px; /* panels and cards */
+	--radius-pill: 999px;
+
+	--text-3xs: 0.625rem; /* 10px */
+	--text-2xs: 0.6875rem; /* 11px */
+	--text-xs: 0.75rem; /* 12px */
+	--text-sm: 0.8125rem; /* 13px: labels, meta */
+	--text-base: 0.875rem; /* 14px: body text */
+	--text-md: 0.9375rem; /* 15px */
+	--text-lg: 1rem; /* 16px */
+	--text-xl: 1.125rem; /* 18px */
+	--text-2xl: 1.25rem; /* 20px */
+	--text-3xl: 1.5rem; /* 24px */
+	--text-4xl: 1.75rem; /* 28px */
+	--text-5xl: 2rem; /* 32px: page titles */
+	--text-display: 2.75rem; /* 44px: the box score */
+
+	--weight-regular: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+	--weight-bold: 700;
+	--weight-heavy: 800;
 
 	/* Neutral, near-monochrome palette; red is reserved for "live" */
 	--site-bg: #eef3f8; /* "ice": a faint blue-white */
 	--site-fg: #0a0a0b;
 	--muted-fg: #71717a;
 	--subtle-fg: #a1a1aa;
+	/* Paragraphs of text: --muted-fg is too faint to read at length */
+	--prose-fg: #3f3f46;
+	--prose-link: #1d4ed8;
+	/* Status page: good, slow, down (status bars, icons, banners) */
+	--status-ok: #15803d;
+	--status-slow: #e8a10c;
+	--status-down: #c81e1e;
 	--panel-bg: #ffffff;
 	--panel-border: #d8dee7;
 	--subtle-bg: #f2f5f9;
@@ -19,6 +53,7 @@
 	--accent-fg: #ffffff;
 	--link: #2563eb;
 	--live: #e5484d;
+	--live-fg: #ffffff;
 	--live-bg: #fdecec;
 	--win: #15803d;
 	--win-bg: #e7f6ec;
@@ -30,6 +65,7 @@
 	   deficiency and contrast on --panel-bg) */
 	--team-a: #2a78d6;
 	--team-b: #eb6834;
+	--ice-shine: #cfe3fa; /* fresh ice behind the Zamboni */
 
 	--header-bg: rgb(255 255 255 / 0.85);
 	--chip-bg: rgb(10 10 11 / 0.06);
@@ -42,6 +78,11 @@
 	--kind-rink-bg: #e6f6f1;
 	--kind-rink-fg: #0f766e;
 	--info-bg: #f1f6ff;
+	/* Logos are drawn for white, so they sit on white in both themes */
+	--logo-bg: #ffffff;
+	/* Hovered cards: a firmer edge (shadows barely show in dark mode) */
+	--card-hover-bg: #ffffff;
+	--card-hover-border: #b9c3d0;
 	--warn-bg: #fff8eb;
 	--warn-border: #f5dcaa;
 	--warn-fg: #b45309;
@@ -65,6 +106,11 @@
 	--site-fg: #ececef;
 	--muted-fg: #a1a1aa;
 	--subtle-fg: #71717a;
+	--prose-fg: #d4d4d8;
+	--prose-link: #6ea8fe;
+	--status-ok: #30a46c;
+	--status-slow: #e2a336;
+	--status-down: #e5484d;
 	--panel-bg: #141a21;
 	--panel-border: #262f3a;
 	--subtle-bg: #1b222b;
@@ -80,6 +126,7 @@
 	--tie-bg: #24272d;
 	--team-a: #3987e5;
 	--team-b: #d95926;
+	--ice-shine: #1b3550;
 
 	--header-bg: rgb(11 15 20 / 0.85);
 	--chip-bg: rgb(255 255 255 / 0.08);
@@ -92,6 +139,9 @@
 	--kind-rink-bg: #042f2e;
 	--kind-rink-fg: #5eead4;
 	--info-bg: #111c2e;
+	/* Same fill, or the time box inside would vanish; just a bright edge */
+	--card-hover-bg: #141a21;
+	--card-hover-border: #56657a;
 	--warn-bg: #261b0b;
 	--warn-border: #4a3413;
 	--warn-fg: #fbbf24;
@@ -153,15 +203,25 @@ table {
 /* Small muted heading used for card and section titles */
 .SectionLabel {
 	margin: 0;
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
 	letter-spacing: 0;
 	color: var(--muted-fg);
 }
 
 /* === Shell === */
 
+/* Header, page, footer: the footer sits at the bottom of short pages */
+#root {
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+	min-height: 100dvh;
+}
+
 .PageShell {
+	flex: 1 0 auto;
+	width: 100%;
 	max-width: 1200px;
 	margin: 0 auto;
 	padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
@@ -177,9 +237,9 @@ table {
 .PageShell-home {
 	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
 	margin-left: calc(var(--spacing) * -3);
-	border-radius: 999px;
-	font-size: 0.875rem;
-	font-weight: 500;
+	border-radius: var(--radius-pill);
+	font-size: var(--text-base);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
@@ -189,14 +249,16 @@ table {
 	text-decoration: none;
 }
 
-/* === Loader === */
+/* === PageLoader === */
 
-.Loader {
+.PageLoader {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	gap: calc(var(--spacing) * 3);
+	/* Centered in the viewport below the header */
+	min-height: calc(100dvh - 220px);
 	padding: calc(var(--spacing) * 8) calc(var(--spacing) * 4);
 	color: var(--muted-fg);
 	text-align: center;
@@ -204,94 +266,20 @@ table {
 	animation: Loader-appear 0.3s 0.15s ease-out both;
 }
 
-/* Centered in the viewport below the header */
-.Loader--page {
-	min-height: calc(100dvh - 220px);
-}
-
-.Loader-rink {
-	width: min(320px, 100%);
-	height: auto;
-	aspect-ratio: 200 / 64;
-	overflow: visible;
-}
-
-.Loader--inline .Loader-rink {
-	width: 200px;
-}
-
-.Loader-label {
+.PageLoader-label {
 	color: var(--site-fg);
-	font-size: 1.0625rem;
-	font-weight: 500;
-}
-
-.Loader--inline .Loader-label {
-	color: var(--muted-fg);
-	font-size: 0.9375rem;
-	font-weight: 400;
+	font-size: var(--text-xl);
+	font-weight: var(--weight-medium);
 }
 
 /* Reserves its line so the loader doesn't jump when the note appears */
-.Loader-note {
+.PageLoader-note {
 	min-height: 1.25rem;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	animation: Loader-appear 0.4s ease-out;
 }
 
-.Loader-ice {
-	stroke: var(--panel-border);
-	stroke-width: 2;
-	stroke-linecap: round;
-}
-
-.Loader-crease {
-	fill: var(--team-a);
-	opacity: 0.15;
-}
-
-.Loader-mesh {
-	stroke: var(--subtle-fg);
-	stroke-width: 0.6;
-	fill: none;
-}
-
-.Loader-netting {
-	opacity: 0.8;
-}
-
-.Loader-frame {
-	fill: none;
-	stroke: var(--live);
-	stroke-width: 2.5;
-	stroke-linejoin: round;
-}
-
-.Loader-net {
-	transform-box: fill-box;
-	transform-origin: left bottom;
-	animation: Loader-net 1.8s ease-out infinite;
-}
-
-.Loader-puck {
-	fill: var(--site-fg);
-	animation: Loader-puck 1.8s infinite;
-}
-
-.Loader-streak {
-	stroke: var(--subtle-fg);
-	stroke-width: 1.5;
-	stroke-linecap: round;
-	animation: Loader-streak 1.8s infinite;
-}
-
-.Loader-spray {
-	fill: var(--subtle-fg);
-	transform-box: fill-box;
-	transform-origin: right bottom;
-	animation: Loader-spray 1.8s ease-out infinite;
-}
-
+/* Shared by both loaders */
 @keyframes Loader-appear {
 	from {
 		opacity: 0;
@@ -299,96 +287,180 @@ table {
 	}
 }
 
-/* Slide in from the left, accelerate into the net, settle, fade, repeat */
-@keyframes Loader-puck {
+/* === ZamboniLap === */
+
+.ZamboniLap {
+	width: min(280px, 100%);
+	height: auto;
+	aspect-ratio: 2;
+	overflow: visible;
+}
+
+.ZamboniLap-boards {
+	fill: none;
+	stroke: var(--panel-border);
+	stroke-width: 2;
+}
+
+.ZamboniLap-blue-line {
+	stroke: var(--team-a);
+	stroke-width: 1.5;
+	opacity: 0.45;
+}
+
+.ZamboniLap-red-line {
+	stroke: var(--live);
+	stroke-width: 1.5;
+	opacity: 0.45;
+}
+
+.ZamboniLap-faceoff {
+	fill: none;
+	stroke: var(--live);
+	stroke-width: 1;
+	opacity: 0.35;
+}
+
+/* Fresh ice: drawn in behind the Zamboni, then fades for the next lap */
+.ZamboniLap-trail {
+	fill: none;
+	stroke: var(--ice-shine);
+	stroke-width: 12;
+	stroke-linecap: round;
+	stroke-dasharray: 100 100;
+	animation: ZamboniLap-trail 5s linear infinite;
+}
+
+.ZamboniLap-zamboni {
+	offset-rotate: auto;
+	animation: ZamboniLap-lap 5s linear infinite;
+}
+
+.ZamboniLap-body {
+	fill: var(--site-fg);
+}
+
+.ZamboniLap-tank {
+	fill: var(--panel-bg);
+	stroke: var(--site-fg);
+	stroke-width: 1.5;
+}
+
+.ZamboniLap-stripe {
+	fill: var(--team-a);
+}
+
+.ZamboniLap-driver {
+	fill: var(--panel-bg);
+}
+
+/* A lap, then a beat at the start line while the trail fades */
+@keyframes ZamboniLap-lap {
 	0% {
-		transform: translateX(10px);
-		opacity: 0;
-		animation-timing-function: ease-out;
+		offset-distance: 0%;
 	}
-	10% {
-		transform: translateX(20px);
-		opacity: 1;
-		animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
-	}
-	52% {
-		transform: translateX(166px);
-		animation-timing-function: ease-out;
-	}
-	62% {
-		transform: translateX(172px);
-		opacity: 1;
-	}
-	82%,
+	90%,
 	100% {
-		transform: translateX(172px);
+		offset-distance: 100%;
+	}
+}
+
+@keyframes ZamboniLap-trail {
+	0% {
+		stroke-dashoffset: 100;
+		opacity: 1;
+	}
+	90% {
+		stroke-dashoffset: 0;
+		opacity: 1;
+	}
+	100% {
+		stroke-dashoffset: 0;
 		opacity: 0;
 	}
 }
 
-@keyframes Loader-streak {
-	0%,
-	12% {
-		opacity: 0;
-	}
-	30%,
-	50% {
-		opacity: 1;
-	}
-	56%,
-	100% {
-		opacity: 0;
-	}
+/* === InlineLoader === */
+
+.InlineLoader {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 1);
+	padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+	color: var(--muted-fg);
+	text-align: center;
+	animation: Loader-appear 0.3s 0.15s ease-out both;
 }
 
-/* The net billows back as the puck hits it */
-@keyframes Loader-net {
+.InlineLoader-row {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+}
+
+.InlineLoader-label {
+	font-size: var(--text-md);
+}
+
+.InlineLoader-note {
+	min-height: 1.25rem;
+	font-size: var(--text-sm);
+	animation: Loader-appear 0.4s ease-out;
+}
+
+/* === PuckDots === */
+
+/* Sized to its 34×10 viewBox */
+.PuckDots {
+	width: 34px;
+	height: 10px;
+	overflow: visible;
+}
+
+.PuckDots rect {
+	fill: var(--site-fg);
+	opacity: 0.25;
+	animation: PuckDots-hop 1.2s ease-in-out infinite;
+}
+
+.PuckDots rect:nth-child(2) {
+	animation-delay: 0.15s;
+}
+
+.PuckDots rect:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+@keyframes PuckDots-hop {
 	0%,
-	50% {
+	60%,
+	100% {
+		opacity: 0.25;
 		transform: none;
 	}
-	58% {
-		transform: scaleX(1.18) skewX(-4deg);
-	}
-	70% {
-		transform: scaleX(0.96);
-	}
-	80%,
-	100% {
-		transform: none;
-	}
-}
-
-/* A spray of snow off the puck as it crosses the crease */
-@keyframes Loader-spray {
-	0%,
-	46% {
-		opacity: 0;
-		transform: none;
-	}
-	52% {
+	30% {
 		opacity: 1;
-	}
-	68%,
-	100% {
-		opacity: 0;
-		transform: translate(-6px, -6px) scale(1.4);
+		transform: translateY(-2px);
 	}
 }
 
+/* Still frames: the Zamboni partway round with the ice shining behind it,
+   and the three pucks lit evenly */
 @media (prefers-reduced-motion: reduce) {
-	.Loader-puck,
-	.Loader-streak,
-	.Loader-net,
-	.Loader-spray {
+	.ZamboniLap-zamboni,
+	.ZamboniLap-trail,
+	.PuckDots rect {
 		animation: none;
 	}
-	.Loader-puck {
-		transform: translateX(120px);
+	.PuckDots rect {
+		opacity: 0.6;
 	}
-	.Loader-streak,
-	.Loader-spray {
-		opacity: 0;
+	.ZamboniLap-zamboni {
+		offset-distance: 35%;
+	}
+	.ZamboniLap-trail {
+		stroke-dashoffset: 65;
 	}
 }
 
@@ -412,7 +484,7 @@ table {
 	min-height: 180px;
 	margin-top: calc(var(--spacing) * 4);
 	border: 1px dashed var(--panel-border);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-md);
 }
 
 .Admin-note {
@@ -422,6 +494,38 @@ table {
 
 .Admin-preview .Admin-note {
 	margin: 0;
+}
+
+.Admin-names {
+	display: block;
+	width: 100%;
+	max-width: calc(var(--spacing) * 100);
+	margin-bottom: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-sm);
+	background: var(--panel-bg);
+	color: inherit;
+	font: inherit;
+	font-size: var(--text-base);
+	resize: vertical;
+}
+
+.Admin-names:focus {
+	outline: none;
+	border-color: var(--subtle-fg);
+	box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+.Admin-results {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 4);
+	margin-top: calc(var(--spacing) * 4);
+}
+
+.Admin-failed {
+	color: var(--muted-fg);
 }
 
 /* === Links === */
@@ -450,9 +554,9 @@ table {
 	inset: 0;
 }
 
+/* A card's or row's other links and buttons sit above its stretched link,
+   so they click (and show their tooltips) on their own */
 .GameTable-row :is(a, button):not(.StretchedLink),
-.GameFeed-item :is(a, button):not(.StretchedLink),
-.HeadToHead-row :is(a, button):not(.StretchedLink),
 .RinkCard :is(a, button):not(.StretchedLink),
 .RinkRoute-status :is(a, button):not(.StretchedLink) {
 	position: relative;
@@ -479,7 +583,7 @@ table {
 	overflow: hidden;
 	border-radius: 50%;
 	/* White in both themes: logos are drawn for a light background */
-	background: #fff;
+	background: var(--logo-bg);
 	border: 1px solid var(--panel-border);
 	vertical-align: middle;
 }
@@ -492,7 +596,7 @@ table {
 
 .TeamAvatar-fallback {
 	font-size: calc(var(--TeamAvatar-size, 36px) * 0.36);
-	font-weight: 700;
+	font-weight: var(--weight-bold);
 	color: var(--muted-fg);
 }
 
@@ -504,7 +608,7 @@ table {
 
 .StatsTable {
 	width: 100%;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 }
 
 .StatsTable th,
@@ -516,9 +620,22 @@ table {
 }
 
 .StatsTable th {
-	font-size: 0.75rem;
-	font-weight: 500;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-medium);
 	color: var(--subtle-fg);
+}
+
+/* A scrolling table: its rows move, its header row stays */
+.StatsTable-wrapper--scroll {
+	overflow: auto;
+	overscroll-behavior: contain;
+}
+
+.StatsTable-wrapper--scroll thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: var(--panel-bg);
 }
 
 /* A sortable header: looks like the plain header, with an arrow on hover or
@@ -526,7 +643,7 @@ table {
 .StatsTable-sort {
 	display: inline-flex;
 	align-items: center;
-	gap: 2px;
+	gap: calc(var(--spacing) * 0.5);
 	padding: 0;
 	font: inherit;
 	color: inherit;
@@ -547,7 +664,7 @@ table {
 .StatsTable-sort-arrow {
 	visibility: hidden;
 	width: 0.75em;
-	font-size: 0.6875rem;
+	font-size: var(--text-2xs);
 }
 
 .StatsTable-sort:hover .StatsTable-sort-arrow,
@@ -582,11 +699,11 @@ table {
 	gap: calc(var(--spacing) * 1.5);
 	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
 	border: 1px solid var(--panel-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--panel-bg);
 	font: inherit;
-	font-size: 0.8125rem;
-	font-weight: 500;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
 	color: var(--site-fg);
 	cursor: pointer;
 	white-space: nowrap;
@@ -618,7 +735,7 @@ table {
 }
 
 .FilterPill-count {
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 	color: var(--subtle-fg);
 }
 
@@ -655,10 +772,10 @@ table {
 .Segmented {
 	display: inline-flex;
 	flex-wrap: wrap;
-	gap: 2px;
-	padding: 3px;
+	gap: calc(var(--spacing) * 0.5);
+	padding: calc(var(--spacing) * 0.75);
 	border: 1px solid var(--panel-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--subtle-bg);
 }
 
@@ -666,11 +783,11 @@ table {
 	appearance: none;
 	padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 3);
 	border: none;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: none;
 	font: inherit;
-	font-size: 0.8125rem;
-	font-weight: 500;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 	white-space: nowrap;
 	cursor: pointer;
@@ -737,7 +854,7 @@ table {
 .FilterMenu-count {
 	margin-left: auto;
 	padding-left: calc(var(--spacing) * 4);
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 	font-variant-numeric: tabular-nums;
 	color: var(--subtle-fg);
 }
@@ -755,10 +872,10 @@ table {
 	appearance: none;
 	padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: none;
 	font: inherit;
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--muted-fg);
 	cursor: pointer;
 }
@@ -787,7 +904,7 @@ table {
 	/* A picked range can wrap the switch onto a second line; a softer corner
 	   keeps that looking like one control */
 	.FilterToolbar > .Segmented {
-		border-radius: 18px;
+		border-radius: var(--radius);
 	}
 
 	.FilterToolbar > .FilterPill {
@@ -818,17 +935,20 @@ table {
 	box-shadow: var(--shadow-sm);
 	transition:
 		box-shadow 150ms,
-		border-color 150ms;
+		border-color 150ms,
+		background 150ms;
 }
 
 .RinkCard:hover {
+	border-color: var(--card-hover-border);
+	background: var(--card-hover-bg);
 	box-shadow: var(--shadow-md);
 }
 
 .RinkCard--live {
-	border-color: rgb(229 72 77 / 0.45);
+	border-color: color-mix(in srgb, var(--live) 45%, transparent);
 	box-shadow:
-		0 0 0 3px rgb(229 72 77 / 0.08),
+		0 0 0 3px color-mix(in srgb, var(--live) 8%, transparent),
 		var(--shadow-sm);
 }
 
@@ -843,8 +963,8 @@ table {
 .RinkCard-name {
 	min-width: 0;
 	overflow: hidden;
-	font-size: 0.875rem;
-	font-weight: 400;
+	font-size: var(--text-base);
+	font-weight: var(--weight-regular);
 	letter-spacing: -0.01em;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -861,11 +981,11 @@ table {
 	display: inline-flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 1);
-	padding: 2px calc(var(--spacing) * 2);
-	border-radius: 999px;
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+	border-radius: var(--radius-pill);
 	background: var(--subtle-bg);
-	font-size: 0.6875rem;
-	font-weight: 500;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
@@ -932,14 +1052,14 @@ table {
 	min-width: 76px;
 	height: 76px;
 	padding: 0 calc(var(--spacing) * 2.5);
-	border-radius: 12px;
+	border-radius: var(--radius);
 	background: var(--subtle-bg);
 	text-align: center;
 }
 
 .RinkCard-time-main {
-	font-size: 1.375rem;
-	font-weight: 650;
+	font-size: var(--text-2xl);
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.03em;
 	line-height: 1.1;
 }
@@ -947,26 +1067,26 @@ table {
 /* "PM" beside the time, smaller */
 .RinkCard-meridiem {
 	margin-left: 3px;
-	font-size: 0.75rem;
-	font-weight: 600;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
 	letter-spacing: 0;
 	color: var(--muted-fg);
 }
 
 .RinkCard-time-sub {
 	margin-top: 2px;
-	font-size: 0.6875rem;
-	font-weight: 500;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
 .RinkCard-time--live {
 	background: var(--live);
-	color: #fff;
+	color: var(--live-fg);
 }
 
 .RinkCard-time--live .RinkCard-time-main {
-	font-size: 1rem;
+	font-size: var(--text-lg);
 	letter-spacing: 0.02em;
 }
 
@@ -983,7 +1103,7 @@ table {
 }
 
 .RinkCard-time--live .RinkCard-time-sub {
-	color: rgb(255 255 255 / 0.85);
+	color: color-mix(in srgb, var(--live-fg) 85%, transparent);
 }
 
 @keyframes RinkCard-pulse {
@@ -1007,8 +1127,8 @@ table {
 	align-items: center;
 	gap: calc(var(--spacing) * 1.5);
 	min-width: 0;
-	font-size: 0.9375rem;
-	font-weight: 550;
+	font-size: var(--text-md);
+	font-weight: var(--weight-medium);
 }
 
 .RinkCard-team-name {
@@ -1025,7 +1145,7 @@ table {
 	gap: calc(var(--spacing) * 2);
 	padding-top: calc(var(--spacing) * 3);
 	border-top: 1px solid var(--panel-border);
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--muted-fg);
 }
 
@@ -1038,18 +1158,18 @@ table {
 
 .RinkCard-empty {
 	color: var(--muted-fg);
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 }
 
 /* During a game the LIVE block links to the rink's feed */
 .RinkCard-started {
 	color: var(--live);
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 }
 
-/* === Past games === */
+/* === Game table cards (e.g. past games) === */
 
-.GameFeed-card {
+.GameTableCard {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
@@ -1060,149 +1180,16 @@ table {
 	box-shadow: var(--shadow-sm);
 }
 
-.GameFeed-title {
+.GameTableCard-title {
 	flex: none;
 	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4)
 		calc(var(--spacing) * 2);
 }
 
-.GameFeed-scroll {
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-}
-
-.GameFeed-viewport {
-	max-height: 100%;
-	overscroll-behavior: contain;
-}
-
-.GameFeed-viewport:focus-visible {
-	outline: 2px solid var(--link);
-	outline-offset: -2px;
-}
-
-.GameFeed-scrollbar {
-	display: flex;
-	width: 6px;
-	margin: 2px;
-	border-radius: 3px;
-	opacity: 0;
-	transition: opacity 150ms;
-}
-
-.GameFeed-scrollbar[data-hovering],
-.GameFeed-scrollbar[data-scrolling] {
-	opacity: 1;
-	transition-duration: 0ms;
-}
-
-.GameFeed-thumb {
-	width: 100%;
-	border-radius: 3px;
-	background: rgb(0 0 0 / 0.25);
-}
-
-.GameFeed-list {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-}
-
-.GameFeed-empty {
+.GameTableCard-empty {
 	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 4);
 	color: var(--muted-fg);
-	font-size: 0.875rem;
-}
-
-.GameFeed-item {
-	position: relative;
-	display: grid;
-	/* Result chip on the left, beside the game's lines; LiveBarn top right */
-	grid-template-columns: 22px minmax(0, 1fr) auto;
-	grid-template-areas:
-		"outcome when links"
-		"outcome matchup matchup"
-		"outcome rink rink";
-	align-items: center;
-	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
-	margin: 0 calc(var(--spacing) * 2);
-	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 2);
-	border-top: 1px solid var(--panel-border);
-}
-
-.GameFeed-item:first-child {
-	border-top-color: transparent;
-}
-
-.GameFeed-item--live {
-	border-radius: var(--radius-sm);
-	border-top-color: transparent;
-	background: var(--live-bg);
-}
-
-.GameFeed-item--live + .GameFeed-item {
-	border-top-color: transparent;
-}
-
-/* Day · time on one line; stacked on wide cards */
-.GameFeed-when {
-	grid-area: when;
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0 calc(var(--spacing) * 1);
-	font-size: 0.8125rem;
-	color: var(--muted-fg);
-}
-
-.GameFeed-date {
-	font-weight: 650;
-	color: var(--site-fg);
-}
-
-.GameFeed-time::before {
-	content: "· ";
-}
-
-.GameFeed-rink {
-	grid-area: rink;
-	display: flex;
-	min-width: 0;
-}
-
-.GameFeed-rink-name {
-	overflow: hidden;
-	font-size: 0.9375rem;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-	color: var(--muted-fg);
-}
-
-/* Team, score, vs/@, opponent, score: one line, wrapping when narrow */
-.GameFeed-matchup {
-	grid-area: matchup;
-	min-width: 0;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 2.5);
-	color: var(--site-fg);
-}
-
-.GameFeed-vs {
-	flex: none;
-	color: var(--muted-fg);
-	font-weight: 500;
-}
-
-.GameFeed-outcome {
-	grid-area: outcome;
-	display: flex;
-}
-
-/* A score the league didn't split per team, at the end of the matchup */
-.GameFeed-score {
-	font-variant-numeric: tabular-nums;
+	font-size: var(--text-base);
 }
 
 .GameFeed-result {
@@ -1210,11 +1197,19 @@ table {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
+	/* Grows for "OTL" */
+	min-width: 22px;
 	height: 22px;
-	border-radius: 6px;
-	font-size: 0.75rem;
-	font-weight: 700;
+	padding: 0 calc(var(--spacing) * 1);
+	border-radius: var(--radius-sm);
+	font-size: var(--text-xs);
+	font-weight: var(--weight-bold);
+}
+
+/* Longer results ("OTL") in a smaller size, so the chip stays compact */
+.GameFeed-result--OTL,
+.GameFeed-result--SOL {
+	font-size: var(--text-3xs);
 }
 
 .GameFeed-result--W {
@@ -1222,7 +1217,9 @@ table {
 	color: var(--win);
 }
 
-.GameFeed-result--L {
+.GameFeed-result--L,
+.GameFeed-result--OTL,
+.GameFeed-result--SOL {
 	background: var(--loss-bg);
 	color: var(--loss);
 }
@@ -1232,62 +1229,9 @@ table {
 	color: var(--tie);
 }
 
-/* Scoresheet, then LiveBarn at the end: right-aligned so LiveBarn stays in
-   place whether or not there's a scoresheet */
-.GameFeed-links {
-	grid-area: links;
-	display: flex;
-	justify-content: flex-end;
-	gap: calc(var(--spacing) * 1);
-}
-
-.GameFeed-item:has(.StretchedLink:hover),
-.HeadToHead-row:has(.StretchedLink:hover) {
-	background: var(--subtle-bg);
-}
-
-.GameFeed-live {
-	color: var(--live);
-	font-weight: 700;
-}
-
-/* Long histories scroll inside the card instead of stretching the page.
-   Short enough that the stats below stay in view: about six wide rows. */
-.GameFeed-card {
-	max-height: 440px;
-	container-type: inline-size;
-}
-
-/* Wide cards fit each game on one row, like the home page's game list:
-   outcome | when | matchup | rink | LiveBarn */
-@container (min-width: 720px) {
-	.GameFeed-item {
-		/* Fixed side columns so every row lines up, whatever it contains */
-		grid-template-columns:
-			22px 6.5rem minmax(0, 2fr) minmax(0, 1fr)
-			var(--icon-links-width);
-		grid-template-areas: "outcome when matchup rink links";
-		gap: calc(var(--spacing) * 4);
-		padding-top: calc(var(--spacing) * 2.5);
-		padding-bottom: calc(var(--spacing) * 2.5);
-	}
-
-	.GameFeed-when {
-		flex-direction: column;
-		gap: 2px;
-	}
-
-	.GameFeed-date {
-		font-size: 0.9375rem;
-	}
-
-	.GameFeed-time::before {
-		content: none;
-	}
-
-	.GameFeed-rink-name {
-		color: inherit;
-	}
+/* Inset like the other cards' tables */
+.GameTableCard .StatsTable-wrapper {
+	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
 }
 
 /* === Home page, game filters and game list (and shared select popups) === */
@@ -1317,7 +1261,7 @@ table {
 	padding: calc(var(--spacing) * 1);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-md);
 	box-shadow: var(--shadow-md);
 	outline: none;
 }
@@ -1328,8 +1272,8 @@ table {
 	gap: calc(var(--spacing) * 2);
 	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3)
 		calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
-	border-radius: 6px;
-	font-size: 0.875rem;
+	border-radius: var(--radius-sm);
+	font-size: var(--text-base);
 	cursor: default;
 	outline: none;
 	user-select: none;
@@ -1361,8 +1305,8 @@ table {
 	align-items: center;
 	justify-content: space-between;
 	margin-bottom: calc(var(--spacing) * 2);
-	font-size: 0.875rem;
-	font-weight: 600;
+	font-size: var(--text-base);
+	font-weight: var(--weight-semibold);
 }
 
 .DayPicker-nav,
@@ -1380,7 +1324,7 @@ table {
 	place-items: center;
 	width: 28px;
 	height: 28px;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 }
 
 .DayPicker-nav svg {
@@ -1399,21 +1343,21 @@ table {
 .DayPicker-grid {
 	display: grid;
 	grid-template-columns: repeat(7, 1fr);
-	gap: 2px;
+	gap: calc(var(--spacing) * 0.5);
 	text-align: center;
 }
 
 .DayPicker-weekday {
 	padding-bottom: calc(var(--spacing) * 1);
-	font-size: 0.6875rem;
-	font-weight: 500;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-medium);
 	color: var(--subtle-fg);
 }
 
 .DayPicker-day {
 	aspect-ratio: 1;
-	border-radius: 999px;
-	font-size: 0.8125rem;
+	border-radius: var(--radius-pill);
+	font-size: var(--text-sm);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -1436,7 +1380,7 @@ table {
 }
 
 .DayPicker-day[data-today] {
-	font-weight: 700;
+	font-weight: var(--weight-bold);
 	box-shadow: inset 0 0 0 1px var(--panel-border);
 }
 
@@ -1460,7 +1404,7 @@ table {
 /* A range: its ends filled, the days between tinted */
 .DayPicker-day[aria-pressed="true"],
 .DayPicker-day[aria-pressed="true"]:hover {
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: var(--chip-bg);
 	color: var(--site-fg);
 }
@@ -1469,14 +1413,14 @@ table {
 .DayPicker-day[data-range-start]:hover,
 .DayPicker-day[data-range-end],
 .DayPicker-day[data-range-end]:hover {
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--accent);
 	color: var(--accent-fg);
 }
 
 .DayPicker-hint {
 	margin: calc(var(--spacing) * 2) 0 0;
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 	color: var(--muted-fg);
 }
 
@@ -1492,14 +1436,17 @@ table {
 	text-overflow: ellipsis;
 }
 
+/* The check trails the label so icons and labels line up with the group
+   labels and the search icon */
 .Picker-item-label {
+	flex: 1;
 	min-width: 0;
 }
 
 .Picker-group-label {
 	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
-	font-size: 0.75rem;
-	font-weight: 600;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
 	color: var(--muted-fg);
 }
 
@@ -1529,7 +1476,7 @@ table {
 .Picker-search-icon {
 	position: absolute;
 	top: 50%;
-	left: 10px;
+	left: calc(var(--spacing) * 2);
 	width: 14px;
 	height: 14px;
 	translate: 0 -50%;
@@ -1540,12 +1487,12 @@ table {
 .Picker-search-input {
 	width: 100%;
 	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2)
-		calc(var(--spacing) * 2) 32px;
+		calc(var(--spacing) * 2) calc(var(--spacing) * 8);
 	border: 1px solid var(--panel-border);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: var(--subtle-bg);
 	font: inherit;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--site-fg);
 	outline: none;
 }
@@ -1565,7 +1512,7 @@ table {
 
 .Picker-empty {
 	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 2);
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -1581,36 +1528,6 @@ table {
 
 .GameTable-row:has(.StretchedLink:hover) {
 	background: var(--subtle-bg);
-}
-
-.GameList-team {
-	display: flex;
-	flex: 0 1 auto;
-	align-items: center;
-	gap: calc(var(--spacing) * 1.5);
-	min-width: 0;
-	font-size: 0.9375rem;
-	font-weight: 400;
-}
-
-/* A final game's score beside each team; the winner is bold, the loser muted */
-.GameList-goals {
-	flex: none;
-	font-variant-numeric: tabular-nums;
-}
-
-.GameList-team--won {
-	font-weight: 650;
-}
-
-.GameList-team--lost {
-	color: var(--muted-fg);
-}
-
-.GameList-team a {
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .GameList-empty {
@@ -1641,14 +1558,14 @@ table {
 
 .NoGames-title {
 	margin: 0;
-	font-size: 1.0625rem;
-	font-weight: 600;
+	font-size: var(--text-xl);
+	font-weight: var(--weight-semibold);
 	text-wrap: balance;
 }
 
 .NoGames-text {
 	margin: 0;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -1745,8 +1662,8 @@ table {
 }
 
 .RinkRoute-name {
-	font-size: 2rem;
-	font-weight: 650;
+	font-size: var(--text-5xl);
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.03em;
 }
 
@@ -1762,26 +1679,12 @@ table {
 	align-items: center;
 	gap: calc(var(--spacing) * 1);
 	margin-top: calc(var(--spacing) * 3);
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
-}
-
-.RinkRoute-section-title {
-	margin-bottom: calc(var(--spacing) * 3);
 }
 
 .RinkRoute-empty {
 	color: var(--muted-fg);
-}
-
-/* Only the day and time go red, so the rest of the row stays readable */
-.RinkRoute-live-row td:nth-child(-n + 2) {
-	color: var(--live);
-	font-weight: 600;
-}
-
-.RinkRoute-live-row td:first-child {
-	box-shadow: inset 3px 0 0 var(--live);
 }
 
 /* === Team and player pages === */
@@ -1826,8 +1729,8 @@ table {
 }
 
 .Detail-name {
-	font-size: 2rem;
-	font-weight: 650;
+	font-size: var(--text-5xl);
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.03em;
 }
 
@@ -1841,7 +1744,7 @@ table {
 }
 
 .Detail-totals {
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--site-fg);
 }
 
@@ -1858,10 +1761,26 @@ table {
 	gap: calc(var(--spacing) * 5);
 }
 
+/* Team page: the logo beside the name and division */
+.TeamHero-identity {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+	min-width: 0;
+}
+
 .PlayerHero-identity {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 2);
+}
+
+/* The name, with the position tagged on after it */
+.PlayerHero-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
 }
 
 .PlayerHero-name {
@@ -1869,14 +1788,14 @@ table {
 	flex-wrap: wrap;
 	align-items: baseline;
 	gap: 0 calc(var(--spacing) * 3);
-	font-size: 2rem;
-	font-weight: 650;
+	font-size: var(--text-5xl);
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.03em;
 	line-height: 1.15;
 }
 
 .PlayerHero-number {
-	font-weight: 500;
+	font-weight: var(--weight-medium);
 	letter-spacing: -0.01em;
 	color: var(--subtle-fg);
 	font-variant-numeric: tabular-nums;
@@ -1887,16 +1806,16 @@ table {
 	flex-wrap: wrap;
 	align-items: center;
 	gap: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
-	font-size: 0.9375rem;
+	font-size: var(--text-md);
 	color: var(--muted-fg);
 }
 
 .PlayerHero-position {
 	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2.5);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--chip-bg);
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
 	color: var(--site-fg);
 }
 
@@ -1904,17 +1823,21 @@ table {
 	display: inline-flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 2);
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 	color: var(--site-fg);
 }
 
-.PlayerHero-division {
-	font-weight: 400;
-	color: var(--muted-fg);
+/* The team name with its division underneath */
+.PlayerHero-team-text {
+	display: flex;
+	flex-direction: column;
+	line-height: 1.25;
 }
 
-.PlayerHero-division::before {
-	content: "· ";
+.PlayerHero-division {
+	font-size: var(--text-sm);
+	font-weight: var(--weight-regular);
+	color: var(--muted-fg);
 }
 
 .PlayerHero-stats {
@@ -1937,11 +1860,24 @@ table {
 }
 
 .PlayerHero-group-label {
-	font-size: 0.75rem;
-	font-weight: 600;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: var(--muted-fg);
+}
+
+/* Last 5: chips the height of a stat block's numbers */
+.PlayerHero-form {
+	display: flex;
+	align-items: center;
+	min-height: 3rem;
+}
+
+.PlayerHero-form .GameFeed-result {
+	width: 28px;
+	height: 28px;
+	font-size: var(--text-sm);
 }
 
 .PlayerHero-group-stats {
@@ -1959,22 +1895,22 @@ table {
 
 .PlayerHero-stat dd {
 	margin: 0;
-	font-size: 1.5rem;
-	font-weight: 650;
+	font-size: var(--text-3xl);
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.02em;
 	font-variant-numeric: tabular-nums;
 	line-height: 1.1;
 }
 
 .PlayerHero-stat dt {
-	font-size: 0.75rem;
-	font-weight: 500;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
 @media (max-width: 600px) {
 	.PlayerHero-name {
-		font-size: 1.625rem;
+		font-size: var(--text-4xl);
 	}
 
 	.PlayerHero-group + .PlayerHero-group {
@@ -1986,7 +1922,7 @@ table {
 .Detail-form {
 	display: inline-flex;
 	align-items: center;
-	gap: 3px;
+	gap: calc(var(--spacing) * 0.75);
 }
 
 /* Muted rather than subtle: it labels the chips, so it needs to be legible
@@ -2030,7 +1966,7 @@ table {
 	border-radius: var(--radius);
 	background: none;
 	font: inherit;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--site-fg);
 	text-align: left;
 	cursor: pointer;
@@ -2050,7 +1986,7 @@ table {
 
 .Warnings-label {
 	flex: none;
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 }
 
 .Warnings-summary {
@@ -2084,7 +2020,7 @@ table {
 .Warnings-detail {
 	margin: 0;
 	max-width: 70ch;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -2094,10 +2030,10 @@ table {
 	margin: 0;
 	padding: 0;
 	list-style: none;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	background: var(--panel-bg);
 	border: 1px solid var(--warn-border);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-md);
 }
 
 .Warnings-list li {
@@ -2114,7 +2050,7 @@ table {
 }
 
 .Warnings-item-label {
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 	min-width: 0;
 }
 
@@ -2127,12 +2063,12 @@ table {
 	appearance: none;
 	padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 3.5);
 	border: 1px solid var(--warn-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--panel-bg);
 	color: var(--site-fg);
 	font: inherit;
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
 	cursor: pointer;
 }
 
@@ -2158,6 +2094,26 @@ table {
 }
 
 /* A stat that isn't posted yet */
+/* Below a table cut to its first rows: shows the rest */
+.StatsTable-more {
+	appearance: none;
+	display: block;
+	width: 100%;
+	padding: calc(var(--spacing) * 2.5);
+	border: 0;
+	border-top: 1px solid var(--panel-border);
+	background: none;
+	font: inherit;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
+	color: var(--link);
+	cursor: pointer;
+}
+
+.StatsTable-more:hover {
+	background: var(--subtle-bg);
+}
+
 .StatsTable-blank {
 	color: var(--subtle-fg);
 }
@@ -2189,14 +2145,14 @@ table {
 }
 
 .Notice-title {
-	font-size: 0.9375rem;
-	font-weight: 600;
+	font-size: var(--text-md);
+	font-weight: var(--weight-semibold);
 	color: var(--site-fg);
 }
 
 .Notice-text {
 	margin: 0;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -2244,7 +2200,7 @@ table {
 .SelectOption .Detail-meta-hint {
 	margin-left: auto;
 	padding-left: calc(var(--spacing) * 4);
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 }
 
 /* === Game page === */
@@ -2291,8 +2247,8 @@ table {
 	display: inline-flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 1.5);
-	font-size: 0.6875rem;
-	font-weight: 650;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-semibold);
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: var(--muted-fg);
@@ -2301,7 +2257,7 @@ table {
 .BoxScore-eyebrow .Compare-key {
 	width: 8px;
 	height: 8px;
-	border-radius: 2px;
+	border-radius: var(--radius-2xs);
 }
 
 .BoxScore-team .TeamAvatar {
@@ -2313,8 +2269,8 @@ table {
 
 .BoxScore-team-name {
 	max-width: 100%;
-	font-size: 1.75rem;
-	font-weight: 750;
+	font-size: var(--text-4xl);
+	font-weight: var(--weight-bold);
 	line-height: 1.15;
 	letter-spacing: -0.025em;
 	text-wrap: balance;
@@ -2327,7 +2283,7 @@ table {
 /* Under the name, above the record */
 .BoxScore-division {
 	margin-top: calc(var(--spacing) * -1.5);
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -2338,13 +2294,13 @@ table {
 	align-items: center;
 	justify-content: center;
 	gap: calc(var(--spacing) * 2);
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--muted-fg);
 }
 
 .BoxScore-record {
-	font-size: 0.9375rem;
-	font-weight: 700;
+	font-size: var(--text-md);
+	font-weight: var(--weight-bold);
 	color: var(--site-fg);
 }
 
@@ -2364,8 +2320,8 @@ table {
 
 /* "Final" or "Live", above the score or "@" */
 .BoxScore-status {
-	font-size: 0.6875rem;
-	font-weight: 700;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-bold);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--muted-fg);
@@ -2376,8 +2332,8 @@ table {
 }
 
 .BoxScore-score {
-	font-size: 2.75rem;
-	font-weight: 750;
+	font-size: var(--text-display);
+	font-weight: var(--weight-bold);
 	letter-spacing: -0.03em;
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
@@ -2393,20 +2349,20 @@ table {
 	border-radius: 50%;
 	background: var(--accent);
 	color: var(--accent-fg);
-	font-size: 1.125rem;
-	font-weight: 700;
+	font-size: var(--text-xl);
+	font-weight: var(--weight-bold);
 	box-shadow: 0 0 0 6px var(--panel-bg);
 }
 
 .BoxScore-time {
-	font-size: 1.5rem;
-	font-weight: 750;
+	font-size: var(--text-3xl);
+	font-weight: var(--weight-bold);
 	letter-spacing: -0.02em;
 	white-space: nowrap;
 }
 
 .BoxScore-when {
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -2417,8 +2373,8 @@ table {
 	justify-content: center;
 	gap: calc(var(--spacing) * 3);
 	margin-top: calc(var(--spacing) * 1);
-	font-size: 0.8125rem;
-	font-weight: 500;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
 }
 
 .BoxScore-official {
@@ -2447,7 +2403,7 @@ table {
 	}
 
 	.BoxScore-team-name {
-		font-size: 1.0625rem;
+		font-size: var(--text-xl);
 	}
 
 	.BoxScore-form-divider {
@@ -2455,17 +2411,17 @@ table {
 	}
 
 	.BoxScore-score {
-		font-size: 2rem;
+		font-size: var(--text-5xl);
 	}
 
 	.BoxScore-time {
-		font-size: 1.125rem;
+		font-size: var(--text-xl);
 	}
 
 	.BoxScore-at {
 		width: 34px;
 		height: 34px;
-		font-size: 0.9375rem;
+		font-size: var(--text-md);
 	}
 }
 
@@ -2474,23 +2430,6 @@ table {
 }
 
 /* Team leaders | head-to-head, in equal halves on wide screens */
-.GamePage-insights {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	align-items: start;
-	gap: calc(var(--spacing) * 4);
-}
-
-/* The hero above already shows both logos */
-.GamePage-insights .Compare-head .TeamAvatar {
-	display: none;
-}
-
-@media (max-width: 900px) {
-	.GamePage-insights {
-		grid-template-columns: minmax(0, 1fr);
-	}
-}
 
 /* Both teams' rosters, side by side until the screen gets narrow */
 .GamePage-rosters {
@@ -2511,8 +2450,8 @@ table {
 	align-items: center;
 	gap: calc(var(--spacing) * 2);
 	margin-top: 0;
-	font-size: 1rem;
-	font-weight: 650;
+	font-size: var(--text-lg);
+	font-weight: var(--weight-semibold);
 }
 
 .GamePage-roster-title .SectionLabel {
@@ -2520,29 +2459,35 @@ table {
 }
 
 /* Series record: headline, one bar split into wins/ties/wins, legend */
+.HeadToHead-last {
+	margin: calc(var(--spacing) * 3) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+}
+
 .SeriesRecord {
 	margin-bottom: calc(var(--spacing) * 4);
 }
 
 .SeriesRecord-headline {
 	margin: 0 0 calc(var(--spacing) * 2);
-	font-size: 1.0625rem;
-	font-weight: 650;
+	font-size: var(--text-xl);
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.01em;
 }
 
 .SeriesRecord-ties {
-	font-weight: 500;
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
 /* 2px surface gaps between segments; rounded only at the bar's ends */
 .SeriesRecord-bar {
 	display: flex;
-	gap: 2px;
+	gap: calc(var(--spacing) * 0.5);
 	height: 10px;
 	overflow: hidden;
-	border-radius: 4px;
+	border-radius: var(--radius-xs);
 }
 
 .SeriesRecord-segment {
@@ -2569,7 +2514,7 @@ table {
 	margin: calc(var(--spacing) * 2) 0 0;
 	padding: 0;
 	list-style: none;
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--muted-fg);
 }
 
@@ -2582,50 +2527,10 @@ table {
 .SeriesRecord-swatch {
 	width: 10px;
 	height: 10px;
-	border-radius: 3px;
+	border-radius: var(--radius-2xs);
 }
 
 .SeriesRecord-count {
-	color: var(--site-fg);
-}
-
-/* Game table: date over rink, the score beside it, then links on the right.
-   The links column takes the slack so the score stays by the game. */
-.HeadToHead .StatsTable td:last-child {
-	width: 100%;
-}
-
-.HeadToHead-game {
-	display: flex;
-	flex-direction: column;
-}
-
-.HeadToHead-rink {
-	font-size: 0.75rem;
-	color: var(--muted-fg);
-}
-
-.HeadToHead-score {
-	display: inline-flex;
-	align-items: baseline;
-	gap: calc(var(--spacing) * 1.5);
-	font-size: 1rem;
-	font-variant-numeric: tabular-nums;
-	color: var(--muted-fg);
-}
-
-.HeadToHead-score-dash {
-	color: var(--subtle-fg);
-}
-
-/* Team names beside their goals; the winner's stands out */
-.HeadToHead-team {
-	font-size: 0.875rem;
-	color: var(--muted-fg);
-}
-
-.HeadToHead-team--won {
-	font-weight: 600;
 	color: var(--site-fg);
 }
 
@@ -2635,86 +2540,7 @@ table {
 	container-type: inline-size;
 }
 
-@container (max-width: 520px) {
-	.HeadToHead-score {
-		display: grid;
-		grid-template-columns: auto auto;
-		justify-content: start;
-		column-gap: calc(var(--spacing) * 2);
-		row-gap: 2px;
-	}
-
-	.HeadToHead-score .HeadToHead-score-dash {
-		display: none;
-	}
-
-	.HeadToHead-team--left {
-		order: 1;
-	}
-
-	.HeadToHead-goals--left {
-		order: 2;
-	}
-
-	.HeadToHead-team--right {
-		order: 3;
-	}
-
-	.HeadToHead-goals--right {
-		order: 4;
-	}
-}
-
-.HeadToHead-score-won--left {
-	font-weight: 700;
-	color: var(--team-a);
-}
-
-.HeadToHead-score-won--right {
-	font-weight: 700;
-	color: var(--team-b);
-}
-
-/* Replay above box score, so the names fit beside the score */
-.HeadToHead-links {
-	display: inline-flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
-	gap: calc(var(--spacing) * 1);
-}
-
-.HeadToHead-row {
-	position: relative;
-}
-
-/* About five games tall, then the table scrolls under its header. The half
-   row showing at the bottom hints there's more. */
-.HeadToHead .StatsTable-wrapper {
-	max-height: 21rem;
-	overflow-y: auto;
-	overscroll-behavior: contain;
-	/* Overlay scrollbars draw over content; this moves the scroll box's edge
-	   into the panel's padding so the scrollbar sits beside the rows */
-	margin-right: calc(var(--spacing) * -3.5);
-	padding-right: calc(var(--spacing) * 3.5);
-}
-
-.HeadToHead .StatsTable th {
-	position: sticky;
-	top: 0;
-	z-index: 2;
-	background: var(--panel-bg);
-	/* A sticky cell's own border scrolls away with the rows beneath it */
-	border-bottom: none;
-	box-shadow: inset 0 -1px var(--panel-border);
-}
-
 /* Rows grow a line taller here, with each team on its own line */
-@container (max-width: 520px) {
-	.HeadToHead .StatsTable-wrapper {
-		max-height: 24.5rem;
-	}
-}
 
 .Timeline-period + .Timeline-period {
 	margin-top: calc(var(--spacing) * 4);
@@ -2736,7 +2562,7 @@ table {
 	gap: calc(var(--spacing) * 3);
 	padding: calc(var(--spacing) * 2.5) 0;
 	border-top: 1px solid var(--panel-border);
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 }
 
 .Timeline-time {
@@ -2752,7 +2578,7 @@ table {
 }
 
 .Timeline-item--goal .Timeline-scorer {
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 }
 
 .Timeline-item--penalty {
@@ -2764,28 +2590,28 @@ table {
 }
 
 .Timeline-detail {
-	font-weight: 400;
+	font-weight: var(--weight-regular);
 	color: var(--muted-fg);
 }
 
 .Timeline-type {
 	margin-left: calc(var(--spacing) * 2);
-	padding: 1px 6px;
-	border-radius: 6px;
+	padding: 1px calc(var(--spacing) * 1.5);
+	border-radius: var(--radius-sm);
 	background: var(--kind-player-bg);
 	color: var(--kind-player-fg);
-	font-size: 0.6875rem;
-	font-weight: 700;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-bold);
 	vertical-align: 1px;
 }
 
 .Timeline-tag {
 	flex: none;
-	padding: 2px 8px;
-	border-radius: 6px;
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+	border-radius: var(--radius-sm);
 	background: var(--chip-bg);
-	font-size: 0.75rem;
-	font-weight: 600;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
 	font-variant-numeric: tabular-nums;
 }
 
@@ -2801,7 +2627,7 @@ table {
 /* Running score: the number that just changed in the scorer's color */
 .Timeline-score {
 	display: inline-flex;
-	gap: 4px;
+	gap: calc(var(--spacing) * 1);
 	color: var(--muted-fg);
 }
 
@@ -2810,7 +2636,7 @@ table {
 }
 
 .Timeline-score-changed {
-	font-weight: 800;
+	font-weight: var(--weight-heavy);
 	color: var(--team);
 }
 
@@ -2860,7 +2686,7 @@ table {
 
 .Matchup-side .Detail-meta {
 	justify-content: center;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 }
 
 /* "■ Team 1": which comparison color is this side's */
@@ -2868,8 +2694,8 @@ table {
 	display: inline-flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 1.5);
-	font-size: 0.6875rem;
-	font-weight: 650;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-semibold);
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	color: var(--muted-fg);
@@ -2878,7 +2704,7 @@ table {
 .Matchup-label .Compare-key {
 	width: 8px;
 	height: 8px;
-	border-radius: 2px;
+	border-radius: var(--radius-2xs);
 }
 
 .Matchup-side .TeamAvatar {
@@ -2916,14 +2742,14 @@ table {
 	width: 100%;
 	max-width: 280px;
 	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 4);
-	font-size: 1rem;
-	font-weight: 650;
+	font-size: var(--text-lg);
+	font-weight: var(--weight-semibold);
 	box-shadow: var(--shadow-sm);
 }
 
 .Matchup-picker[data-placeholder] {
 	color: var(--muted-fg);
-	font-weight: 500;
+	font-weight: var(--weight-medium);
 }
 
 /* Secondary to the team: a quiet chip below it */
@@ -2934,8 +2760,8 @@ table {
 	border-color: transparent;
 	background: var(--chip-bg);
 	box-shadow: none;
-	font-size: 0.8125rem;
-	font-weight: 500;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
@@ -2982,8 +2808,8 @@ table {
 	border-radius: 50%;
 	background: var(--accent);
 	color: var(--accent-fg);
-	font-size: 0.8125rem;
-	font-weight: 800;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-heavy);
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	box-shadow: 0 0 0 6px var(--panel-bg);
@@ -3033,8 +2859,8 @@ table {
 }
 
 .Matchup-empty-title {
-	font-size: 1.25rem;
-	font-weight: 700;
+	font-size: var(--text-2xl);
+	font-weight: var(--weight-bold);
 }
 
 .Matchup-empty-text {
@@ -3060,8 +2886,8 @@ table {
 	padding: calc(var(--spacing) * 4);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
-	border-radius: var(--radius-sm);
-	font-size: 0.875rem;
+	border-radius: var(--radius-md);
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -3076,13 +2902,13 @@ table {
 .Matchup-feature-title {
 	display: block;
 	margin-bottom: calc(var(--spacing) * 0.5);
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 	color: var(--site-fg);
 }
 
 .Matchup-tip {
 	margin: calc(var(--spacing) * 5) 0 0;
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--subtle-fg);
 }
 
@@ -3093,58 +2919,11 @@ table {
 	}
 }
 
-/* Comparison: a header naming each team, then groups of rows */
-.Compare-head {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-	align-items: center;
-	gap: calc(var(--spacing) * 4);
-	padding-bottom: calc(var(--spacing) * 4);
-	border-bottom: 1px solid var(--panel-border);
-}
-
-.Compare-title {
-	text-align: center;
-}
-
-/* Each team's color, used by its key, bars and top scorers */
-.Compare-team--a {
-	--team: var(--team-a);
-}
-
-.Compare-team--b {
-	--team: var(--team-b);
-}
-
-.Compare-team {
-	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 3);
-	min-width: 0;
-}
-
-.Compare-head .Compare-team--b {
-	flex-direction: row-reverse;
-	text-align: right;
-}
-
-.Compare-team-text {
-	min-width: 0;
-}
-
-.Compare-team-name {
-	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 2);
-	font-weight: 650;
-}
-
-.Compare-head .Compare-team--b .Compare-team-name {
-	flex-direction: row-reverse;
-}
-
-.Compare-team-name .InlineLink {
-	color: var(--site-fg);
+/* Full-width card: keep its rows a readable width, centered */
+.Compare > * {
+	width: 100%;
+	max-width: 880px;
+	margin-inline: auto;
 }
 
 /* Legend swatch: which color is which team */
@@ -3152,16 +2931,8 @@ table {
 	flex: none;
 	width: 12px;
 	height: 12px;
-	border-radius: 3px;
+	border-radius: var(--radius-2xs);
 	background: var(--team);
-}
-
-.Compare-team-meta {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 0.8125rem;
-	color: var(--muted-fg);
 }
 
 .Compare-group {
@@ -3170,15 +2941,6 @@ table {
 
 .Compare-group + .Compare-group {
 	border-top: 1px solid var(--panel-border);
-}
-
-.Compare-group-label {
-	margin-bottom: calc(var(--spacing) * 1);
-	font-size: 0.6875rem;
-	font-weight: 600;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--subtle-fg);
 }
 
 /* Team A | label | team B; each side's content hugs the label */
@@ -3193,8 +2955,26 @@ table {
 
 .Compare-label {
 	text-align: center;
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--muted-fg);
+}
+
+/* The label opens a popover explaining the stat; underlined to say so */
+.Compare-info {
+	padding: 0;
+	border: none;
+	background: none;
+	font: inherit;
+	color: inherit;
+	text-decoration: underline dotted;
+	text-decoration-color: var(--subtle-fg);
+	text-underline-offset: 3px;
+	cursor: help;
+}
+
+.Compare-info:hover,
+.Compare-info[data-popup-open] {
+	color: var(--site-fg);
 }
 
 .Compare-cell {
@@ -3213,28 +2993,34 @@ table {
 	--team: var(--team-b);
 }
 
+/* A fixed box, so values line up and "100.0%" has room beside its bar */
 .Compare-value {
 	flex: none;
-	width: 3.25rem;
-	font-size: 1rem;
-	font-weight: 500;
+	width: 4.75rem;
+	padding: 1px 0;
+	border-radius: var(--radius-sm);
+	font-size: var(--text-lg);
+	font-weight: var(--weight-medium);
+	text-align: center;
 	color: var(--muted-fg);
 }
 
-.Compare-cell--a .Compare-value {
-	text-align: right;
-}
-
+/* The better side: tinted in its team's color, as in the games tables */
 .Compare-value--leader {
-	font-weight: 700;
+	font-weight: var(--weight-bold);
 	color: var(--site-fg);
+	background: color-mix(in srgb, var(--team) 16%, transparent);
 }
 
 /* Bars start beside the value and grow outward, on a shared scale */
 .Compare-track {
+	position: relative;
 	display: flex;
 	flex: 1;
-	height: 8px;
+	height: 16px;
+	padding: calc(var(--spacing) * 0.5);
+	border: 1px solid color-mix(in srgb, var(--team) 45%, transparent);
+	border-radius: var(--radius-md);
 }
 
 .Compare-cell--a .Compare-track {
@@ -3246,23 +3032,25 @@ table {
 	background: var(--team);
 }
 
-/* Square at the baseline (the value), rounded at the data end */
-.Compare-cell--a .Compare-fill {
-	border-radius: 4px 0 0 4px;
-}
-
-.Compare-cell--b .Compare-fill {
-	border-radius: 0 4px 4px 0;
+/* Inside the outlined track, so rounded to match it */
+.Compare-fill {
+	border-radius: var(--radius-xs);
 }
 
 .Compare-fill--trailing {
 	opacity: 0.4;
 }
 
+/* An empty chip: a game not played yet */
+.ResultChip-slot {
+	border: 1px dashed var(--panel-border);
+	background: transparent;
+}
+
 .Compare-chips {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 3px;
+	gap: calc(var(--spacing) * 0.75);
 }
 
 .Compare-cell--a .Compare-chips {
@@ -3280,16 +3068,16 @@ table {
 	display: flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 2);
-	font-size: 1rem;
+	font-size: var(--text-lg);
 	font-variant-numeric: tabular-nums;
 }
 
 .GamePreview-opponent {
-	font-weight: 500;
+	font-weight: var(--weight-medium);
 }
 
 .GamePreview-meta {
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 	color: var(--muted-fg);
 }
 
@@ -3298,92 +3086,10 @@ a.Compare-chip:hover {
 	filter: brightness(0.95);
 }
 
-.Compare-streak {
-	width: auto;
-	padding: 0 calc(var(--spacing) * 2);
-}
-
 .Compare-empty {
 	margin: 0;
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--subtle-fg);
-}
-
-/* Top scorers: each team's top three, side by side */
-.TopScorers {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: calc(var(--spacing) * 6);
-}
-
-.TopScorers-list {
-	list-style: none;
-	margin: calc(var(--spacing) * 2) 0 0;
-	padding: 0;
-}
-
-.TopScorers-row {
-	display: grid;
-	grid-template-columns: 1.5rem minmax(0, 1fr) auto;
-	align-items: center;
-	gap: calc(var(--spacing) * 3);
-	padding: calc(var(--spacing) * 2.5) 0;
-	border-top: 1px solid var(--panel-border);
-}
-
-.TopScorers-rank {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 50%;
-	background: var(--subtle-bg);
-	font-size: 0.75rem;
-	font-weight: 700;
-	color: var(--muted-fg);
-}
-
-.TopScorers-row:first-child .TopScorers-rank {
-	background: var(--team);
-	color: #ffffff;
-}
-
-.TopScorers-player {
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
-}
-
-.TopScorers-name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-weight: 600;
-	color: var(--site-fg);
-}
-
-.TopScorers-line {
-	font-size: 0.8125rem;
-	color: var(--muted-fg);
-}
-
-.TopScorers-points {
-	font-size: 1.25rem;
-	font-weight: 700;
-}
-
-.TopScorers-unit {
-	font-size: 0.75rem;
-	font-weight: 500;
-	color: var(--muted-fg);
-}
-
-@media (max-width: 700px) {
-	.TopScorers {
-		grid-template-columns: minmax(0, 1fr);
-		gap: calc(var(--spacing) * 4);
-	}
 }
 
 @media (max-width: 600px) {
@@ -3409,7 +3115,7 @@ a.Compare-chip:hover {
 	.Matchup-vs {
 		width: 34px;
 		height: 34px;
-		font-size: 0.6875rem;
+		font-size: var(--text-2xs);
 	}
 
 	.Matchup-empty {
@@ -3417,19 +3123,11 @@ a.Compare-chip:hover {
 	}
 
 	.Matchup-picker {
-		font-size: 0.875rem;
+		font-size: var(--text-base);
 	}
 
 	.Matchup-center {
 		padding-top: calc(var(--spacing) * 6);
-	}
-
-	.Compare-head {
-		gap: calc(var(--spacing) * 2);
-	}
-
-	.Compare-head .TeamAvatar {
-		display: none;
 	}
 
 	.Compare-row {
@@ -3438,7 +3136,7 @@ a.Compare-chip:hover {
 	}
 
 	.Compare-label {
-		font-size: 0.75rem;
+		font-size: var(--text-xs);
 	}
 
 	.Compare-cell {
@@ -3446,8 +3144,8 @@ a.Compare-chip:hover {
 	}
 
 	.Compare-value {
-		width: 2.5rem;
-		font-size: 0.9375rem;
+		width: 3.75rem;
+		font-size: var(--text-md);
 	}
 }
 
@@ -3466,8 +3164,8 @@ a.Compare-chip:hover {
 	border: none;
 	background: none;
 	font: inherit;
-	font-size: 0.875rem;
-	font-weight: 500;
+	font-size: var(--text-base);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 	cursor: pointer;
 }
@@ -3480,7 +3178,7 @@ a.Compare-chip:hover {
 .Tabs-tab:focus-visible {
 	outline: 2px solid var(--link);
 	outline-offset: -2px;
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 }
 
 /* Base UI positions the indicator under the active tab */
@@ -3492,7 +3190,7 @@ a.Compare-chip:hover {
 	translate: var(--active-tab-left) -50%;
 	width: var(--active-tab-width);
 	height: calc(var(--active-tab-height) - 4px);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	background: var(--subtle-bg);
 	transition:
 		translate 150ms ease,
@@ -3500,7 +3198,126 @@ a.Compare-chip:hover {
 }
 
 .StatsTable-total td {
-	font-weight: 700;
+	font-weight: var(--weight-bold);
+}
+
+/* === Goal net, missed shot and broken stick === */
+
+.GoalNet-mesh {
+	stroke: var(--subtle-fg);
+	stroke-width: 0.6;
+	fill: none;
+}
+
+.GoalNet-netting {
+	opacity: 0.8;
+}
+
+.GoalNet-frame {
+	fill: none;
+	stroke: var(--live);
+	stroke-width: 2.5;
+	stroke-linejoin: round;
+}
+
+.MissedShot {
+	height: auto;
+	aspect-ratio: 200 / 64;
+	overflow: visible;
+}
+
+.MissedShot-ice,
+.BrokenStick-ice {
+	stroke: var(--panel-border);
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.MissedShot-crease {
+	fill: var(--team-a);
+	opacity: 0.15;
+}
+
+.MissedShot-path {
+	fill: none;
+	stroke: var(--subtle-fg);
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	stroke-dasharray: 2 5;
+}
+
+.MissedShot-ping {
+	fill: none;
+	stroke: var(--live);
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.MissedShot-puck {
+	fill: var(--site-fg);
+}
+
+.BrokenStick {
+	height: auto;
+	aspect-ratio: 1;
+}
+
+.BrokenStick-shaft {
+	fill: var(--site-fg);
+	stroke: var(--site-fg);
+	stroke-width: 1;
+	stroke-linejoin: round;
+}
+
+/* Knob tape, a band across the handle */
+.BrokenStick-tape {
+	stroke: var(--live);
+	stroke-width: 9;
+}
+
+.BrokenStick-splinters {
+	fill: none;
+	stroke: var(--subtle-fg);
+	stroke-width: 1.5;
+	stroke-linecap: round;
+}
+
+/* === Not found state === */
+
+.NotFoundState {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 8) calc(var(--spacing) * 4);
+	text-align: center;
+}
+
+/* Centered below the header, like a PageLoader */
+.NotFoundState--page {
+	min-height: calc(100dvh - 220px);
+}
+
+.NotFoundState-art {
+	width: min(280px, 100%);
+	margin-bottom: calc(var(--spacing) * 2);
+}
+
+.NotFoundState-title {
+	margin: 0;
+	font-size: var(--text-2xl);
+	font-weight: var(--weight-semibold);
+}
+
+.NotFoundState-description {
+	margin: 0;
+	color: var(--muted-fg);
+	font-size: var(--text-base);
+}
+
+.NotFoundState-link {
+	font-weight: var(--weight-medium);
 }
 
 /* === Errors === */
@@ -3516,8 +3333,10 @@ a.Compare-chip:hover {
 	text-align: left;
 }
 
+/* A set width, so it doesn't grow when the details expand */
 .ErrorState--page {
-	max-width: 560px;
+	width: 560px;
+	max-width: 100%;
 	margin: calc(var(--spacing) * 12) auto;
 	padding: calc(var(--spacing) * 6);
 }
@@ -3530,20 +3349,27 @@ a.Compare-chip:hover {
 	color: var(--live);
 }
 
+.ErrorState-art {
+	flex: none;
+	width: 64px;
+	align-self: flex-start;
+	margin-right: calc(var(--spacing) * 2);
+}
+
 .ErrorState-body {
 	min-width: 0;
 	flex: 1;
 }
 
 .ErrorState-title {
-	font-weight: 650;
+	font-weight: var(--weight-semibold);
 	letter-spacing: -0.01em;
 }
 
 .ErrorState-description {
 	margin: calc(var(--spacing) * 1) 0 0;
 	color: var(--muted-fg);
-	font-size: 0.9375rem;
+	font-size: var(--text-md);
 }
 
 .ErrorState-actions {
@@ -3558,12 +3384,12 @@ a.Compare-chip:hover {
 	appearance: none;
 	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 4);
 	border: none;
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--accent);
 	color: var(--accent-fg);
 	font: inherit;
-	font-size: 0.875rem;
-	font-weight: 600;
+	font-size: var(--text-base);
+	font-weight: var(--weight-semibold);
 	cursor: pointer;
 }
 
@@ -3586,12 +3412,12 @@ a.Compare-chip:hover {
 	appearance: none;
 	display: inline-flex;
 	align-items: center;
-	gap: 2px;
+	gap: calc(var(--spacing) * 0.5);
 	padding: calc(var(--spacing) * 1.5) 0;
 	border: none;
 	background: none;
 	font: inherit;
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 	cursor: pointer;
 }
@@ -3614,9 +3440,9 @@ a.Compare-chip:hover {
 .ErrorState-details code {
 	display: block;
 	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-md);
 	background: var(--subtle-bg);
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	white-space: pre-wrap;
 	word-break: break-word;
 	color: var(--muted-fg);
@@ -3644,7 +3470,7 @@ a.Compare-chip:hover {
 
 .SiteHeader-brand {
 	flex: none;
-	font-weight: 700;
+	font-weight: var(--weight-bold);
 	letter-spacing: -0.02em;
 	color: var(--site-fg);
 }
@@ -3661,9 +3487,9 @@ a.Compare-chip:hover {
 
 .SiteNav-link {
 	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
-	border-radius: 999px;
-	font-size: 0.875rem;
-	font-weight: 500;
+	border-radius: var(--radius-pill);
+	font-size: var(--text-base);
+	font-weight: var(--weight-medium);
 	color: var(--muted-fg);
 }
 
@@ -3694,9 +3520,9 @@ a.Compare-chip:hover {
 	justify-content: space-between;
 	width: 60px;
 	height: 32px;
-	padding: 0 8px;
+	padding: 0 calc(var(--spacing) * 2);
 	border: 1px solid var(--panel-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--subtle-bg);
 	color: var(--muted-fg);
 	cursor: pointer;
@@ -3742,9 +3568,9 @@ a.Compare-chip:hover {
 	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-md);
 	box-shadow: var(--shadow-md);
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	line-height: 1.45;
 	color: var(--site-fg);
 	outline: none;
@@ -3770,13 +3596,13 @@ a.Compare-chip:hover {
 .SiteSearch-input {
 	width: 100%;
 	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3)
-		calc(var(--spacing) * 2) 36px;
+		calc(var(--spacing) * 2) calc(var(--spacing) * 9);
 	border: 1px solid var(--panel-border);
-	border-radius: 999px;
+	border-radius: var(--radius-pill);
 	background: var(--panel-bg);
 	color: inherit;
 	font: inherit;
-	font-size: 0.9375rem;
+	font-size: var(--text-md);
 }
 
 .SiteSearch-input:focus {
@@ -3795,13 +3621,13 @@ a.Compare-chip:hover {
 	place-items: center;
 	min-width: 20px;
 	height: 20px;
-	padding: 0 4px;
+	padding: 0 calc(var(--spacing) * 1);
 	border: 1px solid var(--panel-border);
-	border-radius: 5px;
+	border-radius: var(--radius-xs);
 	background: var(--subtle-bg);
 	color: var(--muted-fg);
 	font: inherit;
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 	line-height: 1;
 	pointer-events: none;
 }
@@ -3839,7 +3665,7 @@ a.Compare-chip:hover {
 
 .SiteSearch-message {
 	padding: calc(var(--spacing) * 3);
-	font-size: 0.875rem;
+	font-size: var(--text-base);
 	color: var(--muted-fg);
 }
 
@@ -3848,7 +3674,7 @@ a.Compare-chip:hover {
 	align-items: center;
 	gap: calc(var(--spacing) * 3);
 	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2.5);
-	border-radius: var(--radius-sm);
+	border-radius: var(--radius-md);
 	color: inherit;
 	cursor: pointer;
 	outline: none;
@@ -3887,14 +3713,14 @@ a.Compare-chip:hover {
 }
 
 .SiteSearch-item-label {
-	font-weight: 600;
+	font-weight: var(--weight-semibold);
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
 
 .SiteSearch-item-detail {
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--muted-fg);
 	overflow: hidden;
 	white-space: nowrap;
@@ -3903,10 +3729,10 @@ a.Compare-chip:hover {
 
 .SiteSearch-kind {
 	flex: none;
-	padding: 2px calc(var(--spacing) * 2);
-	border-radius: 999px;
-	font-size: 0.6875rem;
-	font-weight: 600;
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+	border-radius: var(--radius-pill);
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-semibold);
 	background: var(--subtle-bg);
 	color: var(--muted-fg);
 }
@@ -3945,9 +3771,9 @@ a.Compare-chip:hover {
 	justify-content: center;
 	height: 16px;
 	padding: 0 calc(var(--spacing) * 1.5);
-	border-radius: 4px;
-	font-size: 0.625rem;
-	font-weight: 700;
+	border-radius: var(--radius-xs);
+	font-size: var(--text-3xs);
+	font-weight: var(--weight-bold);
 	line-height: 1;
 	vertical-align: middle;
 	letter-spacing: 0;
@@ -3981,16 +3807,9 @@ a.Compare-chip:hover {
 	gap: calc(var(--spacing) * 1.5);
 }
 
-.GameTable-team-goals {
-	font-variant-numeric: tabular-nums;
-}
-
-.GameTable-team--won .GameTable-team-name {
-	font-weight: 650;
-}
-
-.GameTable-team--lost .GameTable-team-name {
-	color: var(--muted-fg);
+/* The list's own team, from a team's or player's perspective */
+.GameTable-team--highlighted .GameTable-team-name {
+	font-weight: var(--weight-semibold);
 }
 
 .GameTable-team-text {
@@ -3999,7 +3818,40 @@ a.Compare-chip:hover {
 	min-width: 0;
 }
 
-.RinkRoute-links,
+/* The away side of a scoreboard: mirrored, so it hugs the score */
+.GameTable-team--mirrored {
+	flex-direction: row-reverse;
+}
+
+.GameTable-team--mirrored .GameTable-team-text {
+	align-items: flex-end;
+}
+
+/* Its tint bleeds toward the logo, now on the right */
+.GameTable-team--mirrored[class*="GameTable-tint--"] .GameTable-team-name {
+	margin-left: 0;
+	margin-right: calc(var(--spacing) * -1.5);
+}
+
+.GameTable .GameTable-col--away {
+	text-align: right;
+}
+
+/* A scoreboard's team columns fit its longest name (set by GameTable): the
+   logo, its gap, the name and the cell's padding. The rink, or else the
+   links, takes the rest. */
+.GameTable--scoreboard .GameTable-col--away,
+.GameTable--scoreboard .GameTable-col--home {
+	width: calc(
+		28px + var(--spacing) * 8.5 + var(--GameTable-team-chars) * 1ch
+	);
+}
+
+.GameTable--scoreboard .GameTable-col--rink,
+.GameTable--scoreboard:not(:has(.GameTable-col--rink)) .GameTable-col--links {
+	width: auto;
+}
+
 .GameTable-links {
 	display: flex;
 	justify-content: flex-end;
@@ -4022,15 +3874,101 @@ a.Compare-chip:hover {
 	min-width: 720px;
 }
 
-.GameTable th:nth-child(1) {
-	width: 7.5rem;
+/* Extra fixed columns would squeeze the team names; scroll instead */
+.GameTable:has(.GameTable-col--result),
+.GameTable:has(.GameTable-col--score) {
+	min-width: 800px;
 }
 
-.GameTable th:nth-child(4) {
+.GameTable:has(.GameTable-col--when) {
+	min-width: 820px;
+}
+
+.GameTable:has(.GameTable-col--when):has(.GameTable-col--result) {
+	/* + the result chip */
+	min-width: 930px;
+}
+
+/* Just fits the chip ("OTL"): the next column's padding spaces it */
+.GameTable .GameTable-col--result {
+	width: calc(30px + var(--spacing) * 4);
+	padding-right: calc(var(--spacing) * 1);
+}
+
+/* The score, between the teams */
+.GameTable .GameTable-col--score {
+	width: calc(6rem + var(--spacing) * 6);
+	text-align: center;
+}
+
+.GameTable-score {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.GameTable-score-dash {
+	color: var(--subtle-fg);
+}
+
+/* Every goal count the same box, highlighted or not (and "10" or "3"), so
+   the dash lines up across rows */
+.GameTable-goals {
+	display: inline-block;
+	min-width: 1.25rem;
+	padding: 1px calc(var(--spacing) * 1.5);
+	border-radius: var(--radius-sm);
+	text-align: center;
+}
+
+.GameTable-goals--won {
+	font-weight: var(--weight-bold);
+}
+
+.GameTable-goals--lost {
+	color: var(--muted-fg);
+}
+
+/* A light wash behind the winner's goals and the list's own team: its series
+   color in a head-to-head */
+.GameTable-tint--a {
+	--tint: var(--team-a);
+}
+
+.GameTable-tint--b {
+	--tint: var(--team-b);
+}
+
+/* Elsewhere, a neutral wash: it marks the winner without implying a side */
+.GameTable-tint--neutral {
+	--tint: var(--muted-fg);
+}
+
+.GameTable-goals[class*="GameTable-tint--"],
+[class*="GameTable-tint--"] .GameTable-team-name {
+	background: color-mix(in srgb, var(--tint) 16%, transparent);
+}
+
+[class*="GameTable-tint--"] .GameTable-team-name {
+	padding: 1px calc(var(--spacing) * 1.5);
+	margin-left: calc(var(--spacing) * -1.5);
+	border-radius: var(--radius-sm);
+}
+
+/* Fits "Aug 28, 2024 10:55 PM", the longest date and time */
+.GameTable .GameTable-col--when {
+	width: 12rem;
+}
+
+/* Fits "10:45 PM" */
+.GameTable .GameTable-col--time {
+	width: 6.25rem;
+}
+
+.GameTable .GameTable-col--rink {
 	width: 24%;
 }
 
-.GameTable th:last-child {
+.GameTable .GameTable-col--links {
 	width: calc(var(--icon-links-width) + var(--spacing) * 6);
 }
 
@@ -4055,22 +3993,25 @@ a.Compare-chip:hover {
 }
 
 /* Above the row's stretched link, so it gets its own hover (a tooltip) */
-.GameTime {
-	position: relative;
-	z-index: 1;
-	width: fit-content;
-}
 
 .GameTable-time {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	font-weight: 600;
+	gap: calc(var(--spacing) * 0.5);
+}
+
+/* Room for "Dec 11, 2025", left-aligned: the dates and times each line up */
+.GameTable-date {
+	display: inline-block;
+	min-width: 6rem;
+	margin-right: calc(var(--spacing) * 1.5);
+	text-align: left;
+	font-variant-numeric: tabular-nums;
 }
 
 .GameTable-live {
-	font-size: 0.75rem;
-	font-weight: 700;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-bold);
 	color: var(--live);
 }
 
@@ -4079,7 +4020,7 @@ a.Compare-chip:hover {
 }
 
 .GameTable-team-division {
-	font-size: 0.75rem;
+	font-size: var(--text-xs);
 	color: var(--muted-fg);
 }
 
@@ -4093,8 +4034,19 @@ a.Compare-chip:hover {
 	margin-bottom: calc(var(--spacing) * 3);
 }
 
-.Leaders-header .Tabs-list {
-	margin-bottom: 0;
+/* Team page: leaders beside the roster, which needs the width; stacked
+   when narrow */
+.TeamPage-people {
+	display: grid;
+	grid-template-columns: minmax(260px, 1fr) minmax(0, 2.2fr);
+	align-items: start;
+	gap: calc(var(--spacing) * 4);
+}
+
+@media (max-width: 960px) {
+	.TeamPage-people {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 .Leaders-grid {
@@ -4113,8 +4065,8 @@ a.Compare-chip:hover {
 
 .LeaderCard-title {
 	margin-bottom: calc(var(--spacing) * 2);
-	font-size: 0.8125rem;
-	font-weight: 600;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
 	letter-spacing: 0;
 	color: var(--muted-fg);
 }
@@ -4135,27 +4087,27 @@ a.Compare-chip:hover {
 }
 
 .LeaderCard-number {
-	font-size: 0.8125rem;
+	font-size: var(--text-sm);
 	color: var(--subtle-fg);
 }
 
 .LeaderCard-name {
 	overflow: hidden;
-	font-weight: 550;
+	font-weight: var(--weight-medium);
 	color: var(--site-fg);
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
 
 .LeaderCard-value {
-	font-size: 1.25rem;
-	font-weight: 700;
+	font-size: var(--text-2xl);
+	font-weight: var(--weight-bold);
 	letter-spacing: -0.02em;
 }
 
 /* The leader in each category stands out a little */
 .LeaderCard-row:first-child .LeaderCard-value {
-	font-size: 1.5rem;
+	font-size: var(--text-3xl);
 }
 
 /* === Teams page: standings by division === */
@@ -4173,8 +4125,12 @@ a.Compare-chip:hover {
 }
 
 .Standings-team-name {
-	font-weight: 550;
+	font-weight: var(--weight-medium);
 	color: var(--site-fg);
+}
+
+.Standings-table .Standings-division {
+	color: var(--muted-fg);
 }
 
 /* Same team column width in every division, so the stat columns line up */
@@ -4196,7 +4152,86 @@ a.Compare-chip:hover {
 	background: var(--subtle-bg);
 }
 
-/* Three nav links don't fit beside search on phones: give them their own row */
+/* === Players page: every player's stats, grouped === */
+
+/* Off-screen groups skip layout and paint until scrolled near. The size is
+   a guess at a 25-row table until the browser has laid it out once. */
+.PlayersPage-group {
+	content-visibility: auto;
+	contain-intrinsic-size: auto calc(var(--spacing) * 280);
+}
+
+/* Filters the tables by name; sized and shaped like the toolbar's pills */
+.PlayersPage-search {
+	position: relative;
+	flex: 0 1 calc(var(--spacing) * 56);
+	min-width: 0;
+}
+
+.PlayersPage-search-icon {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--spacing) * 3);
+	width: 14px;
+	height: 14px;
+	translate: 0 -50%;
+	color: var(--subtle-fg);
+	pointer-events: none;
+}
+
+.PlayersPage-search-input {
+	width: 100%;
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 3)
+		calc(var(--spacing) * 1.5) calc(var(--spacing) * 8.5);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-pill);
+	background: var(--panel-bg);
+	color: inherit;
+	font: inherit;
+	font-size: var(--text-sm);
+}
+
+.PlayersPage-search-input:focus {
+	outline: none;
+	border-color: var(--subtle-fg);
+	box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+/* A team group's title: logo, name, then its division and count */
+.PlayersPage-title {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+}
+
+.PlayersPage-team-name {
+	font-weight: var(--weight-medium);
+	color: var(--site-fg);
+}
+
+.PlayersPage-table .PlayersPage-division {
+	color: var(--muted-fg);
+}
+
+/* Same player column width in every group, so the stat columns line up */
+.PlayersPage-table .StatsTable th:first-child {
+	width: 24%;
+}
+
+/* Keep player names in view while the stats scroll sideways on phones (see
+   the standings table above for why there's no z-index) */
+.PlayersPage-table .StatsTable td:first-child,
+.PlayersPage-table .StatsTable th:first-child {
+	position: sticky;
+	left: 0;
+	background: var(--panel-bg);
+}
+
+.PlayersPage-table .StatsTable tbody tr:hover td:first-child {
+	background: var(--subtle-bg);
+}
+
+/* The nav links don't fit beside search on phones: give them their own row */
 @media (max-width: 640px) {
 	.SiteHeader-inner {
 		flex-wrap: wrap;
@@ -4211,4 +4246,723 @@ a.Compare-chip:hover {
 		order: 1;
 		width: 100%;
 	}
+}
+
+/* === AboutPage === */
+
+.AboutPage-hero {
+	max-width: 800px;
+	margin: calc(var(--spacing) * 6) 0 calc(var(--spacing) * 10);
+}
+
+.AboutPage-title {
+	margin: 0;
+	font-size: clamp(2rem, 5vw, 3rem);
+	font-weight: var(--weight-heavy);
+	line-height: 1.05;
+	letter-spacing: -0.025em;
+	text-wrap: balance;
+}
+
+.AboutPage-lede {
+	margin: calc(var(--spacing) * 4) 0 0;
+	font-size: 1.125rem;
+	line-height: 1.5;
+	color: var(--muted-fg);
+}
+
+.AboutPage-features {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: calc(var(--spacing) * 4);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.AboutPage-feature {
+	padding: calc(var(--spacing) * 4);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.AboutPage-art {
+	margin-bottom: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 3);
+	background: var(--subtle-bg);
+	border-radius: var(--radius-sm);
+}
+
+.AboutPage-feature-title {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: var(--weight-bold);
+	letter-spacing: -0.01em;
+}
+
+.AboutPage-feature-text {
+	margin: calc(var(--spacing) * 1.5) 0 0;
+	font-size: 0.875rem;
+	line-height: 1.45;
+	color: var(--muted-fg);
+}
+
+/* A key to press, like the search box's "/" hint */
+.AboutPage-feature-text code {
+	padding: 0 calc(var(--spacing) * 1.25);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-xs);
+	background: var(--subtle-bg);
+	color: var(--site-fg);
+	font: inherit;
+	font-size: var(--text-xs);
+}
+
+.AboutPage-note {
+	margin: calc(var(--spacing) * 3) 0 0;
+	font-size: 0.8125rem;
+	font-style: italic;
+	color: var(--muted-fg);
+}
+
+/* The diagrams: shapes only, colored by the theme */
+.AboutArt {
+	display: block;
+	width: 100%;
+	height: auto;
+	overflow: visible;
+}
+
+.AboutArt-ink {
+	fill: var(--accent);
+}
+
+.AboutArt-on-ink {
+	fill: var(--accent-fg);
+}
+
+.AboutArt-muted {
+	fill: var(--subtle-fg);
+}
+
+.AboutArt-surface,
+.AboutArt-card {
+	fill: var(--panel-bg);
+}
+
+.AboutArt-card,
+.AboutArt-outline {
+	stroke: var(--panel-border);
+	stroke-width: 1;
+}
+
+.AboutArt-outline {
+	fill: none;
+}
+
+.AboutArt-track {
+	fill: var(--panel-border);
+}
+
+.AboutArt-divider {
+	fill: var(--subtle-fg);
+}
+
+.AboutArt-a {
+	fill: var(--team-a);
+}
+
+.AboutArt-b {
+	fill: var(--team-b);
+}
+
+.AboutArt-win {
+	fill: var(--win);
+}
+
+.AboutArt-live {
+	fill: var(--live);
+}
+
+.AboutArt-pulse {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: AboutArt-pulse 1.8s ease-out infinite;
+}
+
+@keyframes AboutArt-pulse {
+	from {
+		opacity: 0.6;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(2.4);
+	}
+}
+
+@media (max-width: 960px) {
+	.AboutPage-features {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 600px) {
+	.AboutPage-hero {
+		margin: 0 0 calc(var(--spacing) * 6);
+	}
+
+	.AboutPage-features {
+		gap: calc(var(--spacing) * 2.5);
+	}
+
+	.AboutPage-feature {
+		padding: calc(var(--spacing) * 2.5);
+	}
+
+	.AboutPage-art {
+		margin-bottom: calc(var(--spacing) * 2.5);
+		padding: calc(var(--spacing) * 1.5);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.AboutArt-pulse {
+		animation: none;
+		opacity: 0.25;
+	}
+}
+
+.AboutArt-link,
+.AboutArt-road,
+.AboutArt-glass {
+	fill: none;
+	stroke-linecap: round;
+}
+
+.AboutArt-check {
+	fill: none;
+	stroke: var(--accent-fg);
+	stroke-width: 1.75;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.AboutArt-link {
+	stroke: var(--subtle-fg);
+	stroke-width: 1.5;
+}
+
+.AboutArt-road {
+	stroke: var(--panel-border);
+	stroke-width: 6;
+}
+
+.AboutArt-glass {
+	stroke: var(--muted-fg);
+	stroke-width: 2;
+}
+
+.AboutArt-kind-player {
+	fill: var(--kind-player-fg);
+	opacity: 0.5;
+}
+
+.AboutArt-kind-team {
+	fill: var(--kind-team-fg);
+	opacity: 0.5;
+}
+
+.AboutArt-kind-rink {
+	fill: var(--kind-rink-fg);
+	opacity: 0.5;
+}
+
+.AboutArt-badge-text,
+.AboutArt-score,
+.AboutArt-rank,
+.AboutArt-key {
+	font-family: var(--font-sans);
+	font-weight: var(--weight-bold);
+}
+
+.AboutArt-badge-text {
+	font-size: 8px;
+	letter-spacing: 0.04em;
+	fill: #fff;
+}
+
+.AboutArt-score {
+	font-size: 20px;
+	letter-spacing: -0.02em;
+	fill: var(--site-fg);
+}
+
+.AboutArt-rank {
+	font-size: 10px;
+	fill: var(--muted-fg);
+}
+
+.AboutArt-key {
+	font-size: 10px;
+	fill: var(--muted-fg);
+}
+
+/* === HelpPage === */
+
+.HelpPage {
+	max-width: 760px;
+}
+
+.HelpPage-hero {
+	margin: calc(var(--spacing) * 6) 0 calc(var(--spacing) * 8);
+}
+
+.HelpPage-title {
+	margin: 0;
+	font-size: clamp(2rem, 5vw, 3rem);
+	font-weight: var(--weight-heavy);
+	line-height: 1.05;
+	letter-spacing: -0.025em;
+}
+
+.HelpPage-lede {
+	margin: calc(var(--spacing) * 4) 0 0;
+	font-size: 1.125rem;
+	line-height: 1.5;
+	color: var(--prose-fg);
+}
+
+/* Underlined, since the text around them is dark too */
+.HelpPage a {
+	color: var(--prose-link);
+	text-decoration: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.18em;
+}
+
+.HelpPage a:hover {
+	text-decoration-thickness: 2px;
+}
+
+/* A list of nothing but links needs no underlines to read as links */
+.HelpPage-toc-list a {
+	text-decoration: none;
+}
+
+.HelpPage-toc-list a:hover {
+	text-decoration: underline;
+}
+
+.HelpPage-toc {
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.HelpPage-toc-list {
+	display: grid;
+	gap: calc(var(--spacing) * 2);
+	margin: calc(var(--spacing) * 3) 0 0;
+	padding-left: 1.4em;
+	line-height: 1.4;
+}
+
+.HelpPage-toc-list li::marker {
+	color: var(--muted-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.HelpPage-faq {
+	margin-top: calc(var(--spacing) * 10);
+}
+
+.HelpPage-item {
+	/* Clear of the sticky header when a link scrolls here */
+	scroll-margin-top: 96px;
+}
+
+.HelpPage-item + .HelpPage-item {
+	margin-top: calc(var(--spacing) * 8);
+	padding-top: calc(var(--spacing) * 8);
+	border-top: 1px solid var(--panel-border);
+}
+
+.HelpPage-question {
+	margin: 0;
+	font-size: 1.125rem;
+	font-weight: var(--weight-bold);
+	line-height: 1.35;
+	letter-spacing: -0.01em;
+}
+
+.HelpPage-answer {
+	margin-top: calc(var(--spacing) * 2.5);
+	line-height: 1.6;
+	color: var(--prose-fg);
+}
+
+.HelpPage-answer p {
+	margin: 0;
+}
+
+.HelpPage-answer p + p {
+	margin-top: calc(var(--spacing) * 2.5);
+}
+
+.HelpPage-answer code {
+	padding: 0 calc(var(--spacing) * 1.25);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-xs);
+	background: var(--subtle-bg);
+	color: var(--site-fg);
+	font: inherit;
+	font-size: var(--text-xs);
+}
+
+@media (max-width: 600px) {
+	.HelpPage-hero {
+		margin: 0 0 calc(var(--spacing) * 6);
+	}
+
+	.HelpPage-toc {
+		padding: calc(var(--spacing) * 4);
+	}
+}
+
+/* === StatusPage === */
+
+.StatusPage {
+	max-width: 880px;
+	margin: 0 auto;
+}
+
+.StatusPage-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 3);
+	margin: calc(var(--spacing) * 6) 0 calc(var(--spacing) * 6);
+}
+
+.StatusPage-title {
+	margin: 0;
+	font-size: clamp(1.75rem, 4vw, 2.5rem);
+	font-weight: var(--weight-heavy);
+	letter-spacing: -0.025em;
+}
+
+/* An outlined button, quieter than the banner below it */
+.StatusPage-report {
+	flex: none;
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-pill);
+	background: var(--panel-bg);
+	box-shadow: var(--shadow-sm);
+	color: var(--site-fg);
+	font-size: 0.875rem;
+	font-weight: var(--weight-semibold);
+	white-space: nowrap;
+}
+
+.StatusPage-report:hover {
+	text-decoration: none;
+	border-color: var(--card-hover-border);
+	background: var(--subtle-bg);
+}
+
+.StatusPage-panel {
+	margin-top: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 5);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.StatusBanner {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 5);
+	border-radius: var(--radius);
+	border: 1px solid;
+	background: var(--panel-bg);
+}
+
+.StatusBanner--operational {
+	border-color: var(--status-ok);
+	background: color-mix(in srgb, var(--status-ok) 9%, var(--panel-bg));
+}
+
+.StatusBanner--degraded {
+	border-color: var(--status-slow);
+	background: color-mix(in srgb, var(--status-slow) 12%, var(--panel-bg));
+}
+
+.StatusBanner--outage {
+	border-color: var(--status-down);
+	background: color-mix(in srgb, var(--status-down) 9%, var(--panel-bg));
+}
+
+.StatusBanner-title {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: var(--weight-bold);
+	letter-spacing: -0.01em;
+}
+
+.StatusBanner-meta {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-size: 0.875rem;
+	color: var(--prose-fg);
+}
+
+.StatusIcon {
+	flex: none;
+}
+
+.StatusIcon path {
+	fill: none;
+	stroke: var(--panel-bg);
+	stroke-width: 1.75;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.StatusIcon--operational circle {
+	fill: var(--status-ok);
+}
+
+.StatusIcon--degraded circle {
+	fill: var(--status-slow);
+}
+
+.StatusIcon--outage circle {
+	fill: var(--status-down);
+}
+
+.StatusPage-components {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.StatusComponent + .StatusComponent {
+	margin-top: calc(var(--spacing) * 6);
+	padding-top: calc(var(--spacing) * 6);
+	border-top: 1px solid var(--panel-border);
+}
+
+.StatusComponent-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 4);
+	margin-bottom: calc(var(--spacing) * 3);
+}
+
+.StatusComponent-name {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: var(--weight-semibold);
+}
+
+.StatusComponent-description {
+	margin: calc(var(--spacing) * 0.5) 0 0;
+	font-size: 0.875rem;
+	color: var(--prose-fg);
+}
+
+.StatusPill {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	font-size: 0.875rem;
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+}
+
+.StatusPill-latency {
+	font-weight: var(--weight-regular);
+	color: var(--muted-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.UptimeBars {
+	display: flex;
+	gap: 2px;
+	height: 34px;
+}
+
+.UptimeBar {
+	flex: 1;
+	min-width: 0;
+	border-radius: 2px;
+	background: var(--panel-border);
+}
+
+.UptimeBar:hover {
+	opacity: 0.75;
+}
+
+.UptimeBar--operational {
+	background: var(--status-ok);
+}
+
+.UptimeBar--degraded {
+	background: var(--status-slow);
+}
+
+.UptimeBar--outage {
+	background: var(--status-down);
+}
+
+.UptimeBars-axis {
+	display: flex;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 2);
+	margin-top: calc(var(--spacing) * 2);
+	font-size: 0.75rem;
+	color: var(--muted-fg);
+}
+
+.UptimeBars-uptime {
+	color: var(--prose-fg);
+	font-weight: var(--weight-medium);
+}
+
+.UptimeBars-narrow {
+	display: none;
+}
+
+.StatusLegend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 2) calc(var(--spacing) * 5);
+	margin: calc(var(--spacing) * 6) 0 0;
+	padding: calc(var(--spacing) * 4) 0 0;
+	border-top: 1px solid var(--panel-border);
+	list-style: none;
+	font-size: 0.8125rem;
+	color: var(--prose-fg);
+}
+
+.StatusLegend li {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+}
+
+.StatusLegend .UptimeBar {
+	flex: none;
+	width: 6px;
+	height: 14px;
+}
+
+.StatusDeploy-list {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: calc(var(--spacing) * 4);
+	margin: calc(var(--spacing) * 3) 0 0;
+}
+
+.StatusDeploy-list dt {
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.StatusDeploy-list dd {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-weight: var(--weight-medium);
+}
+
+.StatusDeploy-commit {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	color: var(--prose-link);
+}
+
+.StatusDeploy-dirty {
+	display: block;
+	margin-top: calc(var(--spacing) * 0.5);
+	font-size: 0.8125rem;
+	font-weight: var(--weight-regular);
+	color: var(--warn-fg);
+}
+
+@media (max-width: 600px) {
+	.StatusPage-header {
+		margin-top: 0;
+	}
+
+	.StatusPage-panel {
+		padding: calc(var(--spacing) * 4);
+	}
+
+	.StatusComponent-head {
+		flex-direction: column;
+		gap: calc(var(--spacing) * 2);
+	}
+
+	/* 90 bars don't fit; show the last 30 days */
+	.UptimeBar--early {
+		display: none;
+	}
+
+	.UptimeBars-wide {
+		display: none;
+	}
+
+	.UptimeBars-narrow {
+		display: inline;
+	}
+
+	.StatusDeploy-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+/* === SiteFooter === */
+
+.SiteFooter {
+	margin-top: calc(var(--spacing) * 12);
+	border-top: 1px solid var(--panel-border);
+}
+
+.SiteFooter-inner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 3);
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+	font-size: 0.875rem;
+}
+
+.SiteFooter-brand {
+	font-weight: 600;
+	color: var(--muted-fg);
+}
+
+.SiteFooter-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 5);
+}
+
+.SiteFooter-link {
+	color: var(--muted-fg);
+}
+
+.SiteFooter-link:hover {
+	color: var(--site-fg);
 }

@@ -1,24 +1,24 @@
+import {Logger} from "@dvdzkwsk/logger"
 import {createConcurrencyLimiter} from "@dvdzkwsk/util/AsyncUtil"
-import {zonedTimeToDate} from "@dvdzkwsk/util/DateUtil"
 import {doFetch} from "@dvdzkwsk/util/FetchUtil"
 import {HTMLElement, parse} from "node-html-parser"
 import {z} from "zod"
 import {
-	KHLDivision,
 	KHLArena,
+	KHLArenaRef,
 	KHLArenaSchema,
 	KHLBoxScore,
 	KHLBoxScoreSchema,
 	KHLBoxScoreTeam,
+	KHLDivision,
 	KHLGame,
+	KHLGamePreviewStats,
+	KHLGamePreviewStatsSchema,
+	KHLGameSchema,
 	KHLGameStats,
 	KHLGameStatsSchema,
-	KHLScoreboardGame,
-	KHLScoreboardGameSchema,
-	KHLScoreboardTeam,
 	KHLGameTeamStats,
 	KHLGoal,
-	KHLGameSchema,
 	KHLLeagueGame,
 	KHLLeagueGameSchema,
 	KHLPenalty,
@@ -27,6 +27,10 @@ import {
 	KHLPlayerSchema,
 	KHLPlayerSearchResult,
 	KHLPlayerSearchResultSchema,
+	KHLRosterRow,
+	KHLScoreboardGame,
+	KHLScoreboardGameSchema,
+	KHLScoreboardTeam,
 	KHLSeason,
 	KHLSeasonStatsTable,
 	KHLStandingsDivision,
@@ -34,14 +38,16 @@ import {
 	KHLStandingsPageSchema,
 	KHLStandingsRow,
 	KHLStatSection,
-	KHLRosterRow,
 	KHLTeam,
-	KHLTeamStats,
-	KHLTeamStatsSchema,
 	KHLTeamsPage,
 	KHLTeamsPageSchema,
+	KHLTeamStats,
+	KHLTeamStatsSchema,
 } from "../shared/KHLJson.js"
-import {LEAGUE, URLS} from "../shared/KHLConfig.js"
+import {URLS} from "../shared/KHLConfig.js"
+import {toLeagueInstant} from "../shared/LeagueTime.js"
+
+const logger = new Logger("KHL")
 
 export async function getKHLSeasons(): Promise<KHLSeason[]> {
 	const page = await getKHLTeamsPage()
@@ -161,6 +167,15 @@ export async function getKHLLeagueSchedule(): Promise<KHLLeagueGame[]> {
 	return z.array(KHLLeagueGameSchema).parse(parseKHLLeagueSchedule(root, url))
 }
 
+/** Season stats the game's preview page compares (PP%, shots, ...). */
+export async function getKHLGamePreviewStats(
+	gameId: string,
+): Promise<KHLGamePreviewStats> {
+	const url = new URL(`/game/${gameId}/preview`, URLS.KHL)
+	const root = await fetchKHLPage(url)
+	return KHLGamePreviewStatsSchema.parse(parseKHLGamePreviewStats(root))
+}
+
 /** The game's period-by-period score, goals and penalties. */
 export async function getKHLBoxScore(gameId: string): Promise<KHLBoxScore> {
 	const url = new URL(`/game/${gameId}/summary`, URLS.KHL)
@@ -208,14 +223,20 @@ async function fetchKHLPage(url: URL): Promise<HTMLElement> {
 	return parse(html)
 }
 
-function parseKHLTeamsPage(root: HTMLElement, pageUrl: URL): KHLTeamsPage {
-	// The page has two dropdowns: seasons, then divisions within the selected
-	// season. An unknown season renders neither.
+/**
+ * /teams and /standings have the same two dropdowns: seasons, then divisions
+ * within the selected season. An unknown season renders neither. The first
+ * division item is "All Divisions" (?season=N), which tells us which season
+ * the page is showing; the rest are the season's divisions.
+ */
+function parseSeasonMenus(
+	root: HTMLElement,
+	pageUrl: URL,
+): {season: KHLSeason; seasons: KHLSeason[]; divisionItems: HTMLElement[]} {
 	const [seasonMenu, divisionMenu] = root.querySelectorAll(".btn-group")
 	if (!seasonMenu || !divisionMenu) {
-		throw new Error(`${pageUrl}: season not found`)
+		throw newParseError(pageUrl, `season not found`)
 	}
-
 	const seasons = seasonMenu
 		.querySelectorAll("a.dropdown-item")
 		.map((a): KHLSeason => {
@@ -224,22 +245,24 @@ function parseKHLTeamsPage(root: HTMLElement, pageUrl: URL): KHLTeamsPage {
 				name: a.text.trim(),
 			}
 		})
-
-	// The first division item is "All Divisions" (/teams/?season=N), which
-	// tells us which season the page is showing.
 	const [allDivisionsItem, ...divisionItems] =
 		divisionMenu.querySelectorAll("a.dropdown-item")
 	if (!allDivisionsItem) {
-		throw new Error(`${pageUrl}: missing "All Divisions" item`)
+		throw newParseError(pageUrl, `missing "All Divisions" item`)
 	}
 	const currentSeasonId = getSearchParam(allDivisionsItem, "season")
 	const season = seasons.find((s) => s.id === currentSeasonId)
 	if (!season) {
-		throw new Error(
-			`${pageUrl}: season ${currentSeasonId} not in season list`,
+		throw newParseError(
+			pageUrl,
+			`season ${currentSeasonId} not in season list`,
 		)
 	}
+	return {season, seasons, divisionItems}
+}
 
+function parseKHLTeamsPage(root: HTMLElement, pageUrl: URL): KHLTeamsPage {
+	const {season, seasons, divisionItems} = parseSeasonMenus(root, pageUrl)
 	const divisions = divisionItems.map((a): KHLDivision => {
 		return {
 			id: matchHref(a, /^\/teams\/(\d+)\//),
@@ -250,7 +273,10 @@ function parseKHLTeamsPage(root: HTMLElement, pageUrl: URL): KHLTeamsPage {
 	const divisionsByName = new Map<string, KHLDivision>()
 	for (const division of divisions) {
 		if (divisionsByName.has(division.name)) {
-			throw new Error(`${pageUrl}: duplicate division "${division.name}"`)
+			throw newParseError(
+				pageUrl,
+				`duplicate division "${division.name}"`,
+			)
 		}
 		divisionsByName.set(division.name, division)
 	}
@@ -268,20 +294,23 @@ function parseKHLTeamsPage(root: HTMLElement, pageUrl: URL): KHLTeamsPage {
 			const name = el.text.trim()
 			currentDivision = divisionsByName.get(name) ?? null
 			if (!currentDivision) {
-				throw new Error(`${pageUrl}: unknown division header "${name}"`)
+				throw newParseError(
+					pageUrl,
+					`unknown division header "${name}"`,
+				)
 			}
 			continue
 		}
 		if (!currentDivision) {
-			throw new Error(`${pageUrl}: team listed before any division`)
+			throw newParseError(pageUrl, `team listed before any division`)
 		}
 		const link = el.querySelector('a[href^="/team/"]')
 		const name = el.querySelector(".text-primary")
 		if (!link || !name) {
-			throw new Error(`${pageUrl}: malformed team card`)
+			throw newParseError(pageUrl, `malformed team card`)
 		}
 		teams.push({
-			id: matchHref(link, /^\/team\/(\d+)\//),
+			id: matchHref(link, TEAM_HREF),
 			name: name.text.trim(),
 			seasonId: season.id,
 			divisionId: currentDivision.id,
@@ -303,10 +332,10 @@ function parseKHLPlayerSearch(
 		const playerLink = playerCell?.querySelector('a[href^="/player/"]')
 		const teamLink = teamCell?.querySelector('a[href^="/team/"]')
 		if (!playerLink || !positionCell || !teamCell || !teamLink) {
-			throw new Error(`${pageUrl}: malformed search result row`)
+			throw newParseError(pageUrl, `malformed search result row`)
 		}
 		return {
-			playerId: matchHref(playerLink, /^\/player\/(\d+)\//),
+			playerId: matchHref(playerLink, PLAYER_HREF),
 			name: playerLink.text.trim(),
 			position: positionCell.text.trim() || null,
 			teamId: getSearchParam(playerLink, "team"),
@@ -326,11 +355,11 @@ function parseKHLPlayer(
 	// position. The number is omitted for players without one.
 	const heading = root.querySelector("h1.text-md-12")
 	if (!heading) {
-		throw new Error(`${pageUrl}: missing player heading`)
+		throw newParseError(pageUrl, `missing player heading`)
 	}
 	const headingMatch = heading.text.trim().match(/^(?:#(\S+)\s+)?(.+)$/)
 	if (!headingMatch?.[2]) {
-		throw new Error(`${pageUrl}: malformed player heading`)
+		throw newParseError(pageUrl, `malformed player heading`)
 	}
 	const teamLine = heading.nextElementSibling?.text.trim() || null
 	const position =
@@ -348,7 +377,7 @@ function parseKHLPlayer(
 		const label = el.querySelector(".text-muted")?.text.trim()
 		const value = el.querySelector(".text-primary")?.text.trim()
 		if (!section || !label || value === undefined) {
-			throw new Error(`${pageUrl}: malformed stat card`)
+			throw newParseError(pageUrl, `malformed stat card`)
 		}
 		section.stats.push({
 			label,
@@ -363,8 +392,9 @@ function parseKHLPlayer(
 	for (const tableHeading of root.querySelectorAll("h1.text-secondary.p2")) {
 		const table = tableHeading.nextElementSibling?.querySelector("table")
 		if (!table) {
-			throw new Error(
-				`${pageUrl}: missing table for "${tableHeading.text.trim()}"`,
+			throw newParseError(
+				pageUrl,
+				`missing table for "${tableHeading.text.trim()}"`,
 			)
 		}
 		const columns = table.querySelectorAll("thead th").map((th) => {
@@ -378,17 +408,12 @@ function parseKHLPlayer(
 			if (!seasonLink || !teamLink) {
 				return []
 			}
-			const stats: Record<string, string> = {}
-			columns.forEach((column, i) => {
-				if (i >= 2) {
-					stats[column] = cells[i]?.text.trim() ?? ""
-				}
-			})
+			const stats = readStatCells(columns.slice(2), cells, 2)
 			return [
 				{
 					seasonId: getSearchParam(seasonLink, "season"),
 					seasonName: seasonLink.text.trim(),
-					teamId: matchHref(teamLink, /^\/team\/(\d+)\//),
+					teamId: matchHref(teamLink, TEAM_HREF),
 					teamName: teamLink.text.trim(),
 					stats,
 				},
@@ -433,7 +458,7 @@ function parseKHLTeamStats(
 	const tables = root.querySelectorAll("table.table")
 	const [skaterTable, goalieTable] = tables
 	if (!skaterTable) {
-		throw new Error(`${pageUrl}: missing roster table`)
+		throw newParseError(pageUrl, `missing roster table`)
 	}
 	const skaters = parseRosterTable(skaterTable, pageUrl)
 	const goalies = goalieTable
@@ -476,7 +501,7 @@ function parseScoreboardCard(
 ): KHLScoreboardGame {
 	const gameLink = card.querySelector('.card-footer a[href^="/game/"]')
 	if (!gameLink) {
-		throw new Error(`${pageUrl}: score card without a game link`)
+		throw newParseError(pageUrl, `score card without a game link`)
 	}
 	const status = card.querySelector(".game-time span")?.text.trim() ?? ""
 	const isFinal = /^final/i.test(status)
@@ -490,11 +515,11 @@ function parseScoreboardCard(
 			const link = row.querySelector('a[href^="/team/"]')
 			const details = row.querySelectorAll(".team-details > div")
 			if (!link || !details[0]) {
-				throw new Error(`${pageUrl}: malformed score card team`)
+				throw newParseError(pageUrl, `malformed score card team`)
 			}
 			const goals = row.querySelector(".team-score")?.text.trim()
 			return {
-				id: matchHref(link, /^\/team\/(\d+)\//),
+				id: matchHref(link, TEAM_HREF),
 				name: details[0].text.trim(),
 				logoUrl: getImageUrl(row, pageUrl),
 				divisionName: details[1]?.text.trim() || null,
@@ -502,18 +527,13 @@ function parseScoreboardCard(
 			}
 		})
 	if (!away || !home) {
-		throw new Error(`${pageUrl}: score card without two teams`)
+		throw newParseError(pageUrl, `score card without two teams`)
 	}
 	return {
-		gameId: matchHref(gameLink, /^\/game\/(\d+)\//),
+		gameId: matchHref(gameLink, GAME_HREF),
 		isFinal,
 		startsAt: isFinal ? null : parseScoreboardTime(date, status),
-		arena: arenaLink
-			? {
-					id: matchHref(arenaLink, /^\/arena\/(\d+)/),
-					name: arenaLink.text.trim(),
-				}
-			: null,
+		arena: parseArenaLink(arenaLink),
 		away,
 		home,
 	}
@@ -521,16 +541,8 @@ function parseScoreboardCard(
 
 /** "2026-10-14" + "10:35 PM" -> ISO instant; null for anything else */
 function parseScoreboardTime(date: string, time: string): string | null {
-	const match = time.match(/^(\d{1,2}):(\d{2}) (AM|PM)$/i)
-	if (!match) {
-		return null
-	}
-	const hour = (Number(match[1]) % 12) + (/pm/i.test(match[3]!) ? 12 : 0)
-	return zonedTimeToDate(
-		date,
-		`${pad2(hour)}:${match[2]}`,
-		LEAGUE.TIME_ZONE,
-	).toISOString()
+	const localTime = parseClockTime(time)
+	return localTime ? toLeagueInstant(date, localTime) : null
 }
 
 function parseKHLGameStats(
@@ -544,7 +556,7 @@ function parseKHLGameStats(
 	const parseTeam = (paneId: string): KHLGameTeamStats => {
 		const pane = root.querySelector(`#${paneId}`)
 		if (!pane) {
-			throw new Error(`${pageUrl}: missing #${paneId} stats`)
+			throw newParseError(pageUrl, `missing #${paneId} stats`)
 		}
 		const [skaterTable, goalieTable] = pane.querySelectorAll("table.table")
 		const empty = {columns: [], rows: []}
@@ -576,48 +588,20 @@ function parseRosterTable(
 		const cells = tr.querySelectorAll("td")
 		const link = cells[1]?.querySelector('a[href^="/player/"]')
 		if (!link) {
-			throw new Error(`${pageUrl}: roster row without a player link`)
+			throw newParseError(pageUrl, `roster row without a player link`)
 		}
-		const stats: Record<string, string> = {}
-		columns.forEach((column, i) => {
-			stats[column] = cells[i + 2]?.text.trim() ?? ""
-		})
 		return {
-			playerId: matchHref(link, /^\/player\/(\d+)\//),
+			playerId: matchHref(link, PLAYER_HREF),
 			number: cells[0]?.text.trim() || null,
 			name: link.text.trim(),
-			stats,
+			stats: readStatCells(columns, cells, 2),
 		}
 	})
 	return {columns, rows}
 }
 
 function parseKHLStandings(root: HTMLElement, pageUrl: URL): KHLStandingsPage {
-	// Same two dropdowns as /teams: seasons, then divisions, whose first item
-	// ("All Divisions", /standings/?season=N) says which season is shown.
-	const [seasonMenu, divisionMenu] = root.querySelectorAll(".btn-group")
-	if (!seasonMenu || !divisionMenu) {
-		throw new Error(`${pageUrl}: season not found`)
-	}
-	const seasons = seasonMenu
-		.querySelectorAll("a.dropdown-item")
-		.map((a): KHLSeason => {
-			return {
-				id: getSearchParam(a, "season"),
-				name: a.text.trim(),
-			}
-		})
-	const allDivisionsItem = divisionMenu.querySelector("a.dropdown-item")
-	if (!allDivisionsItem) {
-		throw new Error(`${pageUrl}: missing "All Divisions" item`)
-	}
-	const currentSeasonId = getSearchParam(allDivisionsItem, "season")
-	const season = seasons.find((s) => s.id === currentSeasonId)
-	if (!season) {
-		throw new Error(
-			`${pageUrl}: season ${currentSeasonId} not in season list`,
-		)
-	}
+	const {season, seasons} = parseSeasonMenus(root, pageUrl)
 
 	// Each division is a heading followed by its table. A division without
 	// teams has a heading but no table.
@@ -629,7 +613,7 @@ function parseKHLStandings(root: HTMLElement, pageUrl: URL): KHLStandingsPage {
 			continue
 		}
 		if (!name) {
-			throw new Error(`${pageUrl}: standings table before any division`)
+			throw newParseError(pageUrl, `standings table before any division`)
 		}
 		// # | Team | GP | W | L | ...
 		const columns = el
@@ -643,19 +627,16 @@ function parseKHLStandings(root: HTMLElement, pageUrl: URL): KHLStandingsPage {
 				const cells = tr.querySelectorAll("td, th")
 				const link = cells[1]?.querySelector('a[href^="/team/"]')
 				if (!link) {
-					throw new Error(
-						`${pageUrl}: standings row without a team link`,
+					throw newParseError(
+						pageUrl,
+						`standings row without a team link`,
 					)
 				}
-				const stats: Record<string, string> = {}
-				columns.forEach((column, i) => {
-					stats[column] = cells[i + 2]?.text.trim() ?? ""
-				})
 				return {
-					teamId: matchHref(link, /^\/team\/(\d+)\//),
+					teamId: matchHref(link, TEAM_HREF),
 					teamName: link.text.trim(),
 					logoUrl: getImageUrl(cells[1]!, pageUrl),
-					stats,
+					stats: readStatCells(columns, cells, 2),
 				}
 			})
 		divisions.push({name, columns, rows})
@@ -685,8 +666,9 @@ function parseKHLLeagueSchedule(
 		)
 		const gameLink = gameCell?.querySelector('a[href^="/game/"]')
 		if (!dateCell || !timeCell || !awayLink || !homeLink || !gameLink) {
-			throw new Error(
-				`${pageUrl}: malformed schedule row: ${row.text.trim()}`,
+			throw newParseError(
+				pageUrl,
+				`malformed schedule row: ${row.text.trim()}`,
 			)
 		}
 
@@ -694,43 +676,31 @@ function parseKHLLeagueSchedule(
 		const dateMatch = dateCell.text
 			.trim()
 			.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-		const timeMatch = timeCell.text
-			.trim()
-			.match(/^(\d{1,2}):(\d{2}) (AM|PM)/)
-		if (!dateMatch || !timeMatch) {
-			throw new Error(
-				`${pageUrl}: unparseable date/time "${dateCell.text.trim()} ${timeCell.text.trim()}"`,
+		const localTime = parseClockTime(timeCell.text)
+		if (!dateMatch || !localTime) {
+			throw newParseError(
+				pageUrl,
+				`unparseable date/time "${dateCell.text.trim()} ${timeCell.text.trim()}"`,
 			)
 		}
-		const hour =
-			(Number(timeMatch[1]) % 12) + (timeMatch[3] === "PM" ? 12 : 0)
 		const localDate = `${dateMatch[3]}-${pad2(Number(dateMatch[1]))}-${pad2(Number(dateMatch[2]))}`
-		const localTime = `${pad2(hour)}:${timeMatch[2]}`
-		const arenaLink = timeCell.querySelector('a[href^="/arena/"]')
 
 		return [
 			{
-				id: matchHref(gameLink, /^\/game\/(\d+)\//),
+				id: matchHref(gameLink, GAME_HREF),
 				localDate,
 				localTime,
-				startsAt: zonedTimeToDate(
-					localDate,
-					localTime,
-					LEAGUE.TIME_ZONE,
-				).toISOString(),
-				arena: arenaLink
-					? {
-							id: matchHref(arenaLink, /^\/arena\/(\d+)/),
-							name: arenaLink.text.trim(),
-						}
-					: null,
+				startsAt: toLeagueInstant(localDate, localTime),
+				arena: parseArenaLink(
+					timeCell.querySelector('a[href^="/arena/"]'),
+				),
 				homeTeam: {
-					id: matchHref(homeLink, /^\/team\/(\d+)\//),
+					id: matchHref(homeLink, TEAM_HREF),
 					name: homeLink.text.trim(),
 					logoUrl: getImageUrl(homeCell!, pageUrl),
 				},
 				awayTeam: {
-					id: matchHref(awayLink, /^\/team\/(\d+)\//),
+					id: matchHref(awayLink, TEAM_HREF),
 					name: awayLink.text.trim(),
 					logoUrl: getImageUrl(awayCell!, pageUrl),
 				},
@@ -748,7 +718,7 @@ function parseKHLArena(root: HTMLElement, pageUrl: URL, id: string): KHLArena {
 	const at = lines.indexOf("Arena Information")
 	const name = lines[at + 1]
 	if (at < 0 || !name || name === "View Larger Map") {
-		throw new Error(`${pageUrl}: arena not found`)
+		throw newParseError(pageUrl, `arena not found`)
 	}
 	const address = lines[at + 2]
 	return {
@@ -758,6 +728,41 @@ function parseKHLArena(root: HTMLElement, pageUrl: URL, id: string): KHLArena {
 	}
 }
 
+/** Preview page labels, as the league prints them, to our keys */
+const PREVIEW_STAT_LABELS: Record<string, keyof KHLGamePreviewStats> = {
+	"POWERPLAY%": "powerPlayPct",
+	"PENALTY KILL%": "penaltyKillPct",
+	"SHOTS/GP": "shotsPerGame",
+	"SHOTS AGAINST/GP": "shotsAgainstPerGame",
+	"PIM/GP": "penaltyMinutesPerGame",
+}
+
+function parseKHLGamePreviewStats(root: HTMLElement): KHLGamePreviewStats {
+	const stats: KHLGamePreviewStats = {
+		powerPlayPct: null,
+		penaltyKillPct: null,
+		shotsPerGame: null,
+		shotsAgainstPerGame: null,
+		penaltyMinutesPerGame: null,
+	}
+	// Each stat is a row of three: away value | label | home value
+	for (const row of root.querySelectorAll("div.row")) {
+		const cells = row.querySelectorAll("p")
+		if (cells.length !== 3) {
+			continue
+		}
+		const key = PREVIEW_STAT_LABELS[cells[1]!.text.trim().toUpperCase()]
+		if (key) {
+			const value = (cell: HTMLElement) => {
+				const number = Number.parseFloat(cell.text.replace("%", ""))
+				return Number.isFinite(number) ? number : null
+			}
+			stats[key] = {away: value(cells[0]!), home: value(cells[2]!)}
+		}
+	}
+	return stats
+}
+
 function parseKHLBoxScore(
 	root: HTMLElement,
 	pageUrl: URL,
@@ -765,7 +770,7 @@ function parseKHLBoxScore(
 ): KHLBoxScore {
 	const main = root.querySelector('[role="main"]')
 	if (!main) {
-		throw new Error(`${pageUrl}: missing main content`)
+		throw newParseError(pageUrl, `missing main content`)
 	}
 
 	// The header lists away | time, rink and score | home. (Its mobile copy
@@ -776,17 +781,13 @@ function parseKHLBoxScore(
 
 	// "Oct 13, 2026 at 11:05 PM"
 	const when = main.querySelector(".text-center.text-3")?.text.trim() ?? ""
-	const whenMatch = when.match(
-		/^(\w{3}) (\d{1,2}), (\d{4}) at (\d{1,2}):(\d{2}) (AM|PM)$/,
-	)
+	const whenMatch = when.match(/^(\w{3}) (\d{1,2}), (\d{4}) at (.+)$/)
 	const monthIndex = MONTHS.indexOf(whenMatch?.[1] ?? "")
-	if (!whenMatch || monthIndex < 0) {
-		throw new Error(`${pageUrl}: unparseable game time "${when}"`)
+	const localTime = whenMatch ? parseClockTime(whenMatch[4]!) : null
+	if (!whenMatch || monthIndex < 0 || !localTime) {
+		throw newParseError(pageUrl, `unparseable game time "${when}"`)
 	}
-	const hour = (Number(whenMatch[4]) % 12) + (whenMatch[6] === "PM" ? 12 : 0)
 	const localDate = `${whenMatch[3]}-${pad2(monthIndex + 1)}-${pad2(Number(whenMatch[2]))}`
-	const localTime = `${pad2(hour)}:${whenMatch[5]}`
-	const arenaLink = main.querySelector('a[href^="/arena/"]')
 
 	// Before the league posts a summary the page just says "No Summary"
 	const headings = main.querySelectorAll("h1")
@@ -816,17 +817,8 @@ function parseKHLBoxScore(
 		gameId,
 		localDate,
 		localTime,
-		startsAt: zonedTimeToDate(
-			localDate,
-			localTime,
-			LEAGUE.TIME_ZONE,
-		).toISOString(),
-		arena: arenaLink
-			? {
-					id: matchHref(arenaLink, /^\/arena\/(\d+)/),
-					name: arenaLink.text.trim(),
-				}
-			: null,
+		startsAt: toLeagueInstant(localDate, localTime),
+		arena: parseArenaLink(main.querySelector('a[href^="/arena/"]')),
 		away,
 		home,
 		hasSummary: scoringHeading !== undefined,
@@ -851,10 +843,10 @@ function parseBoxScoreTeam(
 	const link = col?.querySelector('a[href^="/team/"]')
 	const name = col?.querySelector("h1")?.text.trim()
 	if (!col || !link || !name) {
-		throw new Error(`${pageUrl}: missing team header`)
+		throw newParseError(pageUrl, `missing team header`)
 	}
 	return {
-		id: matchHref(link, /^\/team\/(\d+)\//),
+		id: matchHref(link, TEAM_HREF),
 		name,
 		logoUrl: getImageUrl(col, pageUrl),
 		seasonId: getSearchParam(link, "season"),
@@ -875,8 +867,9 @@ interface PeriodTable {
 function parsePeriodTable(heading: HTMLElement, pageUrl: URL): PeriodTable {
 	const table = heading.nextElementSibling
 	if (table?.tagName !== "TABLE") {
-		throw new Error(
-			`${pageUrl}: missing table for "${heading.text.trim()}"`,
+		throw newParseError(
+			pageUrl,
+			`missing table for "${heading.text.trim()}"`,
 		)
 	}
 	// The first header spans the logo and name cells
@@ -889,10 +882,10 @@ function parsePeriodTable(heading: HTMLElement, pageUrl: URL): PeriodTable {
 		const link = cells[1]?.querySelector('a[href^="/team/"]')
 		const numbers = cells.slice(2).map((td) => Number(td.text.trim()) || 0)
 		if (!link || numbers.length !== periods.length + 1) {
-			throw new Error(`${pageUrl}: malformed period table row`)
+			throw newParseError(pageUrl, `malformed period table row`)
 		}
 		return {
-			teamId: matchHref(link, /^\/team\/(\d+)\//),
+			teamId: matchHref(link, TEAM_HREF),
 			byPeriod: numbers.slice(0, -1),
 			total: numbers.at(-1)!,
 		}
@@ -909,7 +902,7 @@ function applyPeriodTable(
 	for (const team of [teams.away, teams.home]) {
 		const row = table.rows.find((r) => r.teamId === team.id)
 		if (!row) {
-			throw new Error(`${pageUrl}: no ${stat} row for team ${team.id}`)
+			throw newParseError(pageUrl, `no ${stat} row for team ${team.id}`)
 		}
 		team[`${stat}ByPeriod`] = row.byPeriod
 		team[stat] = row.total
@@ -945,7 +938,7 @@ function parsePeriodTime(
 			return {time: match[1]!, period: match[2]!}
 		}
 	}
-	throw new Error(`${pageUrl}: missing time in "${card.text.trim()}"`)
+	throw newParseError(pageUrl, `missing time in "${card.text.trim()}"`)
 }
 
 function parseGoalCard(card: HTMLElement, pageUrl: URL): KHLGoal {
@@ -954,13 +947,13 @@ function parseGoalCard(card: HTMLElement, pageUrl: URL): KHLGoal {
 		'a.font-weight-bold[href^="/player/"]',
 	)
 	if (!teamLink || !scorerLink) {
-		throw new Error(`${pageUrl}: malformed goal "${card.text.trim()}"`)
+		throw newParseError(pageUrl, `malformed goal "${card.text.trim()}"`)
 	}
 	// "Sara Shaker (6)", then "Unassisted" or up to two assist links
 	const seasonGoals = scorerLink.parentNode?.text.match(/\((\d+)\)/)?.[1]
 	return {
 		...parsePeriodTime(card, pageUrl),
-		teamId: matchHref(teamLink, /^\/team\/(\d+)\//),
+		teamId: matchHref(teamLink, TEAM_HREF),
 		scorer: toPlayerRef(scorerLink),
 		scorerSeasonGoals: seasonGoals ? Number(seasonGoals) : null,
 		assists: card
@@ -976,18 +969,18 @@ function parsePenaltyCard(card: HTMLElement, pageUrl: URL): KHLPenalty {
 	const desktop = card.querySelector(".col_1")
 	const duration = card.querySelector(".badge")?.text.trim()
 	if (!teamLink || !desktop || !duration) {
-		throw new Error(`${pageUrl}: malformed penalty "${card.text.trim()}"`)
+		throw newParseError(pageUrl, `malformed penalty "${card.text.trim()}"`)
 	}
 	const playerLink = desktop.querySelector('a[href^="/player/"]')
 	const infraction = playerLink
 		? desktop.querySelector("span")?.text.trim()
 		: desktop.text.trim()
 	if (!infraction) {
-		throw new Error(`${pageUrl}: penalty without an infraction`)
+		throw newParseError(pageUrl, `penalty without an infraction`)
 	}
 	return {
 		...parsePeriodTime(card, pageUrl),
-		teamId: matchHref(teamLink, /^\/team\/(\d+)\//),
+		teamId: matchHref(teamLink, TEAM_HREF),
 		player: playerLink ? toPlayerRef(playerLink) : null,
 		infraction,
 		duration,
@@ -996,7 +989,7 @@ function parsePenaltyCard(card: HTMLElement, pageUrl: URL): KHLPenalty {
 
 function toPlayerRef(link: HTMLElement): KHLPlayerRef {
 	return {
-		id: matchHref(link, /^\/player\/(\d+)\//),
+		id: matchHref(link, PLAYER_HREF),
 		name: link.text.trim(),
 	}
 }
@@ -1023,7 +1016,7 @@ function parseKHLTeamSchedule(
 ): KHLGame[] {
 	const teamName = root.querySelector("h1.text-12")?.text.trim()
 	if (!teamName) {
-		throw new Error(`${pageUrl}: missing team name`)
+		throw newParseError(pageUrl, `missing team name`)
 	}
 
 	// Games are grouped into one table per month, each preceded by a heading
@@ -1041,8 +1034,9 @@ function parseKHLTeamSchedule(
 			continue
 		}
 		if (year === null) {
-			throw new Error(
-				`${pageUrl}: schedule table without a month heading`,
+			throw newParseError(
+				pageUrl,
+				`schedule table without a month heading`,
 			)
 		}
 		for (const row of el.querySelectorAll("tbody tr")) {
@@ -1073,35 +1067,34 @@ function parseKHLScheduleRow(
 		!homeAwayCell ||
 		!opponentLink
 	) {
-		throw new Error(
-			`${pageUrl}: malformed schedule row: ${row.text.trim()}`,
+		throw newParseError(
+			pageUrl,
+			`malformed schedule row: ${row.text.trim()}`,
 		)
 	}
 
 	// "Wed, Oct 21" + "9:15 PM"
 	const dateMatch = dateCell.text.trim().match(/^\w+, (\w{3}) (\d{1,2})$/)
 	const monthIndex = MONTHS.indexOf(dateMatch?.[1] ?? "")
-	const timeMatch = timeCell.text.trim().match(/^(\d{1,2}):(\d{2}) (AM|PM)$/)
-	if (!dateMatch || monthIndex < 0 || !timeMatch) {
-		throw new Error(
-			`${pageUrl}: unparseable date/time "${dateCell.text.trim()} ${timeCell.text.trim()}"`,
+	const localTime = parseClockTime(timeCell.text)
+	if (!dateMatch || monthIndex < 0 || !localTime) {
+		throw newParseError(
+			pageUrl,
+			`unparseable date/time "${dateCell.text.trim()} ${timeCell.text.trim()}"`,
 		)
 	}
-	const hour = (Number(timeMatch[1]) % 12) + (timeMatch[3] === "PM" ? 12 : 0)
 	const localDate = `${context.year}-${pad2(monthIndex + 1)}-${pad2(Number(dateMatch[2]))}`
-	const localTime = `${pad2(hour)}:${timeMatch[2]}`
 
 	const homeAway = homeAwayCell.text.trim().toLowerCase()
 	if (homeAway !== "home" && homeAway !== "away") {
-		throw new Error(`${pageUrl}: unexpected home/away "${homeAway}"`)
+		throw newParseError(pageUrl, `unexpected home/away "${homeAway}"`)
 	}
 
-	const arenaLink = arenaCell.querySelector('a[href^="/arena/"]')
 	const [, gameId, gamePage] = gameLink
 		? (getHref(gameLink).match(/^\/game\/(\d+)\/(\w+)/) ?? [])
 		: []
 	if (gameLink && !gameId) {
-		throw new Error(`${pageUrl}: malformed game link`)
+		throw newParseError(pageUrl, `malformed game link`)
 	}
 	const result = resultCell?.text.trim() || null
 
@@ -1110,31 +1103,76 @@ function parseKHLScheduleRow(
 		seasonId: context.seasonId,
 		team: {id: context.teamId, name: context.teamName},
 		opponent: {
-			id: matchHref(opponentLink, /^\/team\/(\d+)\//),
+			id: matchHref(opponentLink, TEAM_HREF),
 			name: opponentLink.text.trim(),
 		},
 		homeAway,
 		localDate,
 		localTime,
-		startsAt: zonedTimeToDate(
-			localDate,
-			localTime,
-			LEAGUE.TIME_ZONE,
-		).toISOString(),
-		arena: arenaLink
-			? {
-					id: matchHref(arenaLink, /^\/arena\/(\d+)/),
-					name: arenaLink.text.trim(),
-				}
-			: null,
+		startsAt: toLeagueInstant(localDate, localTime),
+		arena: parseArenaLink(arenaCell.querySelector('a[href^="/arena/"]')),
 		result,
 		score: scoreCell?.text.trim() || null,
 		isFinal: gamePage === "summary" || result !== null,
 	}
 }
 
+// --- Parsing helpers
+
+/**
+ * A page that doesn't look the way the parser expects, most likely because
+ * the league changed its markup. Logged here, so every one is reported even
+ * when a caller catches it and carries on without that page.
+ */
+function newParseError(pageUrl: URL, message: string): Error {
+	return logger.newError("parse", `${pageUrl}: ${message}`, {
+		url: pageUrl.toString(),
+	})
+}
+
+/** Like newParseError, for helpers that only have the element */
+function newElementError(message: string, el: HTMLElement): Error {
+	return logger.newError("parse", `${message}: ${el.outerHTML}`, {
+		html: el.outerHTML,
+	})
+}
+
 function pad2(n: number): string {
 	return String(n).padStart(2, "0")
+}
+
+/**
+ * "9:15 PM" -> "21:15", or null if `text` doesn't start with a time. Times may
+ * be followed by more text, e.g. the league schedule's arena link.
+ */
+function parseClockTime(text: string): string | null {
+	const match = text.trim().match(/^(\d{1,2}):(\d{2}) ([AP]M)\b/i)
+	if (!match) {
+		return null
+	}
+	const hour = (Number(match[1]) % 12) + (/pm/i.test(match[3]!) ? 12 : 0)
+	return `${pad2(hour)}:${match[2]}`
+}
+
+/** Each column's cell text, reading `cells` from `offset` on */
+function readStatCells(
+	columns: string[],
+	cells: HTMLElement[],
+	offset: number,
+): Record<string, string> {
+	const stats: Record<string, string> = {}
+	columns.forEach((column, i) => {
+		stats[column] = cells[i + offset]?.text.trim() ?? ""
+	})
+	return stats
+}
+
+function parseArenaLink(
+	link: HTMLElement | null | undefined,
+): KHLArenaRef | null {
+	return link
+		? {id: matchHref(link, ARENA_HREF), name: link.text.trim()}
+		: null
 }
 
 function getImageUrl(el: HTMLElement, pageUrl: URL): string | null {
@@ -1142,10 +1180,15 @@ function getImageUrl(el: HTMLElement, pageUrl: URL): string | null {
 	return src ? new URL(src, pageUrl).toString() : null
 }
 
+const TEAM_HREF = /^\/team\/(\d+)\//
+const PLAYER_HREF = /^\/player\/(\d+)\//
+const GAME_HREF = /^\/game\/(\d+)\//
+const ARENA_HREF = /^\/arena\/(\d+)/
+
 function getHref(el: HTMLElement): string {
 	const href = el.getAttribute("href")
 	if (!href) {
-		throw new Error(`missing href: ${el.outerHTML}`)
+		throw newElementError("missing href", el)
 	}
 	return href
 }
@@ -1153,7 +1196,7 @@ function getHref(el: HTMLElement): string {
 function getSearchParam(el: HTMLElement, name: string): string {
 	const value = new URL(getHref(el), URLS.KHL).searchParams.get(name)
 	if (!value) {
-		throw new Error(`missing ?${name}= in href: ${el.outerHTML}`)
+		throw newElementError(`missing ?${name}= in href`, el)
 	}
 	return value
 }
@@ -1161,7 +1204,7 @@ function getSearchParam(el: HTMLElement, name: string): string {
 function matchHref(el: HTMLElement, pattern: RegExp): string {
 	const match = getHref(el).match(pattern)
 	if (!match?.[1]) {
-		throw new Error(`href does not match ${pattern}: ${el.outerHTML}`)
+		throw newElementError(`href does not match ${pattern}`, el)
 	}
 	return match[1]
 }

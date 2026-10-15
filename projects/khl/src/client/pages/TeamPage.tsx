@@ -1,25 +1,23 @@
 import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {Helmet} from "react-helmet"
 import {
-	FeedGame,
 	GET_TEAM_ENDPOINT,
 	RosterPlayer,
 	TeamResponse,
 } from "../../shared/ApiJson.js"
-import {STRINGS} from "../../shared/KHLConfig.js"
+import {getGoalsByTeam} from "../../shared/KHLJson.js"
 import {
 	AsyncContent,
-	Hint,
 	Link,
 	PageShell,
+	PageTitle,
 	Picker,
 	SegmentedControl,
 	RosterTables,
 	TeamAvatar,
 } from "../Components.js"
-import {GameCards, PastGames} from "../Games.js"
+import {GameCards, HeroLastResults, HeroStatGroup, PastGames} from "../Games.js"
 import {
 	AppContext,
 	getPlayerHref,
@@ -44,11 +42,7 @@ const TeamPage = ({params, query}: RouteProps) => {
 			<AsyncContent state={state} loadingLabel="Loading team details…">
 				{(team) => (
 					<div className="Detail">
-						<Helmet>
-							<title>
-								{team.team.name} | {STRINGS.PRODUCT_NAME}
-							</title>
-						</Helmet>
+						<PageTitle>{team.team.name}</PageTitle>
 						<div className="Detail-toolbar">
 							<SeasonPicker team={team} />
 						</div>
@@ -69,13 +63,16 @@ const TeamPage = ({params, query}: RouteProps) => {
 								emptyMessage={`No upcoming games in ${team.season.name}.`}
 							/>
 						</section>
-						<TeamLeaders roster={team.roster} />
 						<PastGames
 							games={team.games}
 							now={now}
 							getTeamLogoUrl={() => team.team.logoUrl}
 						/>
-						<Roster team={team} />
+						{/* Leaders beside the roster on wide screens, above it on narrow */}
+						<div className="TeamPage-people">
+							<TeamLeaders roster={team.roster} />
+							<Roster team={team} />
+						</div>
 					</div>
 				)}
 			</AsyncContent>
@@ -85,56 +82,66 @@ const TeamPage = ({params, query}: RouteProps) => {
 
 const TeamHeader = ({team}: {team: TeamResponse}) => {
 	const finals = team.games.filter((g) => g.game.isFinal && g.game.result)
-	const count = (result: string) => {
-		return finals.filter((g) => g.game.result === result).length
+	const count = (...results: string[]) => {
+		return finals.filter((g) => results.includes(g.game.result!)).length
 	}
+	// Goals from games with a score the league split per team
+	const goals = finals.flatMap((g) => {
+		const byTeam = getGoalsByTeam(g.game)
+		return byTeam
+			? [
+					{
+						for: byTeam[g.game.team.id]!,
+						against: byTeam[g.game.opponent.id]!,
+					},
+				]
+			: []
+	})
+	const goalsFor = goals.reduce((n, g) => n + g.for, 0)
+	const goalsAgainst = goals.reduce((n, g) => n + g.against, 0)
+	const diff = goalsFor - goalsAgainst
 	return (
-		<header className="Detail-header">
-			<TeamAvatar
-				name={team.team.name}
-				logoUrl={team.team.logoUrl}
-				size={64}
-			/>
-			<div className="Detail-heading">
-				<h1 className="Detail-name">{team.team.name}</h1>
-				<div className="Detail-meta">
-					{team.divisionName && <span>{team.divisionName}</span>}
-					{finals.length > 0 && (
-						<span>
-							{count("W")}-{count("L")}-{count("T")}
-						</span>
-					)}
-					<RecentResults games={finals} />
+		<header className="Detail-header Detail-header--player">
+			<div className="PlayerHero">
+				<div className="TeamHero-identity">
+					<TeamAvatar
+						name={team.team.name}
+						logoUrl={team.team.logoUrl}
+						size={64}
+					/>
+					<div className="PlayerHero-identity">
+						<h1 className="PlayerHero-name">{team.team.name}</h1>
+						{team.divisionName && (
+							<div className="PlayerHero-bio">
+								<span className="PlayerHero-position">
+									{team.divisionName}
+								</span>
+							</div>
+						)}
+					</div>
+				</div>
+				<div className="PlayerHero-stats">
+					<HeroStatGroup
+						label="Record"
+						stats={{
+							W: count("W"),
+							L: count("L", "OTL", "SOL"),
+							T: count("T"),
+							GP: finals.length,
+						}}
+					/>
+					<HeroStatGroup
+						label="Goals"
+						stats={{
+							GF: goalsFor,
+							GA: goalsAgainst,
+							Diff: diff > 0 ? `+${diff}` : diff,
+						}}
+					/>
+					<HeroLastResults games={team.games} />
 				</div>
 			</div>
 		</header>
-	)
-}
-
-/** The last five results, oldest to newest. */
-const RecentResults = ({games}: {games: FeedGame[]}) => {
-	const recent = games.slice(-5)
-	if (recent.length === 0) {
-		return null
-	}
-	return (
-		<Hint label={`Last ${recent.length} games, oldest to newest`}>
-			<span className="Detail-form">
-				{/* The real count: a team three games in has a "Last 3" */}
-				<span className="Detail-meta-hint">Last {recent.length}</span>
-				{recent.map(({game}) => (
-					<span
-						key={game.startsAt}
-						className={cx(
-							"GameFeed-result",
-							`GameFeed-result--${game.result}`,
-						)}
-					>
-						{game.result}
-					</span>
-				))}
-			</span>
-		</Hint>
 	)
 }
 

@@ -54,10 +54,11 @@ const HomePage = ({query}: RouteProps) => {
 					{({rinks, season}) => {
 						const pastGames =
 							pastState.status === "success" ? pastState.data : []
+						const upcoming = getScheduledGames(rinks, now)
 						const games = [
 							...pastGames,
 							...(includesUpcomingDays(filters.day, now)
-								? getScheduledGames(rinks, now)
+								? upcoming
 								: []),
 						]
 						const {forDay, visible} = filterScheduledGames(
@@ -69,7 +70,7 @@ const HomePage = ({query}: RouteProps) => {
 							<NoGames
 								filters={filters}
 								forDay={forDay}
-								upcoming={getScheduledGames(rinks, now)}
+								upcoming={upcoming}
 								now={now}
 								onChange={setFilters}
 							/>
@@ -140,5 +141,12 @@ const HomePage = ({query}: RouteProps) => {
 export const HomeRoute = {
 	path: "/",
 	title: "Home",
+	content: HomePage,
+} as const satisfies Route
+
+/** The home page's schedule, at its own URL for the nav */
+export const GamesRoute = {
+	path: "/games",
+	title: "Games",
 	content: HomePage,
 } as const satisfies Route

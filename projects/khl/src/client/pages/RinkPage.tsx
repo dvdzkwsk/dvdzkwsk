@@ -1,21 +1,23 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {Helmet} from "react-helmet"
 import {GET_RINK_ENDPOINT} from "../../shared/ApiJson.js"
-import {STRINGS} from "../../shared/KHLConfig.js"
 import {
 	AsyncContent,
 	Hint,
 	Link,
+	LIVEBARN_TITLES,
 	LiveBarnBadge,
+	Notice,
 	NotOnLiveBarn,
 	PageShell,
+	PageTitle,
 } from "../Components.js"
 import {
 	GameSummary,
-	GameTable,
+	GameTableCard,
 	getRinkStatus,
 	toGameTableRow,
+	toReplayLinks,
 } from "../Games.js"
 import {Route, RouteProps, useAsync, useNow} from "../Util.js"
 
@@ -31,16 +33,15 @@ const RinkPage = ({params}: RouteProps) => {
 
 	return (
 		<PageShell>
-			<AsyncContent state={state} loadingLabel="Loading rink details…">
+			<AsyncContent
+				state={state}
+				loadingLabel="Loading location details…"
+			>
 				{({rink, address, season, recent}) => {
 					const status = getRinkStatus(rink, now)
 					return (
 						<div className="RinkRoute">
-							<Helmet>
-								<title>
-									{rink.name} | {STRINGS.PRODUCT_NAME}
-								</title>
-							</Helmet>
+							<PageTitle>{rink.name}</PageTitle>
 							<section
 								className={cx(
 									"RinkRoute-panel",
@@ -76,7 +77,9 @@ const RinkPage = ({params}: RouteProps) => {
 															? surface.surfaceName
 															: undefined
 													}
-													title={`Watch ${surface.surfaceName} live on LiveBarn`}
+													title={LIVEBARN_TITLES.live(
+														surface.surfaceName,
+													)}
 												/>
 											))
 										) : (
@@ -110,60 +113,46 @@ const RinkPage = ({params}: RouteProps) => {
 								</div>
 							</section>
 
-							{recent.length > 0 && (
-								<section className="RinkRoute-panel">
-									<h2 className="RinkRoute-section-title SectionLabel">
-										Recent games
-									</h2>
-									<GameTable
-										rows={recent.map(
-											({game, livebarn}) => ({
-												...toGameTableRow(
-													{rink, game},
-													season.id,
-													now,
-												),
-												// Finished: replays instead of the live feed
-												livebarn: livebarn.map(
-													(link) => ({
-														surfaceId:
-															link.surfaceId,
-														href: link.vodUrl,
-														title: `Watch the replay on LiveBarn (${link.surfaceName})`,
-													}),
-												),
-											}),
-										)}
-										now={now}
-										showDay
-										showRink={false}
-									/>
-								</section>
+							{rink.livebarn.length === 0 && (
+								<Notice title="LiveBarn doesn't have a feed for this rink" />
 							)}
 
-							<section className="RinkRoute-panel">
-								<h2 className="RinkRoute-section-title SectionLabel">
-									Upcoming games
-								</h2>
-								{rink.games.length === 0 ? (
-									<p className="RinkRoute-empty">
-										No games scheduled.
-									</p>
-								) : (
-									<GameTable
-										rows={rink.games.map((game) =>
-											toGameTableRow(
-												{rink, game},
-												season.id,
-												now,
-											),
-										)}
-										now={now}
-										showDay
-										showRink={false}
-									/>
+							<GameTableCard
+								title="Upcoming games"
+								count={rink.games.length}
+								emptyText="No games scheduled."
+								// About five games, then they scroll inside the card
+								maxHeight="20rem"
+								rows={rink.games.map((game) =>
+									toGameTableRow(
+										{rink, game},
+										season.id,
+										now,
+									),
 								)}
-							</section>
+								now={now}
+								showDay
+								showRink={false}
+							/>
+
+							{recent.length > 0 && (
+								<GameTableCard
+									title="Recent games"
+									emptyText="No games played yet."
+									rows={recent.map(({game, livebarn}) => ({
+										...toGameTableRow(
+											{rink, game},
+											season.id,
+											now,
+										),
+										// Finished: replays instead of the live feed
+										livebarn: toReplayLinks(livebarn),
+									}))}
+									now={now}
+									showDay
+									showRink={false}
+								/>
+							)}
 						</div>
 					)
 				}}
@@ -179,6 +168,6 @@ function getDirectionsUrl(address: string): string {
 
 export const RinkRoute = {
 	path: "/rinks/:arenaId",
-	title: "Rink",
+	title: "Location",
 	content: RinkPage,
 } as const satisfies Route

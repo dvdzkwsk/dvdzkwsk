@@ -1,23 +1,7 @@
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {HeadToHeadGame, RecentGame, SeasonSummary} from "../shared/ApiJson.js"
-import {KHLSeason} from "../shared/KHLJson.js"
-import {LIMITS} from "../shared/KHLConfig.js"
-import {Hint, TeamAvatar, TeamLink} from "./Components.js"
-import {ResultChips} from "./Games.js"
-import {getShortSeasonName} from "./Util.js"
-
-/**
- * Two teams' seasons compared, as on the matchup page. A game page compares
- * its teams' seasons going into the game.
- */
-export interface ComparisonData {
-	/** Titles the comparison "Season so far" when both sides are in it */
-	currentSeason: KHLSeason
-	a: SeasonSummary
-	b: SeasonSummary
-	/** Finished games between the two teams, newest first */
-	headToHead: HeadToHeadGame[]
-}
+import {SeasonSummary} from "../shared/ApiJson.js"
+import {KHLGamePreviewStats} from "../shared/KHLJson.js"
+import {InfoPopover} from "./Components.js"
 
 /** Which side a stat favors: more is better, less is better, or neither. */
 type Better = "higher" | "lower" | null
@@ -26,321 +10,257 @@ type Side = "a" | "b"
 
 interface ComparisonStat {
 	label: string
-	get: (team: SeasonSummary) => number
+	/** What the stat means and how it's calculated, in the label's popover */
+	info: string
+	a: number | null
+	b: number | null
 	format: (value: number) => string
 	better: Better
-	/** Draw bars; only for counts and rates, which can't be negative */
-	bar: boolean
 }
 
-const perGame = (total: (t: SeasonSummary) => number) => (t: SeasonSummary) =>
-	t.gamesPlayed > 0 ? total(t) / t.gamesPlayed : 0
+const perGame = (team: SeasonSummary, total: number) =>
+	team.gamesPlayed > 0 ? total / team.gamesPlayed : 0
 
-const RECORD_STATS: ComparisonStat[] = [
-	{
-		label: "Wins",
-		get: (t) => t.wins,
-		format: String,
-		better: "higher",
-		bar: true,
-	},
-	{
-		label: "Losses",
-		get: (t) => t.losses,
-		format: String,
-		better: "lower",
-		bar: true,
-	},
-	{
-		label: "Ties",
-		get: (t) => t.ties,
-		format: String,
-		better: null,
-		bar: true,
-	},
-]
+const percent = (value: number) => `${value.toFixed(1)}%`
+const oneDecimal = (value: number) => value.toFixed(1)
+const twoDecimals = (value: number) => value.toFixed(2)
 
-const GOAL_STATS: ComparisonStat[] = [
-	{
-		label: "Goals for / game",
-		get: perGame((t) => t.goalsFor),
-		format: (v) => v.toFixed(2),
-		better: "higher",
-		bar: true,
-	},
-	{
-		label: "Goals against / game",
-		get: perGame((t) => t.goalsAgainst),
-		format: (v) => v.toFixed(2),
-		better: "lower",
-		bar: true,
-	},
-	{
-		label: "Goal differential",
-		get: (t) => t.goalsFor - t.goalsAgainst,
-		format: (v) => (v > 0 ? `+${v}` : String(v)),
-		better: "higher",
-		bar: false,
-	},
-]
+/** Goal rows from each side's season, then the league's preview stats */
+function getComparisonStats(
+	a: SeasonSummary,
+	b: SeasonSummary,
+	previewStats: KHLGamePreviewStats | null,
+): ComparisonStat[] {
+	const goals: ComparisonStat[] = [
+		{
+			label: "Goals for / game",
+			info: "Goals scored per game: goals in the season's finished games ÷ games played.",
+			a: perGame(a, a.goalsFor),
+			b: perGame(b, b.goalsFor),
+			format: twoDecimals,
+			better: "higher",
+		},
+		{
+			label: "Goals against / game",
+			info: "Goals allowed per game: goals against in the season's finished games ÷ games played. Lower is better.",
+			a: perGame(a, a.goalsAgainst),
+			b: perGame(b, b.goalsAgainst),
+			format: twoDecimals,
+			better: "lower",
+		},
+		{
+			label: "Goal differential",
+			info: "Goals scored minus goals allowed, over the season's finished games.",
+			a: a.goalsFor - a.goalsAgainst,
+			b: b.goalsFor - b.goalsAgainst,
+			format: (v) => (v > 0 ? `+${v}` : String(v)),
+			better: "higher",
+		},
+	]
+	// The league's numbers, from its game preview page
+	const preview: (Omit<ComparisonStat, "a" | "b"> & {
+		key: keyof KHLGamePreviewStats
+	})[] = [
+		{
+			label: "Power play",
+			info: "How often a team scores with the extra skater: power-play goals ÷ power plays, as the league reports it.",
+			key: "powerPlayPct",
+			format: percent,
+			better: "higher",
+		},
+		{
+			label: "Penalty kill",
+			info: "How often a team stops the other team scoring while shorthanded: penalties killed without a goal ÷ times shorthanded, as the league reports it.",
+			key: "penaltyKillPct",
+			format: percent,
+			better: "higher",
+		},
+		{
+			label: "Shots / game",
+			info: "Shots on goal per game: shots taken ÷ games played, as the league reports it.",
+			key: "shotsPerGame",
+			format: oneDecimal,
+			better: "higher",
+		},
+		{
+			label: "Shots against / game",
+			info: "Shots on goal allowed per game: shots against ÷ games played, as the league reports it. Lower is better.",
+			key: "shotsAgainstPerGame",
+			format: oneDecimal,
+			better: "lower",
+		},
+		{
+			label: "Penalty minutes / game",
+			info: "Penalty minutes per game: minutes assessed in penalties ÷ games played, as the league reports it. Lower is better.",
+			key: "penaltyMinutesPerGame",
+			format: oneDecimal,
+			better: "lower",
+		},
+	]
+	return [
+		...goals,
+		...preview.flatMap(({key, ...stat}) => {
+			// "away" is side a: a game's away team, or a matchup's first pick
+			const values = previewStats?.[key]
+			return values ? [{...stat, a: values.away, b: values.home}] : []
+		}),
+	]
+}
 
 /**
- * The two teams' seasons side by side: each row's label in the middle, each
- * team's value beside it, and bars in the team's color growing outward.
+ * How full each side's bar is, from 0 to 1, or null for an unknown value (no
+ * bar). Both share a scale, so the larger value fills its side. The scale
+ * starts at zero, or lower when a value is negative (a goal differential), so
+ * the better side still fills and the lower one is empty.
  */
-export const Comparison = ({matchup}: {matchup: ComparisonData}) => {
-	const {a, b} = matchup
-	const sameSeason = a.season.id === b.season.id
-	return (
-		<section className={cx("Detail-panel", "Compare")}>
-			<header className="Compare-head">
-				<CompareTeam side="a" team={a} />
-				<h2 className={cx("SectionLabel", "Compare-title")}>
-					{sameSeason
-						? a.season.id === matchup.currentSeason.id
-							? "Season so far"
-							: a.season.name
-						: "Seasons"}
-				</h2>
-				<CompareTeam side="b" team={b} />
-			</header>
-			<CompareGroup label="Form">
-				<CompareRow
-					label="Last 10"
-					a={<ResultChips games={a.recent} />}
-					b={<ResultChips games={b.recent} />}
-				/>
-				{a.team.id !== b.team.id && <HeadToHeadRow matchup={matchup} />}
-				<CompareRow
-					label="Streak"
-					a={<StreakChip team={a} />}
-					b={<StreakChip team={b} />}
-				/>
-			</CompareGroup>
-			<CompareGroup label="Record">
-				{RECORD_STATS.map((stat) => (
-					<StatRow key={stat.label} stat={stat} a={a} b={b} />
-				))}
-			</CompareGroup>
-			<CompareGroup label="Goals">
-				{GOAL_STATS.map((stat) => (
-					<StatRow key={stat.label} stat={stat} a={a} b={b} />
-				))}
-			</CompareGroup>
-		</section>
-	)
+export function getBarFills(
+	a: number | null,
+	b: number | null,
+): {a: number | null; b: number | null} {
+	const min = Math.min(0, a ?? 0, b ?? 0)
+	const max = Math.max(a ?? 0, b ?? 0)
+	const fill = (value: number | null) => {
+		if (value === null) {
+			return null
+		}
+		return max > min ? (value - min) / (max - min) : 0
+	}
+	return {a: fill(a), b: fill(b)}
 }
 
-/** A team's name, logo and color key, at its side of the comparison. */
-const CompareTeam = ({side, team}: {side: Side; team: SeasonSummary}) => {
-	return (
-		<div className={cx("Compare-team", `Compare-team--${side}`)}>
-			<TeamAvatar
-				name={team.team.name}
-				logoUrl={team.team.logoUrl}
-				size={36}
-			/>
-			<div className="Compare-team-text">
-				<div className="Compare-team-name">
-					<span className="Compare-key" aria-hidden />
-					<TeamLink team={team.team} seasonId={team.team.seasonId} />
-				</div>
-				<Hint label={team.season.name}>
-					<div className="Compare-team-meta">
-						{getShortSeasonName(team.season.name)} ·{" "}
-						{team.gamesPlayed} GP
-					</div>
-				</Hint>
-			</div>
-		</div>
-	)
-}
-
-const CompareGroup = ({
-	label,
-	children,
+/**
+ * Two teams' seasons side by side, on a game page and the matchup page: each
+ * row's label in the middle, each team's value beside it, and bars in the
+ * team's color growing outward.
+ */
+export const Comparison = ({
+	a,
+	b,
+	previewStats,
 }: {
-	label: string
-	children: React.ReactNode
+	/** The away team, or the matchup's first pick */
+	a: SeasonSummary
+	b: SeasonSummary
+	/** The league's PP%, PK%, shots and PIM, with a as "away"; rows for
+	    missing stats are left out */
+	previewStats: KHLGamePreviewStats | null
 }) => {
 	return (
-		<div className="Compare-group" role="group" aria-label={label}>
-			<h3 className="Compare-group-label">{label}</h3>
-			{children}
-		</div>
+		<section className={cx("Detail-panel", "Compare")}>
+			<div className="Compare-group" role="group" aria-label="Stats">
+				{getComparisonStats(a, b, previewStats).map((stat) => (
+					<ValueRow
+						key={stat.label}
+						label={stat.label}
+						info={stat.info}
+						format={stat.format}
+						better={stat.better}
+						valueA={stat.a}
+						valueB={stat.b}
+					/>
+				))}
+			</div>
+		</section>
 	)
 }
 
 /** One row: team A's cell, the label, team B's cell. */
 const CompareRow = ({
 	label,
+	info,
 	a,
 	b,
-	title,
 }: {
 	label: string
+	/** Explains the stat, in a popover on the label */
+	info: string
 	a: React.ReactNode
 	b: React.ReactNode
-	/** Both values, on hover */
-	title?: string
 }) => {
 	return (
-		<Hint label={title}>
-			<div className="Compare-row">
-				<div className={cx("Compare-cell", "Compare-cell--a")}>{a}</div>
-				<div className="Compare-label">{label}</div>
-				<div className={cx("Compare-cell", "Compare-cell--b")}>{b}</div>
+		<div className="Compare-row">
+			<div className={cx("Compare-cell", "Compare-cell--a")}>{a}</div>
+			<div className="Compare-label">
+				<InfoPopover
+					trigger={
+						<button type="button" className="Compare-info">
+							{label}
+						</button>
+					}
+				>
+					{info}
+				</InfoPopover>
 			</div>
-		</Hint>
+			<div className={cx("Compare-cell", "Compare-cell--b")}>{b}</div>
+		</div>
 	)
 }
 
-const StatRow = ({
-	stat,
-	a,
-	b,
+/** A stat for both sides: values by the label, bars growing outward. */
+const ValueRow = ({
+	label,
+	info,
+	format,
+	better,
+	valueA,
+	valueB,
 }: {
-	stat: ComparisonStat
-	a: SeasonSummary
-	b: SeasonSummary
+	label: string
+	info: string
+	format: (value: number) => string
+	better: Better
+	/** Null when unknown: a dash, and no bar */
+	valueA: number | null
+	valueB: number | null
 }) => {
-	const valueA = stat.get(a)
-	const valueB = stat.get(b)
+	const known = valueA !== null && valueB !== null
 	const leader: Side | null =
-		stat.better === null || valueA === valueB
+		!known || better === null || valueA === valueB
 			? null
-			: valueA > valueB === (stat.better === "higher")
+			: valueA > valueB === (better === "higher")
 				? "a"
 				: "b"
-	// Both bars share a scale, so the larger value fills its side
-	const max = Math.max(valueA, valueB)
-	const cell = (side: Side, value: number) => (
-		<>
-			<span
-				className={cx(
-					"Compare-value",
-					leader === side && "Compare-value--leader",
-				)}
-			>
-				{stat.format(value)}
-			</span>
-			{stat.bar && (
-				<span className="Compare-track" aria-hidden>
-					{max > 0 && value > 0 && (
-						<span
-							className={cx(
-								"Compare-fill",
-								leader !== null &&
-									leader !== side &&
-									"Compare-fill--trailing",
-							)}
-							style={{width: `${(value / max) * 100}%`}}
-						/>
+	const fills = getBarFills(valueA, valueB)
+	const show = (value: number | null) =>
+		value === null ? "–" : format(value)
+	const cell = (side: Side, value: number | null) => {
+		const fill = fills[side]
+		return (
+			<>
+				<span
+					className={cx(
+						"Compare-value",
+						leader === side && "Compare-value--leader",
 					)}
+				>
+					{show(value)}
 				</span>
-			)}
-		</>
-	)
+				{fill !== null && (
+					// Both sides' tracks are the same length, outlined, so the
+					// fills show the gap; an empty fill is just the outline
+					<span className="Compare-track" aria-hidden>
+						{fill > 0 && (
+							<span
+								className={cx(
+									"Compare-fill",
+									leader !== null &&
+										leader !== side &&
+										"Compare-fill--trailing",
+								)}
+								style={{width: `${fill * 100}%`}}
+							/>
+						)}
+					</span>
+				)}
+			</>
+		)
+	}
 	return (
 		<CompareRow
-			label={stat.label}
-			title={`${a.team.name} ${stat.format(valueA)} · ${b.team.name} ${stat.format(valueB)}`}
+			label={label}
+			info={info}
 			a={cell("a", valueA)}
 			b={cell("b", valueB)}
-		/>
-	)
-}
-
-const StreakChip = ({team}: {team: SeasonSummary}) => {
-	if (!team.streak) {
-		return <span className="Compare-empty">–</span>
-	}
-	const {result, count} = team.streak
-	const word = {W: "win", L: "loss", T: "tie"}[result] ?? result
-	return (
-		<Hint
-			label={`${count} ${count === 1 ? word : word === "loss" ? "losses" : `${word}s`} in a row`}
-		>
-			<span
-				className={cx(
-					"GameFeed-result",
-					`GameFeed-result--${result}`,
-					"Compare-streak",
-				)}
-			>
-				{result}
-				{count}
-			</span>
-		</Hint>
-	)
-}
-
-/**
- * Each side's latest meetings with the other team in its own season, or a
- * note that they didn't meet.
- */
-const HeadToHeadRow = ({matchup}: {matchup: ComparisonData}) => {
-	const {a, b, currentSeason} = matchup
-	const meetings = (
-		team: SeasonSummary,
-		opponent: SeasonSummary,
-	): RecentGame[] => {
-		return (
-			matchup.headToHead
-				// Newest first; unscored games have no result to show
-				.filter((g) => g.seasonId === team.season.id && g.goals)
-				.slice(0, LIMITS.MATCHUP_HEAD_TO_HEAD_GAMES)
-				.reverse()
-				.map((game) => {
-					const own = game.goals![team.team.id]!
-					const other = game.goals![opponent.team.id]!
-					return {
-						gameId: game.gameId,
-						startsAt: game.startsAt,
-						arena: game.arena,
-						opponent: opponent.team,
-						homeAway:
-							game.homeTeamId === team.team.id ? "home" : "away",
-						result: own > other ? "W" : own < other ? "L" : "T",
-						goalsFor: own,
-						goalsAgainst: other,
-					}
-				})
-		)
-	}
-	const meetingsA = meetings(a, b)
-	const meetingsB = meetings(b, a)
-	if (
-		meetingsA.length === 0 &&
-		meetingsB.length === 0 &&
-		a.season.id === b.season.id
-	) {
-		const when =
-			a.season.id === currentSeason.id
-				? "this season"
-				: `in ${a.season.name}`
-		// An empty mark on each side, like Streak, so the row keeps its shape
-		const none = <span className="Compare-empty">–</span>
-		return (
-			<CompareRow
-				label="Head-to-head"
-				title={`They haven't played each other ${when}`}
-				a={none}
-				b={none}
-			/>
-		)
-	}
-	const cell = (games: RecentGame[], team: SeasonSummary) =>
-		games.length === 0 ? (
-			<span className="Compare-empty">None in {team.season.name}</span>
-		) : (
-			<ResultChips games={games} />
-		)
-	return (
-		<CompareRow
-			label="Head-to-head"
-			a={cell(meetingsA, a)}
-			b={cell(meetingsB, b)}
 		/>
 	)
 }

@@ -4,14 +4,25 @@ import * as React from "react"
 import {createRoot} from "react-dom/client"
 import {Helmet} from "react-helmet"
 import {Logger} from "@dvdzkwsk/logger"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
-import {ErrorBoundary, Link, PageShell, SiteHeader} from "./Components.js"
+import {
+	ErrorBoundary,
+	PageShell,
+	NotFoundState,
+	SiteFooter,
+	SiteHeader,
+} from "./Components.js"
+import {AboutRoute} from "./pages/AboutPage.js"
 import {AdminRoute} from "./pages/AdminPage.js"
 import {GameRoute} from "./pages/GamePage.js"
-import {HomeRoute} from "./pages/HomePage.js"
+import {HelpRoute} from "./pages/HelpPage.js"
+import {GamesRoute, HomeRoute} from "./pages/HomePage.js"
 import {MatchupRoute} from "./pages/MatchupPage.js"
 import {PlayerRoute} from "./pages/PlayerPage.js"
+import {PlayersRoute} from "./pages/PlayersPage.js"
 import {RinkRoute} from "./pages/RinkPage.js"
+import {StatusRoute} from "./pages/StatusPage.js"
 import {TeamRoute} from "./pages/TeamPage.js"
 import {TeamsRoute} from "./pages/TeamsPage.js"
 import {
@@ -31,6 +42,7 @@ export const App = ({context}: {context: AppContextValue}) => {
 		<AppContext.Provider value={context}>
 			<SiteHeader />
 			<CurrentRoute />
+			<SiteFooter />
 		</AppContext.Provider>
 	)
 }
@@ -39,12 +51,17 @@ export const App = ({context}: {context: AppContextValue}) => {
 
 const ROUTES: Route[] = [
 	HomeRoute,
+	GamesRoute,
 	GameRoute,
+	PlayersRoute,
 	PlayerRoute,
 	TeamsRoute,
 	TeamRoute,
 	RinkRoute,
 	MatchupRoute,
+	AboutRoute,
+	HelpRoute,
+	StatusRoute,
 	...(IS_DEV ? [AdminRoute] : []),
 ]
 
@@ -81,8 +98,9 @@ function matchRoute(
 		const matches = routeSegments.every((routeSegment, i) => {
 			const segment = segments[i]!
 			if (routeSegment.startsWith(":")) {
-				params[routeSegment.slice(1)] = decodeURIComponent(segment)
-				return segment !== ""
+				const value = safeDecodeURIComponent(segment)
+				params[routeSegment.slice(1)] = value ?? ""
+				return value !== null && segment !== ""
 			}
 			return routeSegment === segment
 		})
@@ -91,6 +109,18 @@ function matchRoute(
 		}
 	}
 	return null
+}
+
+/**
+ * Null for a malformed escape (e.g. "/players/%E0"). The router renders above
+ * every ErrorBoundary, so a throw here would blank the whole app.
+ */
+function safeDecodeURIComponent(value: string): string | null {
+	try {
+		return decodeURIComponent(value)
+	} catch {
+		return null
+	}
 }
 
 function trimSlashes(path: string): string {
@@ -161,10 +191,7 @@ const RouteMetadata = ({route, location}: PageMetadataProps) => {
 const NotFoundPage = () => {
 	return (
 		<PageShell>
-			<h1>Page not found</h1>
-			<p>
-				<Link href="/">Search for a player or team</Link>
-			</p>
+			<NotFoundState />
 		</PageShell>
 	)
 }
@@ -204,10 +231,6 @@ function main() {
 		},
 	})
 	root.render(<App context={context} />)
-}
-
-function toError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(value))
 }
 
 main()

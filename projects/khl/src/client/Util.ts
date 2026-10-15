@@ -6,12 +6,13 @@ import {
 	setLoggerTransports,
 } from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {History, Location} from "history"
 import * as React from "react"
 import {ClientLog, LOG_ENDPOINT} from "../shared/ApiJson.js"
 import {LEAGUE, URLS} from "../shared/KHLConfig.js"
-import {KHLGame} from "../shared/KHLJson.js"
+import {DAY_MS, getLeagueDayKey, MINUTE_MS} from "../shared/LeagueTime.js"
 
 // --- App context and routes
 
@@ -51,9 +52,15 @@ export function getGameHref(gameId: string): string {
 	return `/games/${gameId}`
 }
 
-/** The league's printable scoresheet; it uses the same game id as /game/:id. */
+/**
+ * The league's filled-in scoresheet ("GAME SHEET" on its game summary); it
+ * uses the same game id as /game/:id. /scoresheet/:id is the blank form.
+ */
 export function getScoresheetUrl(gameId: string): string {
-	return new URL(`/scoresheet/${encodeURIComponent(gameId)}`, URLS.KHL).href
+	return new URL(
+		`/scoresheet-complete/${encodeURIComponent(gameId)}`,
+		URLS.KHL,
+	).href
 }
 
 export function getRinkHref(arenaId: string): string {
@@ -67,19 +74,6 @@ export function getTeamHref(team: {id: string; seasonId: string}): string {
 /** "Kraken Hockey League Fall/Winter 26/27" -> "Fall/Winter 26/27" */
 export function getShortSeasonName(name: string): string {
 	return name.replace(/^Kraken Hockey League\s+/i, "").trim()
-}
-
-// --- Game timing
-
-export function getGameEndsAt(game: KHLGame): Date {
-	return new Date(
-		Date.parse(game.startsAt) + LEAGUE.GAME_DURATION_MINUTES * 60_000,
-	)
-}
-
-export function isGameInProgress(game: KHLGame, now: Date): boolean {
-	const startsAt = Date.parse(game.startsAt)
-	return startsAt <= now.getTime() && now < getGameEndsAt(game)
 }
 
 // --- Formatting (league-local time)
@@ -146,11 +140,16 @@ export function formatFullGameDate(startsAt: string): string {
 	return fullDateFormat.format(new Date(startsAt))
 }
 
+/** "1.35s", from milliseconds */
+export function formatSeconds(ms: number): string {
+	return `${(ms / 1000).toFixed(2)}s`
+}
+
 const relativeFormat = new Intl.RelativeTimeFormat("en-US", {numeric: "auto"})
 
 /** "in 5 days", "in 3 hours", "tomorrow" */
 export function formatRelative(target: string, now: Date): string {
-	const diffMinutes = (Date.parse(target) - now.getTime()) / 60_000
+	const diffMinutes = (Date.parse(target) - now.getTime()) / MINUTE_MS
 	if (Math.abs(diffMinutes) < 60) {
 		return relativeFormat.format(Math.round(diffMinutes), "minute")
 	}
@@ -160,29 +159,17 @@ export function formatRelative(target: string, now: Date): string {
 	return relativeFormat.format(Math.round(diffMinutes / (24 * 60)), "day")
 }
 
-const dayKeyFormat = new Intl.DateTimeFormat("en-CA", {
-	timeZone: LEAGUE.TIME_ZONE,
-	year: "numeric",
-	month: "2-digit",
-	day: "2-digit",
-})
-
 /** "Today", "Tomorrow", or "Mon, Oct 19" in league time */
 export function formatGameDay(startsAt: string, now: Date): string {
-	const day = dayKeyFormat.format(new Date(startsAt))
-	if (day === dayKeyFormat.format(now)) {
+	const day = getLeagueDayKey(new Date(startsAt))
+	if (day === getLeagueDayKey(now)) {
 		return "Today"
 	}
-	const tomorrow = new Date(now.getTime() + 24 * 60 * 60_000)
-	if (day === dayKeyFormat.format(tomorrow)) {
+	const tomorrow = new Date(now.getTime() + DAY_MS)
+	if (day === getLeagueDayKey(tomorrow)) {
 		return "Tomorrow"
 	}
 	return formatGameDate(startsAt, now)
-}
-
-/** "yyyy-MM-dd" of the league-local (Pacific) day `date` falls on */
-export function getLeagueDayKey(date: Date): string {
-	return dayKeyFormat.format(date)
 }
 
 const weekdayFormat = new Intl.DateTimeFormat("en-US", {
@@ -194,9 +181,15 @@ const weekdayFormat = new Intl.DateTimeFormat("en-US", {
 export function getEndOfWeekDayKey(now: Date): string {
 	const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 	const daysLeft = 6 - weekdays.indexOf(weekdayFormat.format(now))
-	return getLeagueDayKey(
-		new Date(now.getTime() + daysLeft * 24 * 60 * 60_000),
-	)
+	return getLeagueDayKey(new Date(now.getTime() + daysLeft * DAY_MS))
+}
+
+/** League-local day key of the last day of the month containing `now` */
+export function getEndOfMonthDayKey(now: Date): string {
+	const [year, month] = getLeagueDayKey(now).split("-").map(Number)
+	// Day 0 of next month is the last day of this one
+	const lastDay = new Date(Date.UTC(year!, month!, 0)).getUTCDate()
+	return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`
 }
 
 // --- Hooks
@@ -232,8 +225,7 @@ export function useAsync<T>(
 		;(IS_DEV ? withSimulatedLoading(load) : load()).then(
 			(data) => current && setResult({status: "success", data}),
 			(cause: unknown) => {
-				const error =
-					cause instanceof Error ? cause : new Error(String(cause))
+				const error = toError(cause)
 				asyncLogger.error("load", "load failed", {error})
 				if (current) {
 					setResult({status: "error", error})
@@ -331,7 +323,10 @@ export function useSeasonFilters(
 	}
 	const setFilters = (changes: Partial<SeasonFilterValues>) => {
 		const next = {...filters, ...changes}
-		const search = new URLSearchParams()
+		// Keeps any other params, e.g. the Teams page's grouping
+		const search = new URLSearchParams(history.location.search)
+		search.delete("season")
+		search.delete("divisions")
 		if (next.season) {
 			search.set("season", next.season)
 		}
@@ -344,6 +339,27 @@ export function useSeasonFilters(
 		})
 	}
 	return [filters, setFilters]
+}
+
+/**
+ * Sets one query param, or removes it when `value` is null (e.g. a default),
+ * keeping the rest. Replaces the history entry, like the filters above.
+ */
+export function replaceQueryParam(
+	history: History,
+	name: string,
+	value: string | null,
+) {
+	const search = new URLSearchParams(history.location.search)
+	if (value === null) {
+		search.delete(name)
+	} else {
+		search.set(name, value)
+	}
+	history.replace({
+		pathname: history.location.pathname,
+		search: search.size > 0 ? `?${search}` : "",
+	})
 }
 
 /**

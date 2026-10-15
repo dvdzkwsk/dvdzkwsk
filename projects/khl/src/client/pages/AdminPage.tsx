@@ -1,9 +1,30 @@
 import * as React from "react"
-import {Toggle} from "@base-ui/react/toggle"
-import {ToggleGroup} from "@base-ui/react/toggle-group"
+import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {Loader, PageShell} from "../Components.js"
 import {
+	BENCHMARK_SITE_LABELS,
+	BenchmarkResponse,
+	BenchmarkRun,
+	BenchmarkSummary,
+	BenchmarkTiming,
+	DEFAULT_BENCHMARK_NAMES,
+	RUN_BENCHMARK_ENDPOINT,
+} from "../../shared/ApiJson.js"
+import {
+	ErrorState,
+	Hint,
+	InlineLoader,
+	NotFoundState,
+	PageLoader,
+	PageShell,
+	SegmentedControl,
+	StatsTable,
+	StatsTableColumn,
+} from "../Components.js"
+import {
+	formatSeconds,
 	readSimulatedLoading,
 	Route,
 	SIMULATED_LOADING_DELAY_MS,
@@ -19,14 +40,24 @@ const AdminPage = () => {
 			<div className="Admin">
 				<h1>Admin</h1>
 				<LoaderDemo />
+				<ErrorStatesDemo />
 				<SimulatedLoadingPicker />
+				<BenchmarkRunner />
 			</div>
 		</PageShell>
 	)
 }
 
-/** Shows the page loader in place, for a few seconds or until stopped. */
+type LoaderKind = "page" | "inline"
+
+const LOADER_KIND_OPTIONS: {value: LoaderKind; label: string}[] = [
+	{value: "page", label: "Page"},
+	{value: "inline", label: "Inline"},
+]
+
+/** Shows either loader in place, for a few seconds or until stopped. */
 const LoaderDemo = () => {
+	const [kind, setKind] = React.useState<LoaderKind>("page")
 	const [loading, setLoading] = React.useState<"timed" | "hang" | null>(null)
 	const [runs, setRuns] = React.useState(0)
 	React.useEffect(() => {
@@ -46,8 +77,14 @@ const LoaderDemo = () => {
 	return (
 		<section className="Detail-panel">
 			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Page loader
+				Loaders
 			</h2>
+			<SegmentedControl<LoaderKind>
+				label="Loader"
+				options={LOADER_KIND_OPTIONS}
+				value={kind}
+				onChange={setKind}
+			/>
 			<div className="Admin-actions">
 				<button
 					type="button"
@@ -75,11 +112,89 @@ const LoaderDemo = () => {
 			<div className="Admin-preview">
 				{loading ? (
 					// Keyed so each run replays the loader's fade-in
-					<Loader key={runs} />
+					kind === "page" ? (
+						<PageLoader key={runs} />
+					) : (
+						<InlineLoader key={runs} />
+					)
 				) : (
 					<p className="Admin-note">
 						{runs ? "Loaded." : "Pick a button to show the loader."}
 					</p>
+				)}
+			</div>
+		</section>
+	)
+}
+
+type ErrorStateDemo = "not-found" | "page" | "inline" | "offline"
+
+const ERROR_STATE_OPTIONS: {value: ErrorStateDemo; label: string}[] = [
+	{value: "not-found", label: "Not found"},
+	{value: "page", label: "Page error"},
+	{value: "inline", label: "Inline error"},
+	{value: "offline", label: "Offline"},
+]
+
+/** Previews the not-found page and ErrorState, with sample errors. */
+const ErrorStatesDemo = () => {
+	const [demo, setDemo] = React.useState<ErrorStateDemo>("not-found")
+	// Made once, so ErrorState logs each sample only when it's first shown
+	const errors = React.useMemo(
+		() => ({
+			server: new FetchError(
+				"Sample 502 from /admin",
+				"GET",
+				"/api/admin/sample",
+				502,
+			),
+			offline: new FetchError(
+				"Sample network failure from /admin",
+				"GET",
+				"/api/admin/sample",
+				null,
+			),
+		}),
+		[],
+	)
+	return (
+		<section className="Detail-panel">
+			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
+				Error states
+			</h2>
+			<p className="Admin-note">
+				Errors are real ErrorStates, so showing one logs it like any
+				other.
+			</p>
+			<SegmentedControl<ErrorStateDemo>
+				label="Error state"
+				options={ERROR_STATE_OPTIONS}
+				value={demo}
+				onChange={setDemo}
+			/>
+			<div className="Admin-preview">
+				{demo === "not-found" && <NotFoundState size="inline" />}
+				{demo === "page" && (
+					<ErrorState
+						title="Couldn't load this page"
+						error={errors.server}
+						onRetry={() => {}}
+					/>
+				)}
+				{demo === "inline" && (
+					<ErrorState
+						title="Couldn't load upcoming games"
+						error={errors.server}
+						onRetry={() => {}}
+						size="inline"
+					/>
+				)}
+				{demo === "offline" && (
+					<ErrorState
+						title="Couldn't load this page"
+						error={errors.offline}
+						onRetry={() => {}}
+					/>
 				)}
 			</div>
 		</section>
@@ -104,27 +219,153 @@ const SimulatedLoadingPicker = () => {
 				Applies to every page's data loads until you turn it off or
 				close the tab.
 			</p>
-			<ToggleGroup
-				className="Segmented"
-				aria-label="Simulate slow loading"
-				value={[mode]}
-				onValueChange={([next]) => {
-					if (next) {
-						writeSimulatedLoading(next as SimulatedLoading)
-						setMode(next as SimulatedLoading)
-					}
+			<SegmentedControl<SimulatedLoading>
+				label="Simulate slow loading"
+				options={SIMULATED_LOADING_OPTIONS}
+				value={mode}
+				onChange={(next) => {
+					writeSimulatedLoading(next)
+					setMode(next)
 				}}
-			>
-				{SIMULATED_LOADING_OPTIONS.map((option) => (
-					<Toggle
-						key={option.value}
-						className="Segmented-item"
-						value={option.value}
-					>
-						{option.label}
-					</Toggle>
-				))}
-			</ToggleGroup>
+			/>
+		</section>
+	)
+}
+
+type BenchmarkState =
+	| {kind: "idle"}
+	| {kind: "running"}
+	| {kind: "done"; result: BenchmarkResponse}
+	| {kind: "error"; error: Error}
+
+/** One column per step, for both the medians and the individual runs. */
+function timingColumns<T>(
+	getTiming: (row: T) => BenchmarkTiming | null,
+): StatsTableColumn<T>[] {
+	const steps: [
+		step: keyof BenchmarkTiming,
+		header: string,
+		title: string,
+	][] = [
+		["open", "Open", "Until the search box shows"],
+		["results", "Results", "From typing the name until a result shows"],
+		["player", "Player", "From opening the result until stats show"],
+		["total", "Total", "Open, search and load the player"],
+	]
+	return steps.map(([step, header, title]) => ({
+		header,
+		title,
+		render: (row: T) => {
+			const timing = getTiming(row)
+			return timing ? formatSeconds(timing[step]) : "–"
+		},
+	}))
+}
+
+const SUMMARY_COLUMNS: StatsTableColumn<BenchmarkSummary>[] = [
+	{
+		header: "Site",
+		isLabel: true,
+		render: (summary) => BENCHMARK_SITE_LABELS[summary.site],
+	},
+	...timingColumns<BenchmarkSummary>((summary) => summary.median),
+	{
+		header: "Runs",
+		title: "Successful runs in the median",
+		render: (summary) => summary.runs,
+	},
+]
+
+const RUN_COLUMNS: StatsTableColumn<BenchmarkRun>[] = [
+	{header: "Player", isLabel: true, render: (run) => run.name},
+	{
+		header: "Site",
+		isLabel: true,
+		render: (run) =>
+			run.error ? (
+				<Hint label={run.error}>
+					<span className="Admin-failed">
+						{BENCHMARK_SITE_LABELS[run.site]} (failed)
+					</span>
+				</Hint>
+			) : (
+				BENCHMARK_SITE_LABELS[run.site]
+			),
+	},
+	...timingColumns<BenchmarkRun>((run) => run.timing),
+]
+
+/** Times KHL+ against the league's site, with tools/Benchmark.ts. */
+const BenchmarkRunner = () => {
+	const [names, setNames] = React.useState(DEFAULT_BENCHMARK_NAMES.join("\n"))
+	const [state, setState] = React.useState<BenchmarkState>({kind: "idle"})
+	const nameList = names
+		.split("\n")
+		.map((name) => name.trim())
+		.filter(Boolean)
+	const run = () => {
+		setState({kind: "running"})
+		doRequest(RUN_BENCHMARK_ENDPOINT, {names: nameList}).then(
+			(result) => setState({kind: "done", result}),
+			(error) => setState({kind: "error", error: toError(error)}),
+		)
+	}
+	return (
+		<section className="Detail-panel">
+			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
+				Speed benchmark
+			</h2>
+			<p className="Admin-note">
+				Opens khl.dvdzkwsk.com and the league's player search in
+				headless Chrome, searches each player and opens their page.
+				Every run starts with an empty browser cache, but KHL+ caches on
+				its server: a player's first run is cold, so run again for warm
+				times. Takes about 5–15s per player.
+			</p>
+			<textarea
+				className="Admin-names"
+				aria-label="Player names, one per line"
+				rows={DEFAULT_BENCHMARK_NAMES.length}
+				value={names}
+				onChange={(e) => setNames(e.target.value)}
+			/>
+			<div className="Admin-actions">
+				<button
+					type="button"
+					className="FilterPill"
+					disabled={state.kind === "running" || !nameList.length}
+					onClick={run}
+				>
+					Run benchmark
+				</button>
+			</div>
+			{state.kind === "running" && (
+				<div className="Admin-preview">
+					<InlineLoader />
+				</div>
+			)}
+			{state.kind === "error" && (
+				<ErrorState
+					title="Couldn't run the benchmark"
+					error={state.error}
+					onRetry={run}
+					size="inline"
+				/>
+			)}
+			{state.kind === "done" && (
+				<div className="Admin-results">
+					<StatsTable
+						rows={state.result.summaries}
+						rowKey={(summary) => summary.site}
+						columns={SUMMARY_COLUMNS}
+					/>
+					<StatsTable
+						rows={state.result.runs}
+						rowKey={(run) => `${run.name}:${run.site}`}
+						columns={RUN_COLUMNS}
+					/>
+				</div>
+			)}
 		</section>
 	)
 }

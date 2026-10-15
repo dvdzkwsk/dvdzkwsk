@@ -2,12 +2,15 @@ import * as fs from "fs"
 import * as path from "path"
 import {ConsoleTransport, Logger, setLoggerTransports} from "@dvdzkwsk/logger"
 import {ApiError, registerEndpoint} from "@dvdzkwsk/util/ApiServerUtil"
+import {FetchError} from "@dvdzkwsk/util/FetchUtil"
+import compression from "compression"
 import express from "express"
 import {
 	FeedGame,
 	GameResponse,
 	GET_GAME_ENDPOINT,
 	GET_MATCHUP_ENDPOINT,
+	LIST_PLAYERS_ENDPOINT,
 	LIST_TEAMS_ENDPOINT,
 	LIST_TEAM_SEASONS_ENDPOINT,
 	MatchupResponse,
@@ -19,11 +22,13 @@ import {
 	GET_PLAYER_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	GET_RINK_ENDPOINT,
+	GET_STATUS_ENDPOINT,
 	GET_STANDINGS_ENDPOINT,
 	LIST_GAMES_ENDPOINT,
 	GamesResponse,
 	LIST_RINKS_ENDPOINT,
 	LOG_ENDPOINT,
+	RUN_BENCHMARK_ENDPOINT,
 	Rink,
 	RinkGame,
 	RecentRinkGame,
@@ -35,6 +40,7 @@ import {
 	UpcomingGame,
 	LiveBarnLink,
 	PlayerResponse,
+	PlayersResponse,
 	PlayerSearchGroup,
 	SEARCH_ENDPOINT,
 	UnavailableSchedule,
@@ -51,12 +57,14 @@ import {
 	toDisplayArena,
 } from "./Arenas.js"
 import {getCity} from "../shared/Cities.js"
-import {LEAGUE, LIMITS} from "../shared/KHLConfig.js"
-import {normalizePlayerName, openDatabase} from "./Database.js"
+import {LIMITS} from "../shared/KHLConfig.js"
+import {openDatabase} from "./Database.js"
+import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
 import {
 	KHL_ALL_SEASONS,
 	getKHLArena,
 	getKHLBoxScore,
+	getKHLGamePreviewStats,
 	getKHLGameStats,
 	getKHLScoreboard,
 	getKHLLeagueSchedule,
@@ -72,21 +80,31 @@ import {
 	KHLBoxScore,
 	KHLBoxScoreTeam,
 	KHLGame,
+	KHLGamePreviewStats,
 	KHLGameTeamStats,
 	KHLLeagueGame,
 	KHLScoreboardGame,
 	KHLScoreboardTeam,
 	KHLLeagueTeam,
 	KHLRosterRow,
+	KHLSeason,
 	KHLTeam,
 	KHLTeamStats,
 	KHLTeamsPage,
+	normalizePlayerName,
 } from "../shared/KHLJson.js"
 import {
 	getLiveBarnLiveUrl,
 	getLiveBarnVodUrl,
 	getLivebarnVenues,
 } from "./LiveBarn.js"
+import {
+	DAY_MS as DAY,
+	getLeagueDayKey,
+	getLeagueLocalTime,
+	HOUR_MS as HOUR,
+	MINUTE_MS as MINUTE,
+} from "../shared/LeagueTime.js"
 import {LiveBarnSurface, LiveBarnVenue} from "../shared/LiveBarnJson.js"
 
 setLoggerTransports([new ConsoleTransport({verbose: true})])
@@ -104,18 +122,40 @@ const DB_PATH =
 
 const db = openDatabase(DB_PATH)
 
-const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-const DAY = 24 * HOUR
-
 const app = express()
+
+// The league-wide players list is ~700kb of JSON, ~150kb gzipped
+app.use(compression())
 
 // Client log batches with stack traces can outgrow the 100kb default
 app.use(express.json({limit: "512kb"}))
 
 app.get("/api/health", (_req, res) => {
-	res.json({ok: true})
+	res.json({ok: true, commit: DEPLOY_INFO.commit, dirty: DEPLOY_INFO.dirty})
 })
+
+registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db))
+
+// Dev only: drives headless Chrome, which the deployed image doesn't have.
+// Imported by path at request time so puppeteer stays out of the bundle.
+if (process.env.NODE_ENV !== "production") {
+	let benchmarkRunning = false
+	registerEndpoint(app, RUN_BENCHMARK_ENDPOINT, async ({names}) => {
+		if (benchmarkRunning) {
+			throw new ApiError(409, "a benchmark is already running")
+		}
+		benchmarkRunning = true
+		try {
+			const benchmarkPath = path.join(PROJECT_DIR, "tools/Benchmark.ts")
+			const {runBenchmark} = (await import(
+				benchmarkPath
+			)) as typeof import("../../tools/Benchmark.js")
+			return await runBenchmark(names)
+		} finally {
+			benchmarkRunning = false
+		}
+	})
+}
 
 registerEndpoint(app, SEARCH_ENDPOINT, async ({q}) => {
 	const query = q.trim()
@@ -288,9 +328,9 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 	const [teamsPage, currentSeason] = await Promise.all([
 		getTeamsPage(season),
-		getTeamsPage().then((page) => page.season),
+		getCurrentSeason(),
 	])
-	const team = teamsPage.teams.find((t) => t.id === teamId)
+	const team = findListedTeam(teamsPage, teamId)
 	if (!team) {
 		throw new ApiError(404, `team ${teamId} not found`)
 	}
@@ -315,7 +355,7 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 	const [boxScore, currentSeason] = await Promise.all([
 		getBoxScore(gameId),
-		getTeamsPage().then((page) => page.season),
+		getCurrentSeason(),
 	])
 	const {away, home} = boxScore
 	// Team pages are extras: if the KHL site fails on one, still show the game
@@ -337,7 +377,7 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 		getStats(away),
 		getStats(home),
 	])
-	const [headToHead, rosters, lineups, awayForm, homeForm] =
+	const [headToHead, rosters, lineups, awayForm, homeForm, previewStats] =
 		await Promise.all([
 			awayStats && homeStats
 				? getHeadToHead(awayStats, homeStats, currentSeason.id, {
@@ -353,9 +393,12 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 			boxScore.hasSummary ? getGameLineups(boxScore) : null,
 			getGameSeasonSummary(away, boxScore.startsAt, currentSeason.id),
 			getGameSeasonSummary(home, boxScore.startsAt, currentSeason.id),
+			// Extras for the comparison; the game shows without them
+			getPreviewStats(gameId),
 		])
 	const response: GameResponse = {
 		boxScore: {...boxScore, arena: toDisplayArena(boxScore.arena)},
+		previewStats,
 		score: await getFinalScore(boxScore),
 		playerIds: Object.fromEntries(recordBoxScorePlayers(boxScore)),
 		livebarn: toLiveBarnLinks(surfaces, boxScore),
@@ -401,8 +444,84 @@ registerEndpoint(app, GET_STANDINGS_ENDPOINT, async ({season}) => {
 	return response
 })
 
+registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
+	const [teamsPage, currentSeason] = await Promise.all([
+		getTeamsPage(season),
+		getCurrentSeason(),
+	])
+	const isCurrentSeason = teamsPage.season.id === currentSeason.id
+	// Built from every team's stats page (~175 of them), so the whole list is
+	// kept longer than any one page rather than refetched every 10 minutes
+	const ttl = isCurrentSeason ? HOUR : 24 * HOUR
+	return cached(
+		`players:${teamsPage.season.id}`,
+		ttl,
+		async () => {
+			// One team's page failing leaves it out rather than failing the list
+			const unavailableTeams: KHLTeam[] = []
+			const rosters = await Promise.all(
+				teamsPage.teams.map(async (team) => {
+					try {
+						const stats = await getTeamStats(
+							team.id,
+							team.seasonId,
+							isCurrentSeason,
+						)
+						const roster = await getRoster(
+							team.id,
+							team.name,
+							team.logoUrl,
+							stats,
+						)
+						return {team, roster}
+					} catch (error) {
+						logger.warn(
+							"listPlayers",
+							"KHL team stats unavailable",
+							{
+								teamId: team.id,
+								seasonId: team.seasonId,
+								error,
+							},
+						)
+						unavailableTeams.push(team)
+						return null
+					}
+				}),
+			)
+			const loaded = rosters.filter((r) => r !== null)
+			// Registered players who haven't played (backups, most goalies) have
+			// no stats to compare, and would be a third of the list
+			const toRows = (team: KHLTeam, players: RosterPlayer[]) => {
+				return players
+					.filter((p) => Number(p.stats["GP"]) > 0)
+					.map((p) => ({...p, teamId: team.id}))
+			}
+			const response: PlayersResponse = {
+				season: teamsPage.season,
+				seasons: teamsPage.seasons,
+				teams: loaded.map(({team}) => ({
+					team,
+					divisionName: getDivisionName(teamsPage, team.divisionId),
+				})),
+				skaters: loaded.flatMap(({team, roster}) =>
+					toRows(team, roster.skaters),
+				),
+				goalies: loaded.flatMap(({team, roster}) =>
+					toRows(team, roster.goalies),
+				),
+				unavailableTeams,
+			}
+			return response
+		},
+		// Don't hold on to a partial list for the full hour
+		(response) =>
+			response.unavailableTeams.length > 0 ? 10 * MINUTE : ttl,
+	)
+})
+
 registerEndpoint(app, LIST_TEAM_SEASONS_ENDPOINT, async ({teamId, season}) => {
-	const currentSeason = (await getTeamsPage()).season
+	const currentSeason = await getCurrentSeason()
 	const stats = await getTeamStats(
 		teamId,
 		season,
@@ -419,13 +538,13 @@ registerEndpoint(
 		const [pageA, pageB, currentSeason] = await Promise.all([
 			getTeamsPage(aSeason),
 			getTeamsPage(bSeason),
-			getTeamsPage().then((page) => page.season),
+			getCurrentSeason(),
 		])
 		if (a === b && pageA.season.id === pageB.season.id) {
 			throw new ApiError(400, "pick two different teams or seasons")
 		}
 		const getTeam = (teamsPage: KHLTeamsPage, teamId: string) => {
-			const team = teamsPage.teams.find((t) => t.id === teamId)
+			const team = findListedTeam(teamsPage, teamId)
 			if (!team) {
 				throw new ApiError(
 					404,
@@ -467,22 +586,26 @@ registerEndpoint(
 				),
 			}
 		}
-		const [matchupA, matchupB, headToHead] = await Promise.all([
-			toMatchupTeam(pageA, teamA, statsA, scheduleA),
-			toMatchupTeam(pageB, teamB, statsB, scheduleB),
-			// A team against its own past season has no head-to-head
-			teamA.id === teamB.id
-				? []
-				: getHeadToHead(statsA, statsB, currentSeason.id, {
-						// The matchup shows each picked season's meetings
-						includeSeasonIds: [teamA.seasonId, teamB.seasonId],
-					}),
-		])
+		const [matchupA, matchupB, headToHead, previewA, previewB] =
+			await Promise.all([
+				toMatchupTeam(pageA, teamA, statsA, scheduleA),
+				toMatchupTeam(pageB, teamB, statsB, scheduleB),
+				// A team against its own past season has no head-to-head
+				teamA.id === teamB.id
+					? []
+					: getHeadToHead(statsA, statsB, currentSeason.id, {
+							// The matchup shows each picked season's meetings
+							includeSeasonIds: [teamA.seasonId, teamB.seasonId],
+						}),
+				getSeasonPreviewStats(scheduleA),
+				getSeasonPreviewStats(scheduleB),
+			])
 		const response: MatchupResponse = {
 			currentSeason,
 			a: matchupA,
 			b: matchupB,
 			headToHead,
+			previewStats: combinePreviewStats(previewA, previewB),
 			upcoming: upcoming.filter(({game}) => {
 				return (
 					game.homeTeam.id === teamB.id ||
@@ -493,6 +616,80 @@ registerEndpoint(
 		return response
 	},
 )
+
+/** A game's preview stats; null if the KHL site fails, as they're extras. */
+async function getPreviewStats(
+	gameId: string,
+): Promise<KHLGamePreviewStats | null> {
+	try {
+		return await cached(`game-preview:${gameId}`, 10 * MINUTE, () =>
+			getKHLGamePreviewStats(gameId),
+		)
+	} catch (error) {
+		logger.warn("getPreviewStats", "KHL preview stats unavailable", {
+			gameId,
+			error,
+		})
+		return null
+	}
+}
+
+/** One team's side of a game's preview stats */
+type TeamPreviewStats = Record<keyof KHLGamePreviewStats, number | null>
+
+/**
+ * A team's PP%, PK%, shots and PIM for its season. The league only shows these
+ * on game previews, but every preview in a season shows the season to date,
+ * so any of the team's games will do: its latest.
+ */
+async function getSeasonPreviewStats(
+	schedule: KHLGame[],
+): Promise<TeamPreviewStats | null> {
+	const game = schedule
+		.filter((g) => g.id)
+		.reduce<KHLGame | null>(
+			(latest, g) =>
+				!latest || g.startsAt > latest.startsAt ? g : latest,
+			null,
+		)
+	if (!game?.id) {
+		return null
+	}
+	const stats = await getPreviewStats(game.id)
+	if (!stats) {
+		return null
+	}
+	const side = game.homeAway
+	return {
+		powerPlayPct: stats.powerPlayPct?.[side] ?? null,
+		penaltyKillPct: stats.penaltyKillPct?.[side] ?? null,
+		shotsPerGame: stats.shotsPerGame?.[side] ?? null,
+		shotsAgainstPerGame: stats.shotsAgainstPerGame?.[side] ?? null,
+		penaltyMinutesPerGame: stats.penaltyMinutesPerGame?.[side] ?? null,
+	}
+}
+
+/** Two teams' preview stats as a game's: a as "away", b as "home" */
+function combinePreviewStats(
+	a: TeamPreviewStats | null,
+	b: TeamPreviewStats | null,
+): KHLGamePreviewStats | null {
+	if (!a && !b) {
+		return null
+	}
+	const pair = (key: keyof KHLGamePreviewStats) => {
+		const away = a?.[key] ?? null
+		const home = b?.[key] ?? null
+		return away === null && home === null ? null : {away, home}
+	}
+	return {
+		powerPlayPct: pair("powerPlayPct"),
+		penaltyKillPct: pair("penaltyKillPct"),
+		shotsPerGame: pair("shotsPerGame"),
+		shotsAgainstPerGame: pair("shotsAgainstPerGame"),
+		penaltyMinutesPerGame: pair("penaltyMinutesPerGame"),
+	}
+}
 
 registerEndpoint(app, LOG_ENDPOINT, async ({sessionId, userAgent, logs}) => {
 	for (const log of logs) {
@@ -564,7 +761,7 @@ async function getDayGames(
 				id: team.id,
 				// The scoreboard doubles apostrophes ("Carl''s"); prefer the teams page
 				name:
-					teamsPage.teams.find((t) => t.id === team.id)?.name ??
+					findListedTeam(teamsPage, team.id)?.name ??
 					team.name.replaceAll("''", "'"),
 				logoUrl: team.logoUrl,
 				divisionName:
@@ -639,25 +836,6 @@ async function getRecentRinkGames(
 		}))
 }
 
-const leagueTimeFormat = new Intl.DateTimeFormat("en-US", {
-	timeZone: LEAGUE.TIME_ZONE,
-	hour: "2-digit",
-	minute: "2-digit",
-	hourCycle: "h23",
-})
-
-/** "yyyy-MM-dd" and "HH:mm" in league time, as KHL pages give them */
-function getLeagueLocalTime(startsAt: string): {
-	localDate: string
-	localTime: string
-} {
-	const date = new Date(startsAt)
-	return {
-		localDate: getLeagueDayKey(date),
-		localTime: leagueTimeFormat.format(date),
-	}
-}
-
 registerEndpoint(app, GET_RINK_ENDPOINT, async ({arenaId}) => {
 	if (!KHL_ARENA_LIVEBARN_SURFACES[arenaId]) {
 		throw new ApiError(404, `rink ${arenaId} not found`)
@@ -697,20 +875,33 @@ app.use(
 		_next: express.NextFunction,
 	) => {
 		logger.error("request", "request failed", {error})
-		res.status(502).json({
+		// 502 when the KHL (or LiveBarn) site failed us; else it's our bug
+		res.status(error instanceof FetchError ? 502 : 500).json({
 			error: error instanceof Error ? error.message : String(error),
 		})
 	},
 )
 
 app.listen(PORT, () => {
-	console.log(`server listening on http://localhost:${PORT}`)
+	logger.info("listen", `server listening on http://localhost:${PORT}`, {
+		commit: DEPLOY_INFO.commit,
+	})
+	startStatusChecks(db)
 })
 
 function getTeamsPage(seasonId?: string): Promise<KHLTeamsPage> {
 	return cached(`teams:${seasonId ?? "current"}`, HOUR, () => {
 		return getKHLTeamsPage(seasonId)
 	})
+}
+
+async function getCurrentSeason(): Promise<KHLSeason> {
+	return (await getTeamsPage()).season
+}
+
+/** Past seasons' pages don't change, so they're kept much longer */
+function getSeasonTtl(isCurrentSeason: boolean): number {
+	return isCurrentSeason ? 10 * MINUTE : 24 * HOUR
 }
 
 function getPlayer(playerId: string, teamId: string, seasonId: string) {
@@ -728,11 +919,13 @@ function getSchedule(
 	seasonId: string,
 	isCurrentSeason: boolean,
 ): Promise<KHLGame[]> {
-	// Past seasons' schedules don't change
-	const ttl = isCurrentSeason ? 10 * MINUTE : 24 * HOUR
-	return cached(`schedule:${teamId}:${seasonId}`, ttl, () => {
-		return getKHLTeamSchedule(teamId, seasonId)
-	})
+	return cached(
+		`schedule:${teamId}:${seasonId}`,
+		getSeasonTtl(isCurrentSeason),
+		() => {
+			return getKHLTeamSchedule(teamId, seasonId)
+		},
+	)
 }
 
 function getTeamStats(
@@ -742,7 +935,7 @@ function getTeamStats(
 ): Promise<KHLTeamStats> {
 	return cached(
 		`team-stats:${teamId}:${seasonId}`,
-		isCurrentSeason ? 10 * MINUTE : 24 * HOUR,
+		getSeasonTtl(isCurrentSeason),
 		() => getKHLTeamStats(teamId, seasonId),
 	)
 }
@@ -842,7 +1035,7 @@ async function getGameSeasonSummary(
 				team.seasonId === currentSeasonId,
 			),
 		])
-		const listed = teamsPage.teams.find((t) => t.id === team.id)
+		const listed = findListedTeam(teamsPage, team.id)
 		return {
 			team: listed ?? {
 				id: team.id,
@@ -852,9 +1045,7 @@ async function getGameSeasonSummary(
 				logoUrl: team.logoUrl,
 			},
 			season: teamsPage.season,
-			divisionName: listed
-				? getDivisionName(teamsPage, listed.divisionId)
-				: "",
+			divisionName: getListedDivisionName(teamsPage, team.id) ?? "",
 			// For a past game, its season going in rather than what came after
 			...getSeasonRecord(
 				schedule.filter((game) => game.startsAt < startsAt),
@@ -1011,13 +1202,6 @@ async function getRink(
 	}
 }
 
-const leagueDayFormat = new Intl.DateTimeFormat("en-CA", {
-	timeZone: LEAGUE.TIME_ZONE,
-	year: "numeric",
-	month: "2-digit",
-	day: "2-digit",
-})
-
 /** A day's games from the league's scoreboard, "yyyy-MM-dd" */
 function getScoreboard(date: string): Promise<KHLScoreboardGame[]> {
 	// A finished day's scores only change when the league corrects one
@@ -1061,32 +1245,36 @@ async function getFinalScore(
 	return {away: game.away.goals, home: game.home.goals}
 }
 
-/** The league-local calendar day, "yyyy-MM-dd" */
-function getLeagueDayKey(date: Date): string {
-	return leagueDayFormat.format(date)
-}
-
-/** A rink we track, or a bare one for rinks off our list (or unknown) */
+/** A rink we track, or a bare one for rinks off our list (or not set) */
 async function getRinkInfoOrFallback(
 	arena: {id: string; name: string} | null,
+	/** The name when there's no arena at all */
+	missingName = "Unknown rink",
 ): Promise<RinkInfo> {
 	if (arena && KHL_ARENA_LIVEBARN_SURFACES[arena.id]) {
 		return getRinkInfo(arena.id)
 	}
 	return {
 		arenaId: arena?.id ?? "",
-		name: arena ? getArenaName(arena) : "Unknown rink",
+		name: arena ? getArenaName(arena) : missingName,
 		city: "",
 		livebarn: [],
 	}
 }
 
-/** The team's current-season division, if the teams page lists it */
+function findListedTeam(
+	teamsPage: KHLTeamsPage,
+	teamId: string,
+): KHLTeam | undefined {
+	return teamsPage.teams.find((t) => t.id === teamId)
+}
+
+/** The team's division in the page's season, if the teams page lists it */
 function getListedDivisionName(
 	teamsPage: KHLTeamsPage,
 	teamId: string,
 ): string | null {
-	const listed = teamsPage.teams.find((t) => t.id === teamId)
+	const listed = findListedTeam(teamsPage, teamId)
 	return listed ? getDivisionName(teamsPage, listed.divisionId) : null
 }
 
@@ -1115,15 +1303,10 @@ async function getLeagueSchedule(): Promise<KHLLeagueGame[]> {
 }
 
 function toRinkGame(game: KHLLeagueGame, teamsPage: KHLTeamsPage): RinkGame {
-	const toRinkTeam = (team: KHLLeagueTeam): RinkTeam => {
-		const listed = teamsPage.teams.find((t) => t.id === team.id)
-		return {
-			...team,
-			divisionName: listed
-				? getDivisionName(teamsPage, listed.divisionId)
-				: null,
-		}
-	}
+	const toRinkTeam = (team: KHLLeagueTeam): RinkTeam => ({
+		...team,
+		divisionName: getListedDivisionName(teamsPage, team.id),
+	})
 	return {
 		gameId: game.id,
 		startsAt: game.startsAt,
@@ -1146,25 +1329,15 @@ async function getUpcomingGames(teamIds: Set<string>): Promise<UpcomingGame[]> {
 	})
 	return Promise.all(
 		games.map(async (g): Promise<UpcomingGame> => {
-			const arenaId = g.arena?.id
-			const rink: RinkInfo =
-				arenaId && KHL_ARENA_LIVEBARN_SURFACES[arenaId]
-					? await getRinkInfo(arenaId)
-					: {
-							arenaId: arenaId ?? "",
-							name: g.arena ? getArenaName(g.arena) : "TBD",
-							city: "",
-							livebarn: [],
-						}
-			return {rink, game: toRinkGame(g, teamsPage)}
+			return {
+				// Not yet assigned a rink
+				rink: await getRinkInfoOrFallback(g.arena, "TBD"),
+				game: toRinkGame(g, teamsPage),
+			}
 		}),
 	)
 }
 
-/**
- * The team's roster for a season, with each player recorded in the database
- * so they link to a player page.
- */
 /**
  * Who played for each team in a game, with their stats in it. Null if the
  * KHL site fails: the box score shows without it.
@@ -1198,6 +1371,10 @@ async function getGameLineups(
 	}
 }
 
+/**
+ * The team's roster for a season, with each player recorded in the database
+ * so they link to a player page.
+ */
 async function getRoster(
 	teamId: string,
 	teamName: string,

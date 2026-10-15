@@ -10,8 +10,10 @@ import {Toggle} from "@base-ui/react/toggle"
 import {ToggleGroup} from "@base-ui/react/toggle-group"
 import {Tooltip} from "@base-ui/react/tooltip"
 import {Autocomplete} from "@base-ui/react/autocomplete"
+import {Helmet} from "react-helmet"
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import {
 	RosterPlayer,
@@ -49,13 +51,20 @@ export const Link = (props: LinkProps) => {
 		<a
 			{...props}
 			onClick={(e) => {
-				if (!e.ctrlKey && !e.metaKey) {
+				props.onClick?.(e)
+				// Modified clicks open a new tab or window natively
+				if (!e.defaultPrevented && !isNewTabClick(e)) {
 					e.preventDefault()
 					history.push(props.href)
 				}
 			}}
 		/>
 	)
+}
+
+/** Clicks the browser turns into a new tab or window */
+function isNewTabClick(event: React.MouseEvent): boolean {
+	return event.metaKey || event.ctrlKey || event.shiftKey
 }
 
 interface TeamLinkProps {
@@ -176,6 +185,16 @@ interface StatsTableProps<T> {
 	rowClassName?: (row: T) => string | undefined
 	/** On the table, e.g. to fix its column widths */
 	className?: string
+	/** On the table, e.g. CSS variables its columns size from */
+	style?: React.CSSProperties
+	/** Rows scroll past this height; the header row stays in view */
+	maxHeight?: string
+	/**
+	 * Show only the first this many rows (after sorting), with a button for
+	 * the rest, so long tables render quickly. Unrendered rows have no cell
+	 * text, so only columns with a `sortValue` can sort.
+	 */
+	rowLimit?: number
 }
 
 type SortValue = number | string | null
@@ -206,11 +225,18 @@ export function StatsTable<T>({
 	rowKey,
 	rowClassName,
 	className,
+	style,
+	maxHeight,
+	rowLimit,
 }: StatsTableProps<T>) {
 	// Null keeps the order the rows came in
 	const [sort, setSort] = React.useState<StatsTableSort | null>(null)
+	const [showAll, setShowAll] = React.useState(false)
 	const bodyRef = React.useRef<HTMLTableSectionElement>(null)
 	const isSortable = (column: StatsTableColumn<T>) => {
+		if (rowLimit !== undefined && column.sortValue === undefined) {
+			return false
+		}
 		return (
 			column.sortable ??
 			(column.sortValue !== undefined || column.header !== "")
@@ -248,6 +274,9 @@ export function StatsTable<T>({
 			})
 			.map(({row}) => row)
 	}, [rows, columns, sort, rowKey])
+	const isLimited =
+		rowLimit !== undefined && !showAll && sortedRows.length > rowLimit
+	const visibleRows = isLimited ? sortedRows.slice(0, rowLimit) : sortedRows
 
 	// Columns without `sortValue` sort by what their cells show
 	const readCellValues = (index: number): Map<string, SortValue> => {
@@ -283,90 +312,113 @@ export function StatsTable<T>({
 	}
 
 	return (
-		<div className="StatsTable-wrapper">
-			<table className={cx("StatsTable", className)}>
-				<thead>
-					<tr>
-						{columns.map((column, index) => {
-							const sorted = sort?.column === index ? sort : null
-							return (
-								<Hint key={column.header} label={column.title}>
-									<th
+		<>
+			<div
+				className={cx(
+					"StatsTable-wrapper",
+					maxHeight && "StatsTable-wrapper--scroll",
+				)}
+				style={maxHeight ? {maxHeight} : undefined}
+			>
+				<table className={cx("StatsTable", className)} style={style}>
+					<thead>
+						<tr>
+							{columns.map((column, index) => {
+								const sorted =
+									sort?.column === index ? sort : null
+								return (
+									<Hint
+										key={column.header}
+										label={column.title}
+									>
+										<th
+											className={cx(
+												column.isLabel &&
+													"StatsTable-label",
+												column.className,
+											)}
+											aria-sort={
+												sorted
+													? sorted.ascending
+														? "ascending"
+														: "descending"
+													: undefined
+											}
+										>
+											{isSortable(column) ? (
+												<button
+													type="button"
+													className={cx(
+														"StatsTable-sort",
+														sorted &&
+															"StatsTable-sort--active",
+													)}
+													onClick={() =>
+														onSort(index, column)
+													}
+												>
+													{column.header}
+													<span
+														className="StatsTable-sort-arrow"
+														aria-hidden
+													>
+														{sorted?.ascending
+															? "↑"
+															: "↓"}
+													</span>
+												</button>
+											) : (
+												column.header
+											)}
+										</th>
+									</Hint>
+								)
+							})}
+						</tr>
+					</thead>
+					<tbody ref={bodyRef}>
+						{visibleRows.map((row) => (
+							<tr
+								key={rowKey(row)}
+								data-row-key={rowKey(row)}
+								className={rowClassName?.(row)}
+							>
+								{columns.map((column, index) => (
+									<td
+										key={index}
 										className={cx(
 											column.isLabel &&
 												"StatsTable-label",
 											column.className,
 										)}
-										aria-sort={
-											sorted
-												? sorted.ascending
-													? "ascending"
-													: "descending"
-												: undefined
-										}
 									>
-										{isSortable(column) ? (
-											<button
-												type="button"
-												className={cx(
-													"StatsTable-sort",
-													sorted &&
-														"StatsTable-sort--active",
-												)}
-												onClick={() =>
-													onSort(index, column)
-												}
-											>
-												{column.header}
-												<span
-													className="StatsTable-sort-arrow"
-													aria-hidden
-												>
-													{sorted?.ascending
-														? "↑"
-														: "↓"}
-												</span>
-											</button>
-										) : (
-											column.header
-										)}
-									</th>
-								</Hint>
-							)
-						})}
-					</tr>
-				</thead>
-				<tbody ref={bodyRef}>
-					{sortedRows.map((row) => (
-						<tr
-							key={rowKey(row)}
-							data-row-key={rowKey(row)}
-							className={rowClassName?.(row)}
-						>
-							{columns.map((column, index) => (
-								<td
-									key={index}
-									className={cx(
-										column.isLabel && "StatsTable-label",
-										column.className,
-									)}
-								>
-									{column.render(row)}
-								</td>
-							))}
-						</tr>
-					))}
-				</tbody>
-			</table>
-		</div>
+										{column.render(row)}
+									</td>
+								))}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+			{/* Outside the wrapper, so it doesn't scroll sideways with the table */}
+			{isLimited && (
+				<button
+					type="button"
+					className="StatsTable-more"
+					onClick={() => setShowAll(true)}
+				>
+					Show all {sortedRows.length}
+				</button>
+			)}
+		</>
 	)
 }
 
 // --- Roster
 
 /** Skater and goalie columns to show, from the league's stats tables. */
-const SKATER_COLUMNS = ["GP", "G", "A", "PTS", "PIM"]
-const GOALIE_COLUMNS = ["GP", "W", "L", "T", "GAA", "SV%"]
+export const SKATER_COLUMNS = ["GP", "G", "A", "PTS", "PIM"]
+export const GOALIE_COLUMNS = ["GP", "W", "L", "T", "GAA", "SV%"]
 
 /** A game's stat columns, as the league lists them once the game is posted */
 const GAME_SKATER_COLUMNS = ["G", "A", "P", "PIM"]
@@ -384,7 +436,44 @@ const toSortNumber = (value: string | null | undefined): number | null => {
 	return Number.isNaN(number) ? null : number
 }
 
-/** A season's roster, or a game's lineup with its stats in that game */
+/** Skaters by points, then goals, then name */
+export function compareSkaters(
+	a: {name: string; stats: Record<string, string>},
+	b: {name: string; stats: Record<string, string>},
+): number {
+	// Season tables total points as "PTS", a game's as "P"
+	const points = (p: typeof a) => Number(p.stats["PTS"] ?? p.stats["P"]) || 0
+	const goals = (p: typeof a) => Number(p.stats["G"]) || 0
+	return (
+		points(b) - points(a) ||
+		goals(b) - goals(a) ||
+		a.name.localeCompare(b.name)
+	)
+}
+
+/** StatsTable columns for the league's stat columns, e.g. ["GP", "G"] */
+export function toStatColumns<T>(
+	columns: string[],
+	/** The row's stats, keyed by the league's column headers */
+	getStats: (row: T) => Record<string, string>,
+	{blank}: {blank?: boolean} = {},
+): StatsTableColumn<T>[] {
+	return columns.map((column) => ({
+		header: column,
+		render: (row: T) =>
+			blank ? (
+				<span className="StatsTable-blank" aria-label="Not posted">
+					–
+				</span>
+			) : (
+				(getStats(row)[column] ?? "")
+			),
+		sortable: !blank,
+		sortValue: (row: T) => toSortNumber(getStats(row)[column]),
+		sortAscendingFirst: LOWER_IS_BETTER.has(column),
+	}))
+}
+
 /**
  * Season stats; one game's stats; or a game whose stats aren't posted yet,
  * which lists the season roster under the game's columns, left blank
@@ -425,19 +514,9 @@ export const RosterTables = ({
 	}[kind]
 	// Season stats don't belong under a game's columns
 	const blank = kind === "pending-game"
-	// Season tables total points as "PTS", a game's as "P"
-	const points = (p: RosterPlayer) =>
-		Number(p.stats["PTS"] ?? p.stats["P"]) || 0
-	const goals = (p: RosterPlayer) => Number(p.stats["G"]) || 0
 	// Blank tables have no stats to rank by, so they go by name
 	const sortedSkaters = [...skaters]
-		.sort((a, b) =>
-			blank
-				? a.name.localeCompare(b.name)
-				: points(b) - points(a) ||
-					goals(b) - goals(a) ||
-					a.name.localeCompare(b.name),
-		)
+		.sort(blank ? (a, b) => a.name.localeCompare(b.name) : compareSkaters)
 		.slice(0, skaterLimit)
 	return (
 		<>
@@ -489,20 +568,7 @@ const RosterTable = ({
 				</Link>
 			),
 		},
-		...columns.map((column) => ({
-			header: column,
-			render: (p: RosterPlayer) =>
-				blank ? (
-					<span className="StatsTable-blank" aria-label="Not posted">
-						–
-					</span>
-				) : (
-					(p.stats[column] ?? "")
-				),
-			sortable: !blank,
-			sortValue: (p: RosterPlayer) => toSortNumber(p.stats[column]),
-			sortAscendingFirst: LOWER_IS_BETTER.has(column),
-		})),
+		...toStatColumns<RosterPlayer>(columns, (p) => p.stats, {blank}),
 	]
 	return (
 		<StatsTable
@@ -564,106 +630,6 @@ export const RosterPanels = ({
 	)
 }
 
-/** How many skaters each team lists in TopScorers */
-const TOP_SCORERS = 3
-
-interface TopScorersTeam {
-	name: string
-	roster: TeamRoster
-}
-
-/**
- * Two teams' top point scorers, keyed with the comparison colors: the first
- * team is "a" (blue), the second "b" (orange).
- */
-export const TopScorers = ({
-	title,
-	teams,
-}: {
-	title: string
-	teams: [TopScorersTeam, TopScorersTeam]
-}) => {
-	const points = (p: RosterPlayer) => Number(p.stats["PTS"]) || 0
-	const goals = (p: RosterPlayer) => Number(p.stats["G"]) || 0
-	const top = (roster: TeamRoster) =>
-		roster.skaters
-			.filter((p) => points(p) > 0)
-			.sort(
-				(x, y) =>
-					points(y) - points(x) ||
-					goals(y) - goals(x) ||
-					x.name.localeCompare(y.name),
-			)
-			.slice(0, TOP_SCORERS)
-	return (
-		<section className={cx("Detail-panel", "Compare")}>
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				{title}
-			</h2>
-			<div className="TopScorers">
-				{teams.map((team, i) => {
-					const side = i === 0 ? "a" : "b"
-					const players = top(team.roster)
-					return (
-						<div
-							key={side}
-							className={cx(
-								"TopScorers-team",
-								`Compare-team--${side}`,
-							)}
-						>
-							<div className="Compare-team-name">
-								<span className="Compare-key" aria-hidden />
-								{team.name}
-							</div>
-							{players.length === 0 ? (
-								<p className="Compare-empty">No points yet.</p>
-							) : (
-								<ol className="TopScorers-list">
-									{players.map((p, rank) => (
-										<li
-											key={p.khlPlayerId}
-											className="TopScorers-row"
-										>
-											<span className="TopScorers-rank">
-												{rank + 1}
-											</span>
-											<span className="TopScorers-player">
-												<Link
-													className="TopScorers-name"
-													href={getPlayerHref(
-														p.playerId,
-													)}
-												>
-													{p.name}
-												</Link>
-												<span className="TopScorers-line">
-													{p.number &&
-														`#${p.number} · `}
-													{p.stats["G"] ?? 0} G ·{" "}
-													{p.stats["A"] ?? 0} A ·{" "}
-													{p.stats["GP"] ?? 0} GP
-												</span>
-											</span>
-											<span className="TopScorers-points">
-												{points(p)}
-												<span className="TopScorers-unit">
-													{" "}
-													PTS
-												</span>
-											</span>
-										</li>
-									))}
-								</ol>
-							)}
-						</div>
-					)
-				})}
-			</div>
-		</section>
-	)
-}
-
 // --- Picker
 
 export interface PickerItem {
@@ -714,10 +680,10 @@ export const Picker = (props: PickerProps) => {
 const PickerItemContent = ({item}: {item: PickerItem}) => {
 	return (
 		<>
-			<span className="SelectOption-check">✓</span>
 			{item.icon}
 			<span className="Picker-item-label">{item.label}</span>
 			{item.hint && <span className="Detail-meta-hint">{item.hint}</span>}
+			<span className="SelectOption-check">✓</span>
 		</>
 	)
 }
@@ -898,6 +864,18 @@ export const PageShell = ({children}: {children: React.ReactNode}) => {
 	return <main className="PageShell">{children}</main>
 }
 
+/**
+ * Overrides the route's <title> with what the page is about, e.g. a team's
+ * name, in the same "X | KHL+" format.
+ */
+export const PageTitle = ({children}: {children: string}) => {
+	return (
+		<Helmet>
+			<title>{`${children} | ${STRINGS.PRODUCT_NAME}`}</title>
+		</Helmet>
+	)
+}
+
 /** Renders loading/error states, or `children` once the data has loaded. */
 export function AsyncContent<T>({
 	state,
@@ -910,7 +888,7 @@ export function AsyncContent<T>({
 	state: AsyncState<T>
 	/** What's loading, e.g. "Loading standings…" */
 	loadingLabel?: string
-	/** Shown if loading takes a while; see Loader */
+	/** Shown if loading takes a while; see PageLoader */
 	slowNote?: string
 	errorTitle?: string
 	/** "inline" inside a section, "page" (default) for the whole page */
@@ -918,7 +896,11 @@ export function AsyncContent<T>({
 	children: (data: T) => React.ReactNode
 }) {
 	if (state.status === "loading") {
-		return <Loader label={loadingLabel} slowNote={slowNote} size={size} />
+		return size === "inline" ? (
+			<InlineLoader label={loadingLabel} slowNote={slowNote} />
+		) : (
+			<PageLoader label={loadingLabel} slowNote={slowNote} />
+		)
 	}
 	if (state.status === "error") {
 		return (
@@ -932,96 +914,156 @@ export function AsyncContent<T>({
 	return <>{children(state.data)}</>
 }
 
-// --- Loader
+// --- Loaders: PageLoader for a whole page, InlineLoader inside a section
 
-/** After this long, the loader says it's still working */
+/** After this long, a loader says it's still working */
 const LOADER_SLOW_MS = 5000
 
-/**
- * A puck sliding into a net, on repeat, over what's loading. If it takes a
- * while, adds a note that it's still working.
- */
-export const Loader = ({
-	label = "Loading…",
-	slowNote = "Still working. The first time this loads, it can take a little extra time.",
-	size = "page",
-}: {
+const DEFAULT_SLOW_NOTE =
+	"Still working. The first time this loads, it can take a little extra time."
+
+interface LoaderProps {
+	/** What's loading, e.g. "Loading standings…" */
 	label?: string
 	/** Shown once it's taken a while: why, so it doesn't look stuck */
 	slowNote?: string
-	/** "inline" inside a section, "page" for the whole page */
-	size?: "inline" | "page"
-}) => {
+}
+
+/** Whether loading has taken long enough to show the slow note */
+const useIsSlow = () => {
 	const [slow, setSlow] = React.useState(false)
 	React.useEffect(() => {
 		const timer = setTimeout(() => setSlow(true), LOADER_SLOW_MS)
 		return () => clearTimeout(timer)
 	}, [])
+	return slow
+}
+
+/**
+ * The loader for a whole page, centered below the header: a Zamboni lapping
+ * the rink from above, the ice shining behind it. If it takes a while, adds a
+ * note that it's still working.
+ */
+export const PageLoader = ({
+	label = "Loading…",
+	slowNote = DEFAULT_SLOW_NOTE,
+}: LoaderProps) => {
+	const slow = useIsSlow()
 	return (
-		<div
-			className={cx("Loader", `Loader--${size}`)}
-			role="status"
-			aria-live="polite"
-		>
-			<svg
-				className="Loader-rink"
-				viewBox="0 0 200 64"
-				aria-hidden="true"
-			>
-				<defs>
-					<pattern
-						id="Loader-mesh"
-						width="4"
-						height="4"
-						patternUnits="userSpaceOnUse"
-						patternTransform="rotate(45)"
-					>
-						<path d="M0 0V4M0 0H4" className="Loader-mesh" />
-					</pattern>
-				</defs>
-				<line className="Loader-ice" x1="6" y1="52" x2="194" y2="52" />
-				<path
-					className="Loader-crease"
-					d="M168 52 A14 7 0 0 0 154 52 Z"
-				/>
-				<g className="Loader-net">
-					<path
-						d="M168 52V28H182L190 52Z"
-						fill="url(#Loader-mesh)"
-						className="Loader-netting"
-					/>
-					<path className="Loader-frame" d="M168 52V28H182L190 52" />
-				</g>
-				<g className="Loader-puck">
-					<line
-						className="Loader-streak"
-						x1="-16"
-						y1="46"
-						x2="-4"
-						y2="46"
-					/>
-					<line
-						className="Loader-streak"
-						x1="-24"
-						y1="49"
-						x2="-6"
-						y2="49"
-					/>
-					<rect x="0" y="45" width="12" height="7" rx="2" />
-				</g>
-				<g className="Loader-spray">
-					<circle cx="160" cy="50" r="1.2" />
-					<circle cx="158" cy="47" r="1" />
-					<circle cx="162" cy="45" r="0.8" />
-				</g>
-			</svg>
-			<span className="Loader-label">{label}</span>
-			<span className="Loader-note">
+		<div className="PageLoader" role="status" aria-live="polite">
+			<ZamboniLap />
+			<span className="PageLoader-label">{label}</span>
+			<span className="PageLoader-note">
 				{/* Most data is fetched from the league's site and cached, so
 				    a first load is the slow one */}
 				{slow && slowNote}
 			</span>
 		</div>
+	)
+}
+
+/**
+ * The loader inside a section: three pucks beside the label, with the slow
+ * note under it.
+ */
+export const InlineLoader = ({
+	label = "Loading…",
+	slowNote = DEFAULT_SLOW_NOTE,
+}: LoaderProps) => {
+	const slow = useIsSlow()
+	return (
+		<div className="InlineLoader" role="status" aria-live="polite">
+			<div className="InlineLoader-row">
+				<PuckDots />
+				<span className="InlineLoader-label">{label}</span>
+			</div>
+			<span className="InlineLoader-note">{slow && slowNote}</span>
+		</div>
+	)
+}
+
+/** The Zamboni's lap, inset from the boards; the trail and Zamboni share it */
+const LAP_PATH =
+	"M46 20H154A26 26 0 0 1 180 46V54A26 26 0 0 1 154 80H46A26 26 0 0 1 20 54V46A26 26 0 0 1 46 20Z"
+
+/** A rink from above, with a Zamboni lapping it and fresh ice behind it */
+const ZamboniLap = () => {
+	return (
+		<svg className="ZamboniLap" viewBox="0 0 200 100" aria-hidden="true">
+			<rect
+				className="ZamboniLap-boards"
+				x="6"
+				y="6"
+				width="188"
+				height="88"
+				rx="40"
+			/>
+			<line
+				className="ZamboniLap-blue-line"
+				x1="72"
+				y1="6"
+				x2="72"
+				y2="94"
+			/>
+			<line
+				className="ZamboniLap-blue-line"
+				x1="128"
+				y1="6"
+				x2="128"
+				y2="94"
+			/>
+			<line
+				className="ZamboniLap-red-line"
+				x1="100"
+				y1="6"
+				x2="100"
+				y2="94"
+			/>
+			<circle className="ZamboniLap-faceoff" cx="100" cy="50" r="12" />
+			<path className="ZamboniLap-trail" pathLength="100" d={LAP_PATH} />
+			{/* Rides the lap with CSS offset-path; points along it, tank at
+			    the front */}
+			<g
+				className="ZamboniLap-zamboni"
+				style={{offsetPath: `path("${LAP_PATH}")`}}
+			>
+				<rect
+					className="ZamboniLap-body"
+					x="-11"
+					y="-6.5"
+					width="22"
+					height="13"
+					rx="2.5"
+				/>
+				<rect
+					className="ZamboniLap-tank"
+					x="0"
+					y="-5"
+					width="10"
+					height="10"
+					rx="1.5"
+				/>
+				<rect
+					className="ZamboniLap-stripe"
+					x="3"
+					y="-5"
+					width="2"
+					height="10"
+				/>
+				<circle className="ZamboniLap-driver" cx="-5" cy="0" r="2.2" />
+			</g>
+		</svg>
+	)
+}
+
+/** Three pucks lighting up and hopping in turn, like a typing indicator */
+const PuckDots = () => {
+	return (
+		<svg className="PuckDots" viewBox="0 0 34 10" aria-hidden="true">
+			{[0, 12.5, 25].map((x) => (
+				<rect key={x} x={x} y="3" width="9" height="5" rx="1.5" />
+			))}
+		</svg>
 	)
 }
 
@@ -1057,7 +1099,11 @@ export const ErrorState = ({
 
 	return (
 		<div className={cx("ErrorState", `ErrorState--${size}`)} role="alert">
-			<AlertIcon />
+			{size === "page" ? (
+				<BrokenStick className="ErrorState-art" />
+			) : (
+				<AlertIcon />
+			)}
 			<div className="ErrorState-body">
 				<div className="ErrorState-title">{title}</div>
 				<p className="ErrorState-description">{describeError(error)}</p>
@@ -1093,9 +1139,7 @@ export class ErrorBoundary extends React.Component<
 	state: {error: Error | null} = {error: null}
 
 	static getDerivedStateFromError(error: unknown) {
-		return {
-			error: error instanceof Error ? error : new Error(String(error)),
-		}
+		return {error: toError(error)}
 	}
 
 	render() {
@@ -1112,6 +1156,116 @@ export class ErrorBoundary extends React.Component<
 		}
 		return this.props.children
 	}
+}
+
+/** A page that isn't there: a shot off the post, and a way back home */
+export const NotFoundState = ({
+	size = "page",
+}: {
+	/** "page" centers it below the header; "inline" fits a section */
+	size?: "inline" | "page"
+}) => {
+	return (
+		<div className={cx("NotFoundState", `NotFoundState--${size}`)}>
+			<MissedShot className="NotFoundState-art" />
+			<h1 className="NotFoundState-title">Page not found</h1>
+			<p className="NotFoundState-description">
+				This page doesn't exist, or it may have moved.
+			</p>
+			<Link className="NotFoundState-link" href="/">
+				Back to upcoming games
+			</Link>
+		</div>
+	)
+}
+
+/** A hockey stick snapped in two, for a page that failed */
+const BrokenStick = ({className}: {className?: string}) => {
+	return (
+		<svg
+			className={cx("BrokenStick", className)}
+			viewBox="0 0 80 80"
+			aria-hidden="true"
+		>
+			<line className="BrokenStick-ice" x1="6" y1="72" x2="74" y2="72" />
+			{/* Handle, with tape on the knob */}
+			<path
+				className="BrokenStick-shaft"
+				d="M12.5 11.5L38.5 37.5L37 39.5L39.5 41.5L35.5 41L33.5 42.5L7.5 16.5Z"
+			/>
+			<path className="BrokenStick-tape" d="M11 15L17 21" />
+			{/* Lower shaft and blade */}
+			<path
+				className="BrokenStick-shaft"
+				d="M41.5 50.5L43 48.5L41 46.5L44.5 47L46.5 45.5L61 60H74Q77 60 77 62.5Q77 65 74 65H57Z"
+			/>
+			<g className="BrokenStick-splinters">
+				<path d="M38 46L35 49M44 42L47 39" />
+			</g>
+		</svg>
+	)
+}
+
+/**
+ * A net, side on, mouth to the left: the front post is at x=168
+ * and the ice at y=52.
+ */
+export const GoalNet = ({className}: {className?: string}) => {
+	const meshId = React.useId()
+	return (
+		<g className={cx("GoalNet", className)}>
+			<defs>
+				<pattern
+					id={meshId}
+					width="4"
+					height="4"
+					patternUnits="userSpaceOnUse"
+					patternTransform="rotate(45)"
+				>
+					<path d="M0 0V4M0 0H4" className="GoalNet-mesh" />
+				</pattern>
+			</defs>
+			<path
+				d="M168 52V28H182L190 52Z"
+				fill={`url(#${meshId})`}
+				className="GoalNet-netting"
+			/>
+			<path className="GoalNet-frame" d="M168 52V28H182L190 52" />
+		</g>
+	)
+}
+
+/** A shot that rang off the post and missed, for a page that isn't there */
+const MissedShot = ({className}: {className?: string}) => {
+	return (
+		<svg
+			className={cx("MissedShot", className)}
+			viewBox="0 0 200 64"
+			aria-hidden="true"
+		>
+			<line className="MissedShot-ice" x1="6" y1="52" x2="194" y2="52" />
+			<path
+				className="MissedShot-crease"
+				d="M168 52 A14 7 0 0 0 154 52 Z"
+			/>
+			<GoalNet />
+			{/* Along the ice, off the post, and up and away */}
+			<path className="MissedShot-path" d="M24 49L165 40Q150 18 140 14" />
+			<path
+				className="MissedShot-ping"
+				d="M160 37.5L155 35M161 44L157 47"
+			/>
+			<rect
+				className="MissedShot-puck"
+				x="-6"
+				y="-3.5"
+				width="12"
+				height="7"
+				rx="2"
+				transform="translate(132 12) rotate(-25)"
+			/>
+		</svg>
+	)
 }
 
 const AlertIcon = () => {
@@ -1360,8 +1514,43 @@ export const SiteHeader = () => {
 	)
 }
 
+// --- Site footer
+
+const FOOTER_LINKS = [
+	{href: "/about", label: "About"},
+	{href: "/help", label: "Help / Feedback"},
+	{href: "/status", label: "Status"},
+	{href: URLS.GITHUB, label: "GitHub ↗"},
+]
+
+/** About, feedback and source links, on every page. */
+export const SiteFooter = () => {
+	return (
+		<footer className="SiteFooter">
+			<div className="SiteFooter-inner">
+				<span className="SiteFooter-brand">{STRINGS.PRODUCT_NAME}</span>
+				<nav className="SiteFooter-nav">
+					{FOOTER_LINKS.map((item) => (
+						<Link
+							key={item.href}
+							className="SiteFooter-link"
+							href={item.href}
+						>
+							{item.label}
+						</Link>
+					))}
+				</nav>
+			</div>
+		</footer>
+	)
+}
+
 const NAV_ITEMS = [
+	// Also active on a game's page, /games/:id
+	{href: "/games", label: "Games"},
 	{href: "/teams", label: "Teams"},
+	// Also active on a player's page, /players/:id
+	{href: "/players", label: "Players"},
 	{href: "/matchup", label: "Matchup"},
 	...(IS_DEV ? [{href: "/admin", label: "Admin"}] : []),
 ]
@@ -1555,10 +1744,6 @@ type SearchStatus =
 
 const searchLogger = new Logger("SiteSearch")
 
-/**
- * Header search with autocomplete across players, teams, and rinks. Arrow
- * keys move through suggestions; Enter or a click opens one.
- */
 function isEditable(target: EventTarget | null): boolean {
 	return (
 		target instanceof HTMLElement &&
@@ -1569,6 +1754,10 @@ function isEditable(target: EventTarget | null): boolean {
 	)
 }
 
+/**
+ * Header search with autocomplete across players, teams, and rinks. Arrow
+ * keys move through suggestions; Enter or a click opens one.
+ */
 const SiteSearch = () => {
 	const {history} = React.useContext(AppContext)
 	const location = useLocation()
@@ -1622,10 +1811,7 @@ const SiteSearch = () => {
 					}
 				},
 				(cause: unknown) => {
-					const error =
-						cause instanceof Error
-							? cause
-							: new Error(String(cause))
+					const error = toError(cause)
 					searchLogger.error("search", "search failed", {
 						query,
 						error,
@@ -1651,7 +1837,7 @@ const SiteSearch = () => {
 		status.kind === "searching" && suggestions.length === 0
 			? "Searching…"
 			: status.kind === "done" && suggestions.length === 0
-				? `No players, teams, or rinks match “${status.query}”.`
+				? `No players, teams, or locations match “${status.query}”.`
 				: null
 
 	return (
@@ -1680,9 +1866,9 @@ const SiteSearch = () => {
 				<Autocomplete.Input
 					ref={inputRef}
 					className="SiteSearch-input"
-					aria-label="Search players, teams, and rinks"
+					aria-label="Search players, teams, and locations"
 					aria-keyshortcuts="/"
-					placeholder="Search players, teams, and rinks"
+					placeholder="Search players, teams, and locations"
 				/>
 				{/* Hidden while focused or typed in; see styles.css */}
 				<kbd className="SiteSearch-key" aria-hidden>
@@ -1757,15 +1943,10 @@ const SiteSearch = () => {
 	)
 }
 
-/** Clicks the browser turns into a new tab or window */
-function isNewTabClick(event: React.MouseEvent): boolean {
-	return event.metaKey || event.ctrlKey || event.shiftKey
-}
-
 const SUGGESTION_KIND_LABELS: Record<SuggestionKind, string> = {
 	player: "Player",
 	team: "Team",
-	rink: "Rink",
+	rink: "Location",
 }
 
 /** Team logo, a person for players, or a pin in the city's color for rinks. */
@@ -1942,6 +2123,15 @@ export const ScoresheetLink = ({gameId}: {gameId: string}) => {
 	)
 }
 
+/** Tooltips for LiveBarn links, so every page words them the same */
+export const LIVEBARN_TITLES = {
+	/** A rink's feed, with nothing playing yet */
+	open: (surfaceName: string) => `Open ${surfaceName} on LiveBarn`,
+	live: (surfaceName: string) => `Watch live on LiveBarn (${surfaceName})`,
+	replay: (surfaceName: string) =>
+		`Watch the replay on LiveBarn (${surfaceName})`,
+}
+
 /** A pill linking out to a LiveBarn feed or replay. */
 export const LiveBarnBadge = ({
 	href,
@@ -1969,37 +2159,58 @@ export const LiveBarnBadge = ({
 }
 
 /**
- * A LiveBarn badge for a rink without a feed: greyed out, with a popover
- * explaining why. Opens on hover, and on tap where there's no hover.
+ * A popover explaining `trigger`, the element that opens it: on hover, and on
+ * tap where there's no hover.
  */
-export const NotOnLiveBarn = ({compact}: {compact?: boolean}) => {
+export const InfoPopover = ({
+	trigger,
+	children,
+}: {
+	trigger: React.ReactElement
+	children: React.ReactNode
+}) => {
 	return (
 		<Popover.Root>
-			<Popover.Trigger
-				openOnHover
-				delay={100}
-				className={cx(
-					"LiveBarnBadge",
-					"LiveBarnBadge--unavailable",
-					compact && "LiveBarnBadge--compact",
-				)}
-				aria-disabled
-				aria-label="LiveBarn unavailable for this rink"
-			>
-				<CameraIcon />
-				{!compact && "LiveBarn"}
-			</Popover.Trigger>
+			<Popover.Trigger openOnHover delay={100} render={trigger} />
 			<Popover.Portal>
 				<Popover.Positioner className="Positioner" sideOffset={6}>
 					<Popover.Popup className="InfoPopup">
-						<strong>No LiveBarn for this rink.</strong> LiveBarn
-						only streams and records rinks with its cameras. We
-						couldn't find this rink on LiveBarn, so there's no live
-						stream or replay for its games.
+						{children}
 					</Popover.Popup>
 				</Popover.Positioner>
 			</Popover.Portal>
 		</Popover.Root>
+	)
+}
+
+/**
+ * A LiveBarn badge for a rink without a feed: greyed out, with a popover
+ * explaining why.
+ */
+export const NotOnLiveBarn = ({compact}: {compact?: boolean}) => {
+	return (
+		<InfoPopover
+			trigger={
+				<button
+					type="button"
+					className={cx(
+						"LiveBarnBadge",
+						"LiveBarnBadge--unavailable",
+						compact && "LiveBarnBadge--compact",
+					)}
+					aria-disabled
+					aria-label="LiveBarn unavailable for this location"
+				>
+					<CameraIcon />
+					{!compact && "LiveBarn"}
+				</button>
+			}
+		>
+			<strong>No LiveBarn for this location.</strong> LiveBarn only
+			streams and records locations with its cameras. We couldn't find
+			this location on LiveBarn, so there's no live stream or replay for
+			its games.
+		</InfoPopover>
 	)
 }
 

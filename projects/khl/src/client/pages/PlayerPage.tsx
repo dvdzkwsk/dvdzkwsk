@@ -2,17 +2,16 @@ import * as React from "react"
 import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {Helmet} from "react-helmet"
 import {
 	GET_PLAYER_ENDPOINT,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
-import {STRINGS} from "../../shared/KHLConfig.js"
 import {
 	AsyncContent,
 	PageShell,
+	PageTitle,
 	Picker,
 	PickerItem,
 	StatsTable,
@@ -21,7 +20,7 @@ import {
 	TeamLink,
 	Warnings,
 } from "../Components.js"
-import {GameCards, PastGames} from "../Games.js"
+import {GameCards, HeroLastResults, HeroStatGroup, PastGames} from "../Games.js"
 import {AppContext, Route, RouteProps, useAsync, useNow} from "../Util.js"
 
 /** Keeps upcoming games to one row of cards */
@@ -81,11 +80,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 					).slice(0, MAX_UPCOMING_GAMES)
 					return (
 						<div className="Detail">
-							<Helmet>
-								<title>
-									{player.name} | {STRINGS.PRODUCT_NAME}
-								</title>
-							</Helmet>
+							<PageTitle>{player.name}</PageTitle>
 							{player.registrations.length > 1 && (
 								<div className="Detail-toolbar">
 									<PlayerTeamPicker
@@ -265,20 +260,22 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 		<header className="Detail-header Detail-header--player">
 			<div className="PlayerHero">
 				<div className="PlayerHero-identity">
-					<h1 className="PlayerHero-name">
-						{player.name}
-						{numbers.length > 0 && (
-							<span className="PlayerHero-number">
-								{numbers.map((n) => `#${n}`).join(" / ")}
-							</span>
-						)}
-					</h1>
-					<div className="PlayerHero-bio">
+					<div className="PlayerHero-heading">
+						<h1 className="PlayerHero-name">
+							{player.name}
+							{numbers.length > 0 && (
+								<span className="PlayerHero-number">
+									{numbers.map((n) => `#${n}`).join(" / ")}
+								</span>
+							)}
+						</h1>
 						{position && (
 							<span className="PlayerHero-position">
 								{position}
 							</span>
 						)}
+					</div>
+					<div className="PlayerHero-bio">
 						{current.map((r) => (
 							<span
 								key={r.khlPlayerId}
@@ -287,57 +284,38 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 								<TeamAvatar
 									name={r.teamName}
 									logoUrl={r.teamLogoUrl}
-									size={20}
+									size={32}
 								/>
-								<TeamLink
-									team={{id: r.teamId, name: r.teamName}}
-									seasonId={player.currentSeason.id}
-								/>
-								{getDivision(r) && (
-									<span className="PlayerHero-division">
-										{getDivision(r)}
-									</span>
-								)}
+								<span className="PlayerHero-team-text">
+									<TeamLink
+										team={{id: r.teamId, name: r.teamName}}
+										seasonId={player.currentSeason.id}
+									/>
+									{getDivision(r) && (
+										<span className="PlayerHero-division">
+											{getDivision(r)}
+										</span>
+									)}
+								</span>
 							</span>
 						))}
 					</div>
 				</div>
 				<div className="PlayerHero-stats">
 					{current.length > 0 && (
-						<StatGroup
+						<HeroStatGroup
 							label="This season"
 							stats={totals(current, 0)}
 						/>
 					)}
-					<StatGroup
+					<HeroStatGroup
 						label="Career"
 						stats={totals(player.registrations, "Career Stats")}
 					/>
+					<HeroLastResults games={player.games} />
 				</div>
 			</div>
 		</header>
-	)
-}
-
-const StatGroup = ({
-	label,
-	stats,
-}: {
-	label: string
-	stats: Record<string, number>
-}) => {
-	return (
-		<section className="PlayerHero-group" aria-label={label}>
-			<h2 className="PlayerHero-group-label">{label}</h2>
-			<dl className="PlayerHero-group-stats">
-				{Object.entries(stats).map(([name, value]) => (
-					<div key={name} className="PlayerHero-stat">
-						<dt>{name}</dt>
-						<dd>{value}</dd>
-					</div>
-				))}
-			</dl>
-		</section>
 	)
 }
 

@@ -52,6 +52,16 @@ export const KHLTeamsPageSchema = z.object({
 	teams: z.array(KHLTeamSchema),
 }) satisfies z.ZodType<KHLTeamsPage>
 
+/** A name for matching: no accents, case or extra spaces */
+export function normalizePlayerName(name: string): string {
+	return name
+		.normalize("NFKD")
+		.replace(/[̀-ͯ]/g, "")
+		.trim()
+		.replace(/\s+/g, " ")
+		.toLowerCase()
+}
+
 /** One row of /player-search: a player's registration on a single team. */
 export interface KHLPlayerSearchResult {
 	playerId: string
@@ -272,12 +282,14 @@ export const KHLGameSchema = z.object({
 export function getGoalsByTeam(game: KHLGame): Record<string, number> | null {
 	const match = game.score?.match(/^(\d+)\s*-\s*(\d+)$/)
 	const result = game.result?.toUpperCase() ?? ""
-	if (!match || !/^[WLT]/.test(result)) {
+	// "OTL"/"SOL" are losses in overtime or a shootout
+	const lost = result.startsWith("L") || /^(OT|SO)L/.test(result)
+	if (!match || !(lost || /^[WT]/.test(result))) {
 		return null
 	}
 	const high = Math.max(Number(match[1]), Number(match[2]))
 	const low = Math.min(Number(match[1]), Number(match[2]))
-	const own = result.startsWith("L") ? low : high
+	const own = lost ? low : high
 	const other = result.startsWith("W") ? low : high
 	return {[game.team.id]: own, [game.opponent.id]: other}
 }
@@ -519,6 +531,38 @@ export const KHLPenaltySchema = z.object({
 }) satisfies z.ZodType<KHLPenalty>
 
 /** /game/:id/summary */
+/** One stat for both teams; null where the league shows nothing */
+export interface KHLPreviewStat {
+	away: number | null
+	home: number | null
+}
+
+export const KHLPreviewStatSchema = z.object({
+	away: z.number().nullable(),
+	home: z.number().nullable(),
+}) satisfies z.ZodType<KHLPreviewStat>
+
+/**
+ * Season stats the league's game preview page compares, for the two teams.
+ * Each is null if the page doesn't list it.
+ */
+export interface KHLGamePreviewStats {
+	/** Percent, e.g. 20 for 20.0% */
+	powerPlayPct: KHLPreviewStat | null
+	penaltyKillPct: KHLPreviewStat | null
+	shotsPerGame: KHLPreviewStat | null
+	shotsAgainstPerGame: KHLPreviewStat | null
+	penaltyMinutesPerGame: KHLPreviewStat | null
+}
+
+export const KHLGamePreviewStatsSchema = z.object({
+	powerPlayPct: KHLPreviewStatSchema.nullable(),
+	penaltyKillPct: KHLPreviewStatSchema.nullable(),
+	shotsPerGame: KHLPreviewStatSchema.nullable(),
+	shotsAgainstPerGame: KHLPreviewStatSchema.nullable(),
+	penaltyMinutesPerGame: KHLPreviewStatSchema.nullable(),
+}) satisfies z.ZodType<KHLGamePreviewStats>
+
 export interface KHLBoxScore {
 	gameId: string
 	/** League-local (Pacific) calendar date, "yyyy-MM-dd" */

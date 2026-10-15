@@ -1,27 +1,35 @@
 import * as React from "react"
 import {Combobox} from "@base-ui/react/combobox"
-import {ScrollArea} from "@base-ui/react/scroll-area"
 import {Popover} from "@base-ui/react/popover"
 import {PreviewCard} from "@base-ui/react/preview-card"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import {
 	FeedGame,
 	HeadToHeadGame,
+	LiveBarnLink,
 	RecentGame,
 	Rink,
 	RinkGame,
 	RinkInfo,
 	RinkTeam,
+	SeasonSummary,
 	UpcomingGame,
 } from "../shared/ApiJson.js"
 import {getGoalsByTeam} from "../shared/KHLJson.js"
-import {LEAGUE} from "../shared/KHLConfig.js"
+import {LIMITS} from "../shared/KHLConfig.js"
+import {
+	DAY_MS,
+	getGameEndsAt,
+	getLeagueDayKey,
+	isGameInProgress,
+} from "../shared/LeagueTime.js"
 import {
 	ChevronIcon,
 	CityDot,
 	Hint,
 	HomeAwayBadge,
 	Link,
+	LIVEBARN_TITLES,
 	LiveBarnBadge,
 	NotOnLiveBarn,
 	RinkLink,
@@ -40,10 +48,9 @@ import {
 	formatGameTime,
 	formatRelative,
 	formatScore,
+	getEndOfMonthDayKey,
 	getEndOfWeekDayKey,
-	getGameEndsAt,
 	getGameHref,
-	getLeagueDayKey,
 	useNow,
 } from "./Util.js"
 
@@ -56,19 +63,10 @@ export interface RinkStatus {
 }
 
 export function getRinkStatus(rink: Rink, now: Date): RinkStatus {
-	const live = rink.games.find((g) => isRinkGameLive(g, now)) ?? null
+	const live = rink.games.find((g) => isGameInProgress(g, now)) ?? null
 	const next =
 		rink.games.find((g) => Date.parse(g.startsAt) > now.getTime()) ?? null
 	return {rink, live, next}
-}
-
-function getRinkGameEndsAt(game: RinkGame): number {
-	return Date.parse(game.startsAt) + LEAGUE.GAME_DURATION_MINUTES * 60_000
-}
-
-function isRinkGameLive(game: RinkGame, now: Date): boolean {
-	const time = now.getTime()
-	return Date.parse(game.startsAt) <= time && time < getRinkGameEndsAt(game)
 }
 
 interface GameCardsProps {
@@ -88,7 +86,7 @@ export const GameCards = ({
 	emptyMessage = "No upcoming games scheduled.",
 }: GameCardsProps) => {
 	const visible = games
-		.filter(({game}) => getRinkGameEndsAt(game) > now.getTime())
+		.filter(({game}) => getGameEndsAt(game) > now)
 		.slice(0, limit)
 	if (visible.length === 0) {
 		return <p className="RinkCard-empty">{emptyMessage}</p>
@@ -118,7 +116,7 @@ interface RinkCardProps {
 
 /** A game at a rink: when, who, which division, and how to watch. */
 export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
-	const live = game !== null && isRinkGameLive(game, now)
+	const live = game !== null && isGameInProgress(game, now)
 	return (
 		<article className={cx("RinkCard", live && "RinkCard--live")}>
 			<header className="RinkCard-header">
@@ -137,7 +135,7 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
 									? surface.surfaceName
 									: undefined
 							}
-							title={`Open ${surface.surfaceName} on LiveBarn`}
+							title={LIVEBARN_TITLES.open(surface.surfaceName)}
 						/>
 					))}
 				</span>
@@ -172,7 +170,7 @@ export const GameSummary = ({
 	seasonId: string
 	now: Date
 }) => {
-	const live = isRinkGameLive(game, now)
+	const live = isGameInProgress(game, now)
 	const [clock, meridiem] = formatGameTime(game.startsAt).split(" ")
 	return (
 		<>
@@ -255,15 +253,8 @@ const RinkCardTeam = ({
 }
 
 /** Usually both teams share a division; show both when they don't. */
-export function getDivisionLabel(game: RinkGame): string {
-	const divisions = [
-		...new Set(
-			[game.awayTeam.divisionName, game.homeTeam.divisionName].filter(
-				Boolean,
-			),
-		),
-	]
-	return divisions.join(" vs ")
+function getDivisionLabel(game: RinkGame): string {
+	return getDivisions(game).join(" vs ")
 }
 
 // --- Past games
@@ -287,35 +278,44 @@ export const PastGames = ({
 }: PastGamesProps) => {
 	const past = games.filter((g) => getGameEndsAt(g.game) <= now).reverse()
 	return (
-		<section className="GameFeed-card">
-			<h2 className={cx("GameFeed-title", "SectionLabel")}>
-				Past games{past.length > 0 && ` · ${past.length}`}
+		<GameTableCard
+			title="Past games"
+			count={past.length}
+			emptyText="No games played yet."
+			// Long histories scroll inside the card, under a fixed header
+			maxHeight="24rem"
+			rows={past
+				.slice(0, limit)
+				.map((g) => feedGameToRow(g, getTeamLogoUrl(g.game.team.id)))}
+			now={now}
+			showResult
+			showDay
+		/>
+	)
+}
+
+/** A titled card around a GameTable: "Past games · 7", or `emptyText`. */
+export const GameTableCard = ({
+	title,
+	count,
+	emptyText,
+	...tableProps
+}: React.ComponentProps<typeof GameTable> & {
+	title: string
+	/** Shown after the title when there are any */
+	count?: number
+	emptyText: string
+}) => {
+	return (
+		<section className="GameTableCard">
+			<h2 className={cx("GameTableCard-title", "SectionLabel")}>
+				{title}
+				{!!count && ` · ${count}`}
 			</h2>
-			{past.length === 0 ? (
-				<div className="GameFeed-empty">No games played yet.</div>
+			{tableProps.rows.length === 0 ? (
+				<div className="GameTableCard-empty">{emptyText}</div>
 			) : (
-				<ScrollArea.Root className="GameFeed-scroll">
-					<ScrollArea.Viewport className="GameFeed-viewport">
-						<ScrollArea.Content>
-							<GameTable
-								rows={past
-									.slice(0, limit)
-									.map((g) =>
-										feedGameToRow(
-											g,
-											getTeamLogoUrl(g.game.team.id),
-										),
-									)}
-								now={now}
-								showResult
-								showDay
-							/>
-						</ScrollArea.Content>
-					</ScrollArea.Viewport>
-					<ScrollArea.Scrollbar className="GameFeed-scrollbar">
-						<ScrollArea.Thumb className="GameFeed-thumb" />
-					</ScrollArea.Scrollbar>
-				</ScrollArea.Root>
+				<GameTable {...tableProps} />
 			)}
 		</section>
 	)
@@ -323,7 +323,7 @@ export const PastGames = ({
 
 // --- Game filters and list: upcoming games across every rink
 
-type DayPreset = "yesterday" | "today" | "tomorrow" | "week"
+type DayPreset = "yesterday" | "today" | "week" | "month"
 
 type DayKey = `${number}-${number}-${number}`
 
@@ -334,13 +334,13 @@ type DayKey = `${number}-${number}-${number}`
 export type DayFilter = DayPreset | DayKey | `${DayKey}..${DayKey}`
 
 /** The longest range the date picker allows; past days are fetched one by one */
-const MAX_RANGE_DAYS = 7
+const MAX_RANGE_DAYS = 31
 
 const DAY_FILTERS: {value: DayPreset; label: string}[] = [
 	{value: "yesterday", label: "Yesterday"},
 	{value: "today", label: "Today"},
-	{value: "tomorrow", label: "Tomorrow"},
 	{value: "week", label: "This week"},
+	{value: "month", label: "This month"},
 ]
 
 /** With no day in the URL (and for old "all" links) */
@@ -421,9 +421,9 @@ export const GameFilters = ({
 							sortedRinks.find((r) => r.arenaId === id)?.name ??
 							id,
 					),
-					"All rinks",
+					"All locations",
 				)}
-				searchLabel="Search rinks"
+				searchLabel="Search locations"
 				options={sortedRinks.map((rink) => ({
 					value: rink.arenaId,
 					label: rink.name,
@@ -477,7 +477,7 @@ export const GameFilters = ({
 	)
 }
 
-/** "All rinks"; "KCI Starbucks"; "KCI Starbucks +2" */
+/** "All locations"; "KCI Starbucks"; "KCI Starbucks +2" */
 function summarizeSelection(names: string[], none: string): string {
 	if (names.length === 0) {
 		return none
@@ -753,10 +753,9 @@ function toDayFilter({from, to}: DayRange): DayFilter {
 
 /** Days from `from` to `to`, counting both */
 function getDaysBetween(from: string, to: string): number {
-	const day = 24 * 60 * 60_000
 	return (
 		(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
-			day +
+			DAY_MS +
 		1
 	)
 }
@@ -768,13 +767,13 @@ function addDaysToKey(day: string, count: number): DayKey {
 	return date.toISOString().slice(0, 10) as DayKey
 }
 
+/** How far back the date picker goes */
+const PAST_MONTHS = 24
+
 /**
  * The day switch's calendar button: opens a month calendar for any day. Past
  * days show their results; upcoming days with games are marked.
  */
-/** How far back the date picker goes */
-const PAST_MONTHS = 24
-
 const DayPicker = ({
 	value,
 	gameDays,
@@ -971,7 +970,10 @@ const monthFormat = new Intl.DateTimeFormat("en-US", {
 })
 
 /** "2026-10-22" -> "Thu, Oct 22" (or "Thursday, October 22") */
-function formatDayKey(day: string, style: "short" | "long" = "short"): string {
+export function formatDayKey(
+	day: string,
+	style: "short" | "long" = "short",
+): string {
 	return dayKeyFormats[style].format(new Date(`${day}T00:00:00Z`))
 }
 
@@ -1131,27 +1133,14 @@ export const GameList = ({
 	)
 }
 
-/**
- * A game's start time. Hovering it gives the full date and how far off it
- * is; it sits above a row's stretched link so the tooltip can open.
- */
-export const GameTime = ({startsAt}: {startsAt: string}) => {
-	const now = useNow()
-	return (
-		<Hint
-			label={`${formatGameDate(startsAt, now)} · ${formatRelative(startsAt, now)}`}
-		>
-			<span className="GameTime">{formatGameTime(startsAt)}</span>
-		</Hint>
-	)
-}
-
 /** A team in a games table row */
 export interface GameTableTeamInfo {
 	id: string
 	name: string
 	logoUrl: string | null
 	divisionName?: string | null
+	/** Two-team tables (head-to-head): the team's color, as in Compare */
+	accent?: "a" | "b"
 }
 
 /**
@@ -1169,6 +1158,9 @@ export interface GameTableRow {
 	score: {away: number; home: number} | null
 	/** A team's own lists: its result ("W", "L", "T"), shown as a chip */
 	result?: string | null
+	/** The side whose perspective the list is from (a team's or player's own
+	    games): its name is highlighted */
+	highlight?: "away" | "home"
 	rink: {id: string; name: string} | null
 	/** Feeds or replays; empty when the rink isn't on LiveBarn */
 	livebarn: {surfaceId: number; href: string; title: string}[]
@@ -1177,7 +1169,7 @@ export interface GameTableRow {
 }
 
 /**
- * Games as a table: (result,) (day,) time, each team with its division, the
+ * Games as a table: (result,) (date,) time, each team with its division, the
  * rink, then the scoresheet and LiveBarn. The row links to the game. Fixed
  * column widths, so stacked tables (e.g. one per day) line up.
  */
@@ -1187,6 +1179,7 @@ export const GameTable = ({
 	showResult,
 	showDay,
 	showRink = true,
+	maxHeight,
 }: {
 	rows: GameTableRow[]
 	now: Date
@@ -1196,7 +1189,16 @@ export const GameTable = ({
 	showDay?: boolean
 	/** Off on a rink's own page */
 	showRink?: boolean
+	/** Rows scroll past this height under a fixed header */
+	maxHeight?: string
 }) => {
+	// Once any game here has a score, it sits between the teams like a
+	// scoreboard: "ESB [logo] 3 – 8 [logo] ALTP". Upcoming-only tables don't
+	// need it.
+	const scoreboard = rows.some((row) => row.score)
+	// Both team columns as wide as the longest name here, so a table of short
+	// names doesn't spread them out
+	const teamChars = scoreboard ? getTeamColumnChars(rows) : null
 	const columns: StatsTableColumn<GameTableRow>[] = [
 		...(showResult
 			? [
@@ -1218,22 +1220,11 @@ export const GameTable = ({
 					},
 				]
 			: []),
-		...(showDay
-			? [
-					{
-						header: "Day",
-						isLabel: true,
-						className: "GameTable-col--day",
-						sortValue: (row: GameTableRow) => row.startsAt,
-						render: (row: GameTableRow) =>
-							formatGameDate(row.startsAt, now),
-					},
-				]
-			: []),
 		{
-			header: "Time",
+			// "Sun, Oct 11 10:30 PM" when rows span days; else just the time
+			header: showDay ? "Date" : "Time",
 			isLabel: true,
-			className: "GameTable-col--time",
+			className: showDay ? "GameTable-col--when" : "GameTable-col--time",
 			sortValue: (row) => row.startsAt,
 			render: (row) => {
 				const time = (
@@ -1241,7 +1232,17 @@ export const GameTable = ({
 						{row.live && (
 							<span className="GameTable-live">LIVE</span>
 						)}
-						<GameTime startsAt={row.startsAt} />
+						<span>
+							{showDay && (
+								<>
+									{/* Fixed width, so the times line up */}
+									<span className="GameTable-date">
+										{formatGameDate(row.startsAt, now)}
+									</span>
+								</>
+							)}
+							{formatGameTime(row.startsAt)}
+						</span>
 					</>
 				)
 				// The row's link to the game; its hit area covers the row
@@ -1261,31 +1262,43 @@ export const GameTable = ({
 		{
 			header: "Away",
 			isLabel: true,
+			className: scoreboard ? "GameTable-col--away" : undefined,
 			render: (row) => (
 				<GameTableTeam
 					team={row.away}
 					seasonId={row.seasonId}
-					goals={row.score?.away}
-					against={row.score?.home}
+					highlighted={row.highlight === "away"}
+					mirrored={scoreboard}
 				/>
 			),
 		},
+		...(scoreboard
+			? [
+					{
+						header: "",
+						className: "GameTable-col--score",
+						sortable: false,
+						render: (row: GameTableRow) =>
+							row.score && <GameTableScore row={row} />,
+					},
+				]
+			: []),
 		{
 			header: "Home",
 			isLabel: true,
+			className: scoreboard ? "GameTable-col--home" : undefined,
 			render: (row) => (
 				<GameTableTeam
 					team={row.home}
 					seasonId={row.seasonId}
-					goals={row.score?.home}
-					against={row.score?.away}
+					highlighted={row.highlight === "home"}
 				/>
 			),
 		},
 		...(showRink
 			? [
 					{
-						header: "Rink",
+						header: "Location",
 						isLabel: true,
 						className: "GameTable-col--rink",
 						render: (row: GameTableRow) =>
@@ -1317,7 +1330,15 @@ export const GameTable = ({
 	]
 	return (
 		<StatsTable<GameTableRow>
-			className="GameTable"
+			className={cx("GameTable", scoreboard && "GameTable--scoreboard")}
+			style={
+				teamChars
+					? ({
+							"--GameTable-team-chars": teamChars,
+						} as React.CSSProperties)
+					: undefined
+			}
+			maxHeight={maxHeight}
 			rows={rows}
 			rowKey={(row) => row.gameId ?? `${row.startsAt}:${row.away.id}`}
 			rowClassName={(row) =>
@@ -1328,6 +1349,65 @@ export const GameTable = ({
 	)
 }
 
+/** Team columns fit names up to this long; longer ones end in an ellipsis */
+const TEAM_COLUMN_CHARS = {min: 8, max: 22}
+
+/**
+ * The longest team name (or division, which is set smaller) in these rows,
+ * in characters, clamped to `TEAM_COLUMN_CHARS`.
+ */
+function getTeamColumnChars(rows: GameTableRow[]): number {
+	const longest = Math.max(
+		0,
+		...rows.flatMap((row) =>
+			[row.away, row.home].map((team) =>
+				Math.max(
+					team.name.length,
+					// --text-xs is about 0.8 of the names' size
+					Math.ceil((team.divisionName?.length ?? 0) * 0.8),
+				),
+			),
+		),
+	)
+	return Math.min(
+		TEAM_COLUMN_CHARS.max,
+		Math.max(TEAM_COLUMN_CHARS.min, longest),
+	)
+}
+
+/**
+ * "2 – 9", away first: the winner's goals bold (in its color, when the table
+ * colors its teams) and the loser's muted. A tie is plain.
+ */
+const GameTableScore = ({row}: {row: GameTableRow}) => {
+	const {away, home} = row.score!
+	const goals = (mine: number, other: number, team: GameTableTeamInfo) => {
+		return (
+			<span
+				className={cx(
+					"GameTable-goals",
+					mine > other && "GameTable-goals--won",
+					mine < other && "GameTable-goals--lost",
+					mine > other &&
+						`GameTable-tint--${team.accent ?? "neutral"}`,
+				)}
+			>
+				{mine}
+			</span>
+		)
+	}
+	return (
+		<span
+			className="GameTable-score"
+			aria-label={`${row.away.name} ${away}, ${row.home.name} ${home}`}
+		>
+			{goals(away, home, row.away)}
+			<span className="GameTable-score-dash"> – </span>
+			{goals(home, away, row.home)}
+		</span>
+	)
+}
+
 /** An upcoming (or playing) league game, with its rink's live feeds */
 export function toGameTableRow(
 	{rink, game}: {rink: RinkInfo; game: RinkGame},
@@ -1335,7 +1415,7 @@ export function toGameTableRow(
 	now: Date,
 ): GameTableRow {
 	// A final score means it's over, even inside its slot
-	const live = !game.score && isRinkGameLive(game, now)
+	const live = !game.score && isGameInProgress(game, now)
 	return {
 		gameId: game.gameId,
 		seasonId,
@@ -1348,8 +1428,8 @@ export function toGameTableRow(
 			surfaceId: surface.surfaceId,
 			href: surface.liveUrl,
 			title: live
-				? `Watch live on LiveBarn (${surface.surfaceName})`
-				: `Open ${surface.surfaceName} on LiveBarn`,
+				? LIVEBARN_TITLES.live(surface.surfaceName)
+				: LIVEBARN_TITLES.open(surface.surfaceName),
 		})),
 		live,
 	}
@@ -1375,48 +1455,53 @@ function feedGameToRow(
 			? {away: goals[away.id] ?? 0, home: goals[home.id] ?? 0}
 			: null,
 		result: game.result,
+		highlight: game.homeAway,
 		rink: game.arena,
-		livebarn: livebarn.map((link) => ({
-			surfaceId: link.surfaceId,
-			href: link.vodUrl,
-			title: `Watch the replay on LiveBarn (${link.surfaceName})`,
-		})),
+		livebarn: toReplayLinks(livebarn),
 	}
 }
 
+/** A finished game's LiveBarn replays, as a GameTable row's links */
+export function toReplayLinks(
+	livebarn: LiveBarnLink[],
+): GameTableRow["livebarn"] {
+	return livebarn.map((link) => ({
+		surfaceId: link.surfaceId,
+		href: link.vodUrl,
+		title: LIVEBARN_TITLES.replay(link.surfaceName),
+	}))
+}
+
 /**
- * A team in a games table: logo, then name over division. With a score, the
- * winner is bold and the loser muted.
+ * A team in a games table: logo, then name over division. The list's own
+ * team (`GameTableRow.highlight`) is bold and tinted.
  */
 const GameTableTeam = ({
 	team,
 	seasonId,
-	goals,
-	against,
+	highlighted,
+	mirrored,
 }: {
 	team: GameTableTeamInfo
 	seasonId: string
-	/** This team's goals, once the game is final */
-	goals?: number
-	/** The other team's */
-	against?: number
+	highlighted?: boolean
+	/** Logo on the right, text right-aligned: the away side of a scoreboard */
+	mirrored?: boolean
 }) => {
-	const isFinal = goals !== undefined && against !== undefined
 	return (
 		<span
 			className={cx(
 				"GameTable-team",
-				isFinal && goals > against && "GameTable-team--won",
-				isFinal && goals < against && "GameTable-team--lost",
+				mirrored && "GameTable-team--mirrored",
+				highlighted && "GameTable-team--highlighted",
+				// Tinted: in its series color in a head-to-head, else grey
+				highlighted && `GameTable-tint--${team.accent ?? "neutral"}`,
 			)}
 		>
 			<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={28} />
 			<span className="GameTable-team-text">
 				<span className="GameTable-team-name">
 					<TeamLink team={team} seasonId={seasonId} />
-					{goals !== undefined && (
-						<span className="GameTable-team-goals">{goals}</span>
-					)}
 				</span>
 				{team.divisionName && (
 					<span className="GameTable-team-division">
@@ -1430,10 +1515,9 @@ const GameTableTeam = ({
 
 /** Games that haven't finished yet, across every rink, soonest first. */
 export function getScheduledGames(rinks: Rink[], now: Date): ScheduledGame[] {
-	const cutoff = now.getTime() - LEAGUE.GAME_DURATION_MINUTES * 60_000
 	return rinks
 		.flatMap((rink) => rink.games.map((game) => ({rink, game})))
-		.filter(({game}) => Date.parse(game.startsAt) > cutoff)
+		.filter(({game}) => getGameEndsAt(game) > now)
 		.sort((a, b) => a.game.startsAt.localeCompare(b.game.startsAt))
 }
 
@@ -1501,9 +1585,9 @@ export const NoGames = ({
 			</h2>
 			<p className="NoGames-text">
 				{narrowed && forDay.length > 0
-					? `${forDay.length} ${forDay.length === 1 ? "game is" : "games are"} hidden by your rink and division filters.`
+					? `${forDay.length} ${forDay.length === 1 ? "game is" : "games are"} hidden by your location and division filters.`
 					: narrowed
-						? "Nothing's scheduled then, at any rink."
+						? "Nothing's scheduled then, at any location."
 						: "Nothing's scheduled then."}
 			</p>
 			<div className="NoGames-actions">
@@ -1532,15 +1616,16 @@ export const NoGames = ({
 	)
 }
 
-/** "tomorrow", "this week", "on Thu, Oct 22", "Oct 13 – Oct 17" */
+/** "today", "this week", "on Thu, Oct 22", "Oct 13 – Oct 17" */
 function describeDay(day: DayFilter, now: Date): string {
 	switch (day) {
 		case "yesterday":
 		case "today":
-		case "tomorrow":
 			return day
 		case "week":
 			return "this week"
+		case "month":
+			return "this month"
 	}
 	const range = getDayRange(day)
 	if (!range) {
@@ -1558,16 +1643,16 @@ function getLastDayKey(day: DayFilter, now: Date): string {
 			return getLeagueDayKey(addDays(now, -1))
 		case "today":
 			return getLeagueDayKey(now)
-		case "tomorrow":
-			return getLeagueDayKey(addDays(now, 1))
 		case "week":
 			return getEndOfWeekDayKey(now)
+		case "month":
+			return getEndOfMonthDayKey(now)
 	}
 	return getDayRange(day)?.to ?? getLeagueDayKey(now)
 }
 
 function addDays(date: Date, days: number): Date {
-	return new Date(date.getTime() + days * 24 * 60 * 60_000)
+	return new Date(date.getTime() + days * DAY_MS)
 }
 
 /**
@@ -1603,10 +1688,10 @@ function matchesDay(game: RinkGame, day: DayFilter, now: Date): boolean {
 			return key === getLeagueDayKey(addDays(now, -1))
 		case "today":
 			return key === today
-		case "tomorrow":
-			return key === getLeagueDayKey(addDays(now, 1))
 		case "week":
 			return key <= getEndOfWeekDayKey(now)
+		case "month":
+			return key <= getEndOfMonthDayKey(now)
 		default: {
 			const range = getDayRange(day)
 			return !!range && range.from <= key && key <= range.to
@@ -1614,11 +1699,12 @@ function matchesDay(game: RinkGame, day: DayFilter, now: Date): boolean {
 	}
 }
 
+/** The game's divisions: usually one, two when the teams' differ */
 function getDivisions(game: RinkGame): string[] {
 	return [
 		...new Set(
 			[game.awayTeam.divisionName, game.homeTeam.divisionName].flatMap(
-				(d) => d ?? [],
+				(d) => d || [],
 			),
 		),
 	]
@@ -1642,152 +1728,76 @@ interface HeadToHeadProps {
 }
 
 /**
- * Earlier games between two teams: the series record as a bar, then a table
- * with one row per game: its score, then its replay and box score.
+ * The series between two teams at a glance: who leads, as a bar in the teams'
+ * colors, and when they last met. Their games are in HeadToHeadGames.
  */
-export const HeadToHead = ({left, right, games, now}: HeadToHeadProps) => {
-	const columns: StatsTableColumn<HeadToHeadGame>[] = [
-		{
-			header: "Game",
-			isLabel: true,
-			sortValue: (game) => game.startsAt,
-			render: (game) => (
-				<span className="HeadToHead-game">
-					{/* The row's link to the game; its hit area covers the row */}
-					{game.gameId ? (
-						<Link
-							className="StretchedLink"
-							href={getGameHref(game.gameId)}
-						>
-							{formatGameDate(game.startsAt, now)}
-						</Link>
-					) : (
-						<span>{formatGameDate(game.startsAt, now)}</span>
-					)}
-					{game.arena && (
-						<span className="HeadToHead-rink">
-							{game.arena.name}
-						</span>
-					)}
-				</span>
-			),
-		},
-		{
-			header: "Score",
-			isLabel: true,
-			// Two teams and two numbers; nothing to order by
-			sortable: false,
-			render: (game) => (
-				<ScoreCell game={game} left={left} right={right} />
-			),
-		},
-		{
-			header: "",
-			render: (game) => (
-				<span className="HeadToHead-links">
-					{game.gameId && <ScoresheetLink gameId={game.gameId} />}
-					{game.livebarn.map((link) => (
-						<LiveBarnBadge
-							key={link.surfaceId}
-							compact
-							href={link.vodUrl}
-							title={`Watch the replay on LiveBarn (${link.surfaceName})`}
-						/>
-					))}
-					{game.livebarn.length === 0 && <NotOnLiveBarn compact />}
-				</span>
-			),
-		},
-	]
+export const HeadToHeadSeries = ({
+	left,
+	right,
+	games,
+}: Omit<HeadToHeadProps, "now">) => {
+	const now = useNow()
+	const last = games.find((g) => g.goals)
+	if (games.length === 0) {
+		return (
+			<p className="Detail-empty">
+				No earlier games between these teams in recent seasons.
+			</p>
+		)
+	}
 	return (
-		<section className={cx("Detail-panel", "HeadToHead")}>
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Head-to-head
-				{games.length > 0 &&
-					` · ${games.length} ${games.length === 1 ? "game" : "games"}`}
-			</h2>
-			{games.length === 0 ? (
-				<p className="Detail-empty">
-					No earlier games between these teams in recent seasons.
+		<>
+			<SeriesRecord left={left} right={right} games={games} />
+			{last && (
+				<p className="HeadToHead-last">
+					Last met {formatGameDate(last.startsAt, now)}
+					{last.arena && ` at ${last.arena.name}`}
 				</p>
-			) : (
-				<>
-					<SeriesRecord left={left} right={right} games={games} />
-					<StatsTable
-						rows={games}
-						rowKey={(game) => game.gameId ?? game.startsAt}
-						rowClassName={() => "HeadToHead-row"}
-						columns={columns}
-					/>
-				</>
 			)}
+		</>
+	)
+}
+
+/** Earlier games between two teams, in the same table as every games list. */
+export const HeadToHeadGames = ({left, right, games, now}: HeadToHeadProps) => {
+	if (games.length === 0) {
+		return null
+	}
+	return (
+		<section className="Detail-panel">
+			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
+				Previous meetings
+			</h2>
+			<GameTable
+				rows={games.map((game) => headToHeadToRow(game, left, right))}
+				now={now}
+				showDay
+			/>
 		</section>
 	)
 }
 
-/**
- * "Left 9 – 2 Right": the team names inline with their goals, the winner's
- * name bold and its goals in its series color.
- */
-const ScoreCell = ({
-	game,
-	left,
-	right,
-}: {
-	game: HeadToHeadGame
-	left: HeadToHeadTeam
-	right: HeadToHeadTeam
-}) => {
-	const leftGoals = game.goals?.[left.id]
-	const rightGoals = game.goals?.[right.id]
-	const scored = leftGoals !== undefined && rightGoals !== undefined
-	const leftWon = scored && leftGoals > rightGoals
-	const rightWon = scored && rightGoals > leftGoals
-	return (
-		<span className="HeadToHead-score">
-			<span
-				className={cx(
-					"HeadToHead-team",
-					"HeadToHead-team--left",
-					leftWon && "HeadToHead-team--won",
-				)}
-			>
-				{left.name}
-			</span>
-			{scored ? (
-				<>
-					<span
-						className={cx(
-							"HeadToHead-goals--left",
-							leftWon && "HeadToHead-score-won--left",
-						)}
-					>
-						{leftGoals}
-					</span>
-					<span className="HeadToHead-score-dash">–</span>
-					<span
-						className={cx(
-							"HeadToHead-goals--right",
-							rightWon && "HeadToHead-score-won--right",
-						)}
-					>
-						{rightGoals}
-					</span>
-				</>
-			) : (
-				<span className="HeadToHead-score-dash">–</span>
-			)}
-			<span
-				className={cx(
-					"HeadToHead-team",
-					"HeadToHead-team--right",
-					rightWon && "HeadToHead-team--won",
-				)}
-			>
-				{right.name}
-			</span>
-		</span>
-	)
+function headToHeadToRow(
+	game: HeadToHeadGame,
+	left: HeadToHeadTeam,
+	right: HeadToHeadTeam,
+): GameTableRow {
+	// The series' colors: left (e.g. the away team) blue, right orange
+	const a = {...left, accent: "a" as const}
+	const b = {...right, accent: "b" as const}
+	const [home, away] = game.homeTeamId === left.id ? [a, b] : [b, a]
+	return {
+		gameId: game.gameId,
+		seasonId: game.seasonId,
+		startsAt: game.startsAt,
+		away,
+		home,
+		score: game.goals
+			? {away: game.goals[away.id] ?? 0, home: game.goals[home.id] ?? 0}
+			: null,
+		rink: game.arena,
+		livebarn: toReplayLinks(game.livebarn),
+	}
 }
 
 /** Wins, ties and losses as one bar in the teams' colors, with a legend. */
@@ -1894,11 +1904,57 @@ const SeriesRecord = ({
 
 // --- Recent results
 
+/**
+ * Under a team's name in a game's or matchup's header: its division, then its
+ * record and last five results.
+ */
+export const TeamForm = ({
+	form,
+	showDivision = true,
+}: {
+	form: SeasonSummary
+	/** Off where the header's pickers already name the season and division */
+	showDivision?: boolean
+}) => {
+	return (
+		<>
+			{showDivision && form.divisionName && (
+				<div className="BoxScore-division">{form.divisionName}</div>
+			)}
+			{/* No title here: it would show over the chips' hover cards */}
+			<div className="BoxScore-form">
+				{form.recent.length > 0 && (
+					<>
+						<span className="BoxScore-record">
+							{form.wins}-{form.losses}-{form.ties}
+						</span>
+						<span className="BoxScore-form-divider" aria-hidden />
+					</>
+				)}
+				<span className="Detail-meta-hint">Last 5</span>
+				<ResultChips
+					games={form.recent.slice(-LIMITS.GAME_RECENT_GAMES)}
+					slots={LIMITS.GAME_RECENT_GAMES}
+				/>
+			</div>
+		</>
+	)
+}
+
 /** W/L/T chips, oldest first, each opening its game with a preview on hover. */
-export const ResultChips = ({games}: {games: RecentGame[]}) => {
-	if (games.length === 0) {
+export const ResultChips = ({
+	games,
+	slots,
+}: {
+	games: RecentGame[]
+	/** Always this many chips, empty placeholders after the games, e.g. a
+	    "Last 5" three games into a season */
+	slots?: number
+}) => {
+	if (games.length === 0 && !slots) {
 		return <span className="Compare-empty">No games yet</span>
 	}
+	const empty = Math.max(0, (slots ?? 0) - games.length)
 	return (
 		<span className="Compare-chips">
 			{games.map((game, i) => (
@@ -1907,7 +1963,106 @@ export const ResultChips = ({games}: {games: RecentGame[]}) => {
 					game={game}
 				/>
 			))}
+			{Array.from({length: empty}, (_, i) => (
+				<ResultChipSlot key={`slot-${i}`} />
+			))}
 		</span>
+	)
+}
+
+/**
+ * "Last 5" and a team's latest results, oldest first, padded with empty
+ * slots early in a season. For a team's own (or a player's) schedule.
+ */
+export const LastResults = ({
+	games,
+	showLabel = true,
+}: {
+	games: FeedGame[]
+	/** Off where the caller labels it, e.g. a stats block's heading */
+	showLabel?: boolean
+}) => {
+	const recent = games
+		.filter((g) => g.game.isFinal && g.game.result)
+		.slice(-LIMITS.GAME_RECENT_GAMES)
+	return (
+		<Hint
+			label={`Last ${LIMITS.GAME_RECENT_GAMES} games, oldest to newest`}
+		>
+			<span className="Detail-form">
+				{showLabel && (
+					<span className="Detail-meta-hint">
+						Last {LIMITS.GAME_RECENT_GAMES}
+					</span>
+				)}
+				{recent.map(({game}) => (
+					<span
+						key={game.startsAt}
+						className={cx(
+							"GameFeed-result",
+							`GameFeed-result--${game.result}`,
+						)}
+					>
+						{game.result}
+					</span>
+				))}
+				{/* Empty slots for games still to come */}
+				{Array.from(
+					{length: LIMITS.GAME_RECENT_GAMES - recent.length},
+					(_, i) => (
+						<ResultChipSlot key={`slot-${i}`} />
+					),
+				)}
+			</span>
+		</Hint>
+	)
+}
+
+/**
+ * A labeled row of big numbers in a page's hero, e.g. "This season" or
+ * "Record". Player and team pages line these up side by side.
+ */
+export const HeroStatGroup = ({
+	label,
+	stats,
+}: {
+	label: string
+	stats: Record<string, number | string>
+}) => {
+	return (
+		<section className="PlayerHero-group" aria-label={label}>
+			<h2 className="PlayerHero-group-label">{label}</h2>
+			<dl className="PlayerHero-group-stats">
+				{Object.entries(stats).map(([name, value]) => (
+					<div key={name} className="PlayerHero-stat">
+						<dt>{name}</dt>
+						<dd>{value}</dd>
+					</div>
+				))}
+			</dl>
+		</section>
+	)
+}
+
+/** "Last 5" as a hero stat block */
+export const HeroLastResults = ({games}: {games: FeedGame[]}) => {
+	return (
+		<section className="PlayerHero-group" aria-label="Last 5">
+			<h2 className="PlayerHero-group-label">Last 5</h2>
+			<div className="PlayerHero-form">
+				<LastResults games={games} showLabel={false} />
+			</div>
+		</section>
+	)
+}
+
+/** A result chip's outline, for a game not played yet */
+export const ResultChipSlot = () => {
+	return (
+		<span
+			className={cx("GameFeed-result", "Compare-chip", "ResultChip-slot")}
+			aria-hidden
+		/>
 	)
 }
 

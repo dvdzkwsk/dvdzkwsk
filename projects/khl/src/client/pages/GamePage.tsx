@@ -1,7 +1,6 @@
 import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {Helmet} from "react-helmet"
 import {
 	GameResponse,
 	SeasonSummary,
@@ -13,15 +12,18 @@ import {
 	KHLPenalty,
 	KHLPlayerRef,
 } from "../../shared/KHLJson.js"
-import {LEAGUE, LIMITS, STRINGS, URLS} from "../../shared/KHLConfig.js"
+import {STRINGS, URLS} from "../../shared/KHLConfig.js"
+import {getGameEndsAt} from "../../shared/LeagueTime.js"
 import {
 	AsyncContent,
 	Hint,
 	Link,
+	LIVEBARN_TITLES,
 	LiveBarnBadge,
 	Notice,
 	NotOnLiveBarn,
 	PageShell,
+	PageTitle,
 	RinkLink,
 	RosterPanels,
 	SegmentedControl,
@@ -31,7 +33,7 @@ import {
 	TeamLink,
 } from "../Components.js"
 import {Comparison} from "../Compare.js"
-import {HeadToHead, ResultChips} from "../Games.js"
+import {HeadToHeadGames, TeamForm} from "../Games.js"
 import {
 	AppContext,
 	formatGameDate,
@@ -57,13 +59,9 @@ const GamePage = ({params, query}: RouteProps) => {
 			<AsyncContent state={state} loadingLabel="Loading game details…">
 				{(game) => (
 					<div className="Detail">
-						<Helmet>
-							<title>
-								{game.boxScore.away.name} @{" "}
-								{game.boxScore.home.name} |{" "}
-								{STRINGS.PRODUCT_NAME}
-							</title>
-						</Helmet>
+						<PageTitle>
+							{`${game.boxScore.away.name} @ ${game.boxScore.home.name}`}
+						</PageTitle>
 						<div className="Detail-toolbar">
 							<GameViewToggle
 								game={game}
@@ -109,7 +107,7 @@ const GameViewToggle = ({game, view}: {game: GameResponse; view: GameView}) => {
 		<SegmentedControl<GameView>
 			label="View"
 			options={[
-				{value: "preview", label: "Preview"},
+				{value: "preview", label: STRINGS.GAME_PREVIEW},
 				{
 					value: "result",
 					label: STRINGS.GAME_RESULT,
@@ -191,33 +189,20 @@ const PreviewView = ({game, now}: {game: GameResponse; now: Date}) => {
 			{!game.score && getGameState(game, now) !== "upcoming" && (
 				<Notice title={STRINGS.SCORESHEET_NOT_POSTED} />
 			)}
-			{/* Wide screens: the teams' seasons beside the head-to-head, which
-			    doesn't need the full width */}
-			{game.form.away && game.form.home ? (
-				<div className="GamePage-insights">
-					<Comparison
-						matchup={{
-							currentSeason: game.currentSeason,
-							a: game.form.away,
-							b: game.form.home,
-							headToHead: game.headToHead,
-						}}
-					/>
-					<HeadToHead
-						left={game.boxScore.away}
-						right={game.boxScore.home}
-						games={game.headToHead}
-						now={now}
-					/>
-				</div>
-			) : (
-				<HeadToHead
-					left={game.boxScore.away}
-					right={game.boxScore.home}
-					games={game.headToHead}
-					now={now}
+			{/* How the teams compare this season, then their previous meetings */}
+			{game.form.away && game.form.home && (
+				<Comparison
+					a={game.form.away}
+					b={game.form.home}
+					previewStats={game.previewStats}
 				/>
 			)}
+			<HeadToHeadGames
+				left={game.boxScore.away}
+				right={game.boxScore.home}
+				games={game.headToHead}
+				now={now}
+			/>
 			{game.rosters && (
 				<RosterPanels
 					teams={[
@@ -328,9 +313,7 @@ function getGameState(game: GameResponse, now: Date): GameState {
 	if (now.getTime() < startsAt) {
 		return "upcoming"
 	}
-	return now.getTime() < startsAt + LEAGUE.GAME_DURATION_MINUTES * 60_000
-		? "live"
-		: "final"
+	return now < getGameEndsAt(game.boxScore) ? "live" : "final"
 }
 
 /** The rink's feed before and during the game, then the game's replay. */
@@ -349,13 +332,13 @@ const GameLiveBarnLinks = ({game, now}: {game: GameResponse; now: Date}) => {
 					surfaceName={
 						livebarn.length > 1 ? link.surfaceName : undefined
 					}
-					title={
+					title={LIVEBARN_TITLES[
 						state === "final"
-							? `Watch the replay on LiveBarn (${link.surfaceName})`
+							? "replay"
 							: state === "live"
-								? `Watch live on LiveBarn (${link.surfaceName})`
-								: `Open ${link.surfaceName} on LiveBarn`
-					}
+								? "live"
+								: "open"
+					](link.surfaceName)}
 				/>
 			))}
 		</>
@@ -382,29 +365,7 @@ const HeaderTeam = ({
 			<div className="BoxScore-team-name">
 				<TeamLink team={team} seasonId={team.seasonId} />
 			</div>
-			{form?.divisionName && (
-				<div className="BoxScore-division">{form.divisionName}</div>
-			)}
-			{form && (
-				// No title here: it would show over the chips' hover cards
-				<div className="BoxScore-form">
-					{form.recent.length > 0 && (
-						<>
-							<span className="BoxScore-record">
-								{form.wins}-{form.losses}-{form.ties}
-							</span>
-							<span
-								className="BoxScore-form-divider"
-								aria-hidden
-							/>
-						</>
-					)}
-					<span className="Detail-meta-hint">Last 5</span>
-					<ResultChips
-						games={form.recent.slice(-LIMITS.GAME_RECENT_GAMES)}
-					/>
-				</div>
-			)}
+			{form && <TeamForm form={form} />}
 		</div>
 	)
 }

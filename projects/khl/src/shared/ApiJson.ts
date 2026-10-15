@@ -6,6 +6,8 @@ import {
 	KHLBoxScore,
 	KHLBoxScoreSchema,
 	KHLGame,
+	KHLGamePreviewStats,
+	KHLGamePreviewStatsSchema,
 	KHLGameSchema,
 	KHLHomeAway,
 	KHLHomeAwaySchema,
@@ -388,6 +390,8 @@ export const HeadToHeadGameSchema = z.object({
 
 export interface GameResponse {
 	boxScore: KHLBoxScore
+	/** From the league's preview page; null if it failed */
+	previewStats: KHLGamePreviewStats | null
 	/**
 	 * Once the game is final. Can come before the box score's summary: the
 	 * scoreboard often posts it first.
@@ -410,6 +414,7 @@ export interface GameResponse {
 
 export const GameResponseSchema = z.object({
 	boxScore: KHLBoxScoreSchema,
+	previewStats: KHLGamePreviewStatsSchema.nullable(),
 	score: z.object({away: z.number(), home: z.number()}).nullable(),
 	playerIds: z.record(z.string(), z.uuid()),
 	livebarn: z.array(LiveBarnLinkSchema),
@@ -547,6 +552,68 @@ export const GET_STANDINGS_ENDPOINT = {
 	responseSchema: StandingsResponseSchema,
 } satisfies ApiEndpoint<GetStandingsRequest, StandingsResponse>
 
+export interface PlayersTeam {
+	team: KHLTeam
+	divisionName: string
+}
+
+export const PlayersTeamSchema = z.object({
+	team: KHLTeamSchema,
+	divisionName: z.string(),
+}) satisfies z.ZodType<PlayersTeam>
+
+/** A roster row from one team's stats page, for the league-wide list */
+export interface LeaguePlayer extends RosterPlayer {
+	teamId: string
+}
+
+export const LeaguePlayerSchema = RosterPlayerSchema.extend({
+	teamId: z.string(),
+}) satisfies z.ZodType<LeaguePlayer>
+
+export interface PlayersResponse {
+	/** The season being shown */
+	season: KHLSeason
+	/** Every league season, newest first */
+	seasons: KHLSeason[]
+	/** Every team whose roster loaded, with its division */
+	teams: PlayersTeam[]
+	/**
+	 * Players who've played a game, one row per team registration (so a
+	 * player on two teams is listed twice)
+	 */
+	skaters: LeaguePlayer[]
+	goalies: LeaguePlayer[]
+	/** Teams missing from the lists because the KHL site errored */
+	unavailableTeams: KHLTeam[]
+}
+
+export const PlayersResponseSchema = z.object({
+	season: KHLSeasonSchema,
+	seasons: z.array(KHLSeasonSchema),
+	teams: z.array(PlayersTeamSchema),
+	skaters: z.array(LeaguePlayerSchema),
+	goalies: z.array(LeaguePlayerSchema),
+	unavailableTeams: z.array(KHLTeamSchema),
+}) satisfies z.ZodType<PlayersResponse>
+
+export interface ListPlayersRequest {
+	/** Defaults to the current season */
+	season?: string
+}
+
+export const ListPlayersRequestSchema = z.object({
+	season: z.string().min(1).optional(),
+}) satisfies z.ZodType<ListPlayersRequest>
+
+/** Every player in a season with their stats, from each team's roster. */
+export const LIST_PLAYERS_ENDPOINT = {
+	method: "GET",
+	uri: "/api/players",
+	requestSchema: ListPlayersRequestSchema,
+	responseSchema: PlayersResponseSchema,
+} satisfies ApiEndpoint<ListPlayersRequest, PlayersResponse>
+
 /** One of a team's finished games, from its side */
 export interface RecentGame {
 	/** Missing for some finished games the league never linked */
@@ -627,6 +694,9 @@ export interface MatchupResponse {
 	/** Scheduled games between the two teams, soonest first; only when both
 	    sides are from the current season */
 	upcoming: UpcomingGame[]
+	/** The league's PP%, PK%, shots and PIM for each side's season, with a
+	    as "away" and b as "home"; null when neither side's could be loaded */
+	previewStats: KHLGamePreviewStats | null
 }
 
 export const MatchupResponseSchema = z.object({
@@ -635,6 +705,7 @@ export const MatchupResponseSchema = z.object({
 	b: MatchupTeamSchema,
 	headToHead: z.array(HeadToHeadGameSchema),
 	upcoming: z.array(UpcomingGameSchema),
+	previewStats: KHLGamePreviewStatsSchema.nullable(),
 }) satisfies z.ZodType<MatchupResponse>
 
 export interface GetMatchupRequest {
@@ -756,6 +827,116 @@ export const GET_RINK_ENDPOINT = {
 	responseSchema: RinkResponseSchema,
 } satisfies ApiEndpoint<GetRinkRequest, RinkResponse>
 
+/** How a component is doing, worst last */
+export type StatusLevel = "operational" | "degraded" | "outage"
+
+export const StatusLevelSchema = z.enum([
+	"operational",
+	"degraded",
+	"outage",
+]) satisfies z.ZodType<StatusLevel>
+
+/** One run of a component's check */
+export interface StatusCheck {
+	/** ISO 8601 UTC instant */
+	checkedAt: string
+	status: StatusLevel
+	/** Null when the check never got a response */
+	latencyMs: number | null
+	/** What went wrong, e.g. "HTTP 503" or "timed out" */
+	error: string | null
+}
+
+export const StatusCheckSchema = z.object({
+	checkedAt: z.string(),
+	status: StatusLevelSchema,
+	latencyMs: z.number().nullable(),
+	error: z.string().nullable(),
+}) satisfies z.ZodType<StatusCheck>
+
+/** A league-local day of a component's checks */
+export interface StatusDay {
+	/** "yyyy-MM-dd" */
+	day: string
+	checks: number
+	degraded: number
+	outages: number
+}
+
+export const StatusDaySchema = z.object({
+	day: z.string(),
+	checks: z.number(),
+	degraded: z.number(),
+	outages: z.number(),
+}) satisfies z.ZodType<StatusDay>
+
+export interface StatusComponent {
+	id: string
+	name: string
+	description: string
+	/** Null until the first check has run */
+	latest: StatusCheck | null
+	/** Days with checks, oldest first; days without any are left out */
+	days: StatusDay[]
+}
+
+export const StatusComponentSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	description: z.string(),
+	latest: StatusCheckSchema.nullable(),
+	days: z.array(StatusDaySchema),
+}) satisfies z.ZodType<StatusComponent>
+
+/** Which build is running */
+export interface DeployInfo {
+	/** Git commit the build came from; null if unknown */
+	commit: string | null
+	/** Whether the build had uncommitted changes */
+	dirty: boolean
+	/** ISO 8601; null for local builds */
+	deployedAt: string | null
+	/** When this server process started, ISO 8601 */
+	startedAt: string
+}
+
+export const DeployInfoSchema = z.object({
+	commit: z.string().nullable(),
+	dirty: z.boolean(),
+	deployedAt: z.string().nullable(),
+	startedAt: z.string(),
+}) satisfies z.ZodType<DeployInfo>
+
+export interface StatusResponse {
+	/** The days the history covers, oldest first ("yyyy-MM-dd") */
+	historyDays: string[]
+	/** How often each component is checked */
+	intervalMinutes: number
+	components: StatusComponent[]
+	deploy: DeployInfo
+}
+
+export const StatusResponseSchema = z.object({
+	historyDays: z.array(z.string()),
+	intervalMinutes: z.number(),
+	components: z.array(StatusComponentSchema),
+	deploy: DeployInfoSchema,
+}) satisfies z.ZodType<StatusResponse>
+
+export type GetStatusRequest = Record<string, never>
+
+export const GetStatusRequestSchema = z.object(
+	{},
+) satisfies z.ZodType<GetStatusRequest>
+
+/** The site's health: each component's latest check and daily history. */
+export const GET_STATUS_ENDPOINT = {
+	method: "GET",
+	uri: "/api/status",
+	requestSchema: GetStatusRequestSchema,
+	responseSchema: StatusResponseSchema,
+} satisfies ApiEndpoint<GetStatusRequest, StatusResponse>
+
 export type ClientLogLevel = "debug" | "info" | "warn" | "error"
 
 /** One log message from the browser, as sent to LOG_ENDPOINT. */
@@ -810,3 +991,95 @@ export const LOG_ENDPOINT = {
 	requestSchema: LogRequestSchema,
 	responseSchema: LogResponseSchema,
 } satisfies ApiEndpoint<LogRequest, LogResponse>
+
+export type BenchmarkSite = "khl-plus" | "khl"
+
+export const BENCHMARK_SITE_LABELS: Record<BenchmarkSite, string> = {
+	"khl-plus": "KHL+",
+	khl: "League site",
+}
+
+/** Common surnames, so both sites return several matches to pick from */
+export const DEFAULT_BENCHMARK_NAMES = [
+	"Ashley Johnson",
+	"Michael Nguyen",
+	"Ami Miller",
+	"Zach Garcia",
+	"Camille Anderson",
+]
+
+/** Milliseconds for each step of "open the site, search, open a player" */
+export interface BenchmarkTiming {
+	/** Until the search box shows */
+	open: number
+	/** From typing the name until the first result shows */
+	results: number
+	/** From opening that result until the player's stats show */
+	player: number
+	total: number
+}
+
+export const BenchmarkTimingSchema = z.object({
+	open: z.number(),
+	results: z.number(),
+	player: z.number(),
+	total: z.number(),
+}) satisfies z.ZodType<BenchmarkTiming>
+
+/** One site's run for one player name; `error` instead of `timing` if it failed */
+export interface BenchmarkRun {
+	site: BenchmarkSite
+	name: string
+	timing: BenchmarkTiming | null
+	error: string | null
+}
+
+export const BenchmarkRunSchema = z.object({
+	site: z.enum(["khl-plus", "khl"]),
+	name: z.string(),
+	timing: BenchmarkTimingSchema.nullable(),
+	error: z.string().nullable(),
+}) satisfies z.ZodType<BenchmarkRun>
+
+/** Per-step medians over a site's successful runs, or null if none succeeded */
+export interface BenchmarkSummary {
+	site: BenchmarkSite
+	runs: number
+	median: BenchmarkTiming | null
+}
+
+export const BenchmarkSummarySchema = z.object({
+	site: z.enum(["khl-plus", "khl"]),
+	runs: z.number(),
+	median: BenchmarkTimingSchema.nullable(),
+}) satisfies z.ZodType<BenchmarkSummary>
+
+export interface RunBenchmarkRequest {
+	/** Player names to search for, each on both sites */
+	names: string[]
+}
+
+export const RunBenchmarkRequestSchema = z.object({
+	names: z.array(z.string().trim().min(2).max(100)).min(1).max(10),
+}) satisfies z.ZodType<RunBenchmarkRequest>
+
+export interface BenchmarkResponse {
+	runs: BenchmarkRun[]
+	summaries: BenchmarkSummary[]
+}
+
+export const BenchmarkResponseSchema = z.object({
+	runs: z.array(BenchmarkRunSchema),
+	summaries: z.array(BenchmarkSummarySchema),
+}) satisfies z.ZodType<BenchmarkResponse>
+
+/**
+ * Dev only: times KHL+ against the league's site in headless Chrome (see
+ * tools/Benchmark.ts). Takes several seconds per name.
+ */
+export const RUN_BENCHMARK_ENDPOINT = {
+	method: "POST",
+	uri: "/api/admin/benchmark",
+	requestSchema: RunBenchmarkRequestSchema,
+	responseSchema: BenchmarkResponseSchema,
+} satisfies ApiEndpoint<RunBenchmarkRequest, BenchmarkResponse>

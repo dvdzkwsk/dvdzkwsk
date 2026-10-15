@@ -2,8 +2,9 @@
 
 export const STRINGS = {
 	PRODUCT_NAME: "KHL+",
-	/** Our game page's result: its tab, and links to it */
-	GAME_RESULT: "Result",
+	/** The game page's view toggle */
+	GAME_PREVIEW: "Game Preview",
+	GAME_RESULT: "Game Result",
 	/** Links to the league's official scoresheet */
 	KHL_SCORESHEET: "KHL Scoresheet",
 	/** A finished (or past) game whose scoresheet isn't up yet */
@@ -16,6 +17,13 @@ export const URLS = {
 	KHL: "https://krakenhockeyleague.com",
 	/** Our own domain, for canonical and og:url tags; empty until we have one */
 	WEBSITE_DOMAIN: "",
+	/** The repo this site's code lives in; commits link here */
+	GITHUB_REPO: "https://github.com/dvdzkwsk/dvdzkwsk",
+	/** This site's source code, linked from the footer */
+	GITHUB: "https://github.com/dvdzkwsk/dvdzkwsk/tree/master/projects/khl",
+	/** Google Form for help requests and feedback, linked from the footer */
+	FEEDBACK_FORM:
+		"https://docs.google.com/forms/d/e/1FAIpQLScmYQDDkokzGcqSw1TkNqoJI0l6LXKZQmVh5L6YEbN5sOvnwg/viewform?usp=publish-editor",
 }
 
 export const LEAGUE = {

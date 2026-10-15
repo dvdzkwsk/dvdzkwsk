@@ -6,6 +6,9 @@ import {Combobox} from "@base-ui/react/combobox"
 import {Popover} from "@base-ui/react/popover"
 import {Select} from "@base-ui/react/select"
 import {Switch} from "@base-ui/react/switch"
+import {Toggle} from "@base-ui/react/toggle"
+import {ToggleGroup} from "@base-ui/react/toggle-group"
+import {Tooltip} from "@base-ui/react/tooltip"
 import {Autocomplete} from "@base-ui/react/autocomplete"
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
@@ -18,14 +21,16 @@ import {
 } from "../shared/ApiJson.js"
 import {getCity} from "../shared/Cities.js"
 import {KHLSeason} from "../shared/KHLJson.js"
-import {STRINGS} from "../shared/KHLConfig.js"
+import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {
 	AppContext,
 	AsyncState,
 	describeError,
 	getPlayerHref,
 	getRinkHref,
+	getScoresheetUrl,
 	getTeamHref,
+	IS_DEV,
 	useAsync,
 	useLocation,
 } from "./Util.js"
@@ -147,7 +152,21 @@ export interface StatsTableColumn<T> {
 	title?: string
 	/** Left-aligned text column instead of a right-aligned number */
 	isLabel?: boolean
+	/** On the column's header and cells, e.g. to size it */
+	className?: string
 	render: (row: T) => React.ReactNode
+	/**
+	 * What the header sorts the rows by; null sorts last either way. Without
+	 * it, a column sorts by its cells' text (numbers as numbers), which suits
+	 * most columns; dates and times need this.
+	 */
+	sortValue?: (row: T) => number | string | null
+	/** False for a column that makes no sense to sort. Unlabeled columns
+	    (e.g. links) aren't sortable either. */
+	sortable?: boolean
+	/** First click sorts ascending, e.g. names, or GAA where lower is better.
+	    By default numbers sort high to low first, text A to Z. */
+	sortAscendingFirst?: boolean
 }
 
 interface StatsTableProps<T> {
@@ -155,6 +174,30 @@ interface StatsTableProps<T> {
 	rows: T[]
 	rowKey: (row: T) => string
 	rowClassName?: (row: T) => string | undefined
+	/** On the table, e.g. to fix its column widths */
+	className?: string
+}
+
+type SortValue = number | string | null
+
+interface StatsTableSort {
+	column: number
+	ascending: boolean
+	/** For a column without `sortValue`: each row's cell text, by row key */
+	values?: Map<string, SortValue>
+}
+
+/** A cell's text as a sort value: "1.000", ".667", "+4", "42%" are numbers */
+function toCellSortValue(text: string): SortValue {
+	const trimmed = text.trim()
+	if (trimmed === "" || trimmed === "–" || trimmed === "-") {
+		return null
+	}
+	const number = trimmed
+		.replace(/^\+/, "")
+		.replace(/%$/, "")
+		.replace(/,/g, "")
+	return /^-?(\d+\.?\d*|\.\d+)$/.test(number) ? Number(number) : trimmed
 }
 
 export function StatsTable<T>({
@@ -162,38 +205,151 @@ export function StatsTable<T>({
 	rows,
 	rowKey,
 	rowClassName,
+	className,
 }: StatsTableProps<T>) {
+	// Null keeps the order the rows came in
+	const [sort, setSort] = React.useState<StatsTableSort | null>(null)
+	const bodyRef = React.useRef<HTMLTableSectionElement>(null)
+	const isSortable = (column: StatsTableColumn<T>) => {
+		return (
+			column.sortable ??
+			(column.sortValue !== undefined || column.header !== "")
+		)
+	}
+	const sortedRows = React.useMemo(() => {
+		const column = sort && columns[sort.column]
+		if (!sort || !column) {
+			return rows
+		}
+		const sortValue =
+			column.sortValue ??
+			((row: T) => sort.values?.get(rowKey(row)) ?? null)
+		const direction = sort.ascending ? 1 : -1
+		// Array.sort is stable, so ties keep the incoming order
+		return rows
+			.map((row) => ({row, value: sortValue(row)}))
+			.sort((x, y) => {
+				if (x.value === null || y.value === null) {
+					return (
+						(x.value === null ? 1 : 0) - (y.value === null ? 1 : 0)
+					)
+				}
+				const order =
+					typeof x.value === "number" && typeof y.value === "number"
+						? x.value - y.value
+						: String(x.value).localeCompare(
+								String(y.value),
+								undefined,
+								{
+									numeric: true,
+								},
+							)
+				return order * direction
+			})
+			.map(({row}) => row)
+	}, [rows, columns, sort, rowKey])
+
+	// Columns without `sortValue` sort by what their cells show
+	const readCellValues = (index: number): Map<string, SortValue> => {
+		const values = new Map<string, SortValue>()
+		for (const tr of Array.from(bodyRef.current?.rows ?? [])) {
+			const key = tr.dataset.rowKey
+			if (key !== undefined) {
+				values.set(
+					key,
+					toCellSortValue(tr.cells[index]?.textContent ?? ""),
+				)
+			}
+		}
+		return values
+	}
+
+	const onSort = (index: number, column: StatsTableColumn<T>) => {
+		const values = column.sortValue ? undefined : readCellValues(index)
+		const isNumeric = column.sortValue
+			? !column.isLabel
+			: [...values!.values()].every(
+					(v) => v === null || typeof v === "number",
+				)
+		setSort((current) =>
+			current?.column === index
+				? {column: index, ascending: !current.ascending, values}
+				: {
+						column: index,
+						ascending: column.sortAscendingFirst ?? !isNumeric,
+						values,
+					},
+		)
+	}
+
 	return (
 		<div className="StatsTable-wrapper">
-			<table className="StatsTable">
+			<table className={cx("StatsTable", className)}>
 				<thead>
 					<tr>
-						{columns.map((column) => (
-							<th
-								key={column.header}
-								title={column.title}
-								className={
-									column.isLabel
-										? "StatsTable-label"
-										: undefined
-								}
-							>
-								{column.header}
-							</th>
-						))}
+						{columns.map((column, index) => {
+							const sorted = sort?.column === index ? sort : null
+							return (
+								<Hint key={column.header} label={column.title}>
+									<th
+										className={cx(
+											column.isLabel &&
+												"StatsTable-label",
+											column.className,
+										)}
+										aria-sort={
+											sorted
+												? sorted.ascending
+													? "ascending"
+													: "descending"
+												: undefined
+										}
+									>
+										{isSortable(column) ? (
+											<button
+												type="button"
+												className={cx(
+													"StatsTable-sort",
+													sorted &&
+														"StatsTable-sort--active",
+												)}
+												onClick={() =>
+													onSort(index, column)
+												}
+											>
+												{column.header}
+												<span
+													className="StatsTable-sort-arrow"
+													aria-hidden
+												>
+													{sorted?.ascending
+														? "↑"
+														: "↓"}
+												</span>
+											</button>
+										) : (
+											column.header
+										)}
+									</th>
+								</Hint>
+							)
+						})}
 					</tr>
 				</thead>
-				<tbody>
-					{rows.map((row) => (
-						<tr key={rowKey(row)} className={rowClassName?.(row)}>
-							{columns.map((column) => (
+				<tbody ref={bodyRef}>
+					{sortedRows.map((row) => (
+						<tr
+							key={rowKey(row)}
+							data-row-key={rowKey(row)}
+							className={rowClassName?.(row)}
+						>
+							{columns.map((column, index) => (
 								<td
-									key={column.header}
-									className={
-										column.isLabel
-											? "StatsTable-label"
-											: undefined
-									}
+									key={index}
+									className={cx(
+										column.isLabel && "StatsTable-label",
+										column.className,
+									)}
 								>
 									{column.render(row)}
 								</td>
@@ -212,38 +368,94 @@ export function StatsTable<T>({
 const SKATER_COLUMNS = ["GP", "G", "A", "PTS", "PIM"]
 const GOALIE_COLUMNS = ["GP", "W", "L", "T", "GAA", "SV%"]
 
+/** A game's stat columns, as the league lists them once the game is posted */
+const GAME_SKATER_COLUMNS = ["G", "A", "P", "PIM"]
+const GAME_GOALIE_COLUMNS = ["SA", "GA", "SV", "SV%", "MIN"]
+
+/** Stats where the best goalie or skater has the smallest number */
+const LOWER_IS_BETTER = new Set(["GAA"])
+
+/** A stat cell as a number for sorting, e.g. ".849" or "2.00"; null if blank */
+const toSortNumber = (value: string | null | undefined): number | null => {
+	if (value === null || value === undefined || value.trim() === "") {
+		return null
+	}
+	const number = Number(value)
+	return Number.isNaN(number) ? null : number
+}
+
+/** A season's roster, or a game's lineup with its stats in that game */
+/**
+ * Season stats; one game's stats; or a game whose stats aren't posted yet,
+ * which lists the season roster under the game's columns, left blank
+ */
+export type RosterKind = "season" | "game" | "pending-game"
+
 /** A team's skaters, by points, then its goalies. */
 export const RosterTables = ({
 	roster,
 	skaterLimit,
+	kind = "season",
 }: {
 	roster: TeamRoster
 	/** Show only the top skaters, e.g. for a leaders table */
 	skaterLimit?: number
+	kind?: RosterKind
 }) => {
 	const {skaters, goalies} = roster
 	if (skaters.length === 0 && goalies.length === 0) {
-		return <p className="Detail-empty">No roster for this season.</p>
+		return (
+			<p className="Detail-empty">
+				{kind === "game"
+					? "The league hasn't posted this game's lineup."
+					: "No roster for this season."}
+			</p>
+		)
 	}
-	const points = (p: RosterPlayer) => Number(p.stats["PTS"]) || 0
+	// A game's lineup shows every column the league lists for it
+	const skaterColumns = {
+		season: SKATER_COLUMNS,
+		game: roster.skaterColumns,
+		"pending-game": GAME_SKATER_COLUMNS,
+	}[kind]
+	const goalieColumns = {
+		season: GOALIE_COLUMNS,
+		game: roster.goalieColumns,
+		"pending-game": GAME_GOALIE_COLUMNS,
+	}[kind]
+	// Season stats don't belong under a game's columns
+	const blank = kind === "pending-game"
+	// Season tables total points as "PTS", a game's as "P"
+	const points = (p: RosterPlayer) =>
+		Number(p.stats["PTS"] ?? p.stats["P"]) || 0
 	const goals = (p: RosterPlayer) => Number(p.stats["G"]) || 0
+	// Blank tables have no stats to rank by, so they go by name
 	const sortedSkaters = [...skaters]
-		.sort(
-			(a, b) =>
-				points(b) - points(a) ||
-				goals(b) - goals(a) ||
-				a.name.localeCompare(b.name),
+		.sort((a, b) =>
+			blank
+				? a.name.localeCompare(b.name)
+				: points(b) - points(a) ||
+					goals(b) - goals(a) ||
+					a.name.localeCompare(b.name),
 		)
 		.slice(0, skaterLimit)
 	return (
 		<>
-			<RosterTable players={sortedSkaters} columns={SKATER_COLUMNS} />
+			<RosterTable
+				players={sortedSkaters}
+				columns={skaterColumns}
+				blank={blank}
+			/>
 			{goalies.length > 0 && (
 				<>
 					<h3 className={cx("SectionLabel", "Detail-subtitle")}>
 						Goalies
 					</h3>
-					<RosterTable players={goalies} columns={GOALIE_COLUMNS} />
+					<RosterTable
+						players={goalies}
+						columns={goalieColumns}
+						blank={blank}
+					/>
 				</>
 			)}
 		</>
@@ -253,15 +465,24 @@ export const RosterTables = ({
 const RosterTable = ({
 	players,
 	columns,
+	blank,
 }: {
 	players: RosterPlayer[]
 	columns: string[]
+	/** Stat cells left empty, e.g. before a game's stats are posted */
+	blank?: boolean
 }) => {
 	const tableColumns: StatsTableColumn<RosterPlayer>[] = [
-		{header: "#", isLabel: true, render: (p) => p.number ?? ""},
+		{
+			header: "#",
+			isLabel: true,
+			render: (p) => p.number ?? "",
+			sortValue: (p) => toSortNumber(p.number),
+		},
 		{
 			header: "Player",
 			isLabel: true,
+			sortValue: (p) => p.name.toLowerCase(),
 			render: (p) => (
 				<Link className="InlineLink" href={getPlayerHref(p.playerId)}>
 					{p.name}
@@ -270,7 +491,17 @@ const RosterTable = ({
 		},
 		...columns.map((column) => ({
 			header: column,
-			render: (p: RosterPlayer) => p.stats[column] ?? "",
+			render: (p: RosterPlayer) =>
+				blank ? (
+					<span className="StatsTable-blank" aria-label="Not posted">
+						–
+					</span>
+				) : (
+					(p.stats[column] ?? "")
+				),
+			sortable: !blank,
+			sortValue: (p: RosterPlayer) => toSortNumber(p.stats[column]),
+			sortAscendingFirst: LOWER_IS_BETTER.has(column),
 		})),
 	]
 	return (
@@ -292,7 +523,13 @@ interface RosterPanelTeam {
 }
 
 /** Each team's roster in its own panel, side by side (games, matchups). */
-export const RosterPanels = ({teams}: {teams: RosterPanelTeam[]}) => {
+export const RosterPanels = ({
+	teams,
+	kind = "season",
+}: {
+	teams: RosterPanelTeam[]
+	kind?: RosterKind
+}) => {
 	return (
 		<div className="GamePage-rosters">
 			{teams.map(({team, roster, note, title}) => (
@@ -312,16 +549,118 @@ export const RosterPanels = ({teams}: {teams: RosterPanelTeam[]}) => {
 							size={24}
 						/>
 						<TeamLink team={team} seasonId={team.seasonId} />
-						<span className="SectionLabel" title={title}>
-							{note && `${note} · `}
-							Roster ·{" "}
-							{roster.skaters.length + roster.goalies.length}
-						</span>
+						<Hint label={title}>
+							<span className="SectionLabel">
+								{note && `${note} · `}
+								{kind === "game" ? "Lineup" : "Roster"} ·{" "}
+								{roster.skaters.length + roster.goalies.length}
+							</span>
+						</Hint>
 					</h2>
-					<RosterTables roster={roster} />
+					<RosterTables roster={roster} kind={kind} />
 				</section>
 			))}
 		</div>
+	)
+}
+
+/** How many skaters each team lists in TopScorers */
+const TOP_SCORERS = 3
+
+interface TopScorersTeam {
+	name: string
+	roster: TeamRoster
+}
+
+/**
+ * Two teams' top point scorers, keyed with the comparison colors: the first
+ * team is "a" (blue), the second "b" (orange).
+ */
+export const TopScorers = ({
+	title,
+	teams,
+}: {
+	title: string
+	teams: [TopScorersTeam, TopScorersTeam]
+}) => {
+	const points = (p: RosterPlayer) => Number(p.stats["PTS"]) || 0
+	const goals = (p: RosterPlayer) => Number(p.stats["G"]) || 0
+	const top = (roster: TeamRoster) =>
+		roster.skaters
+			.filter((p) => points(p) > 0)
+			.sort(
+				(x, y) =>
+					points(y) - points(x) ||
+					goals(y) - goals(x) ||
+					x.name.localeCompare(y.name),
+			)
+			.slice(0, TOP_SCORERS)
+	return (
+		<section className={cx("Detail-panel", "Compare")}>
+			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
+				{title}
+			</h2>
+			<div className="TopScorers">
+				{teams.map((team, i) => {
+					const side = i === 0 ? "a" : "b"
+					const players = top(team.roster)
+					return (
+						<div
+							key={side}
+							className={cx(
+								"TopScorers-team",
+								`Compare-team--${side}`,
+							)}
+						>
+							<div className="Compare-team-name">
+								<span className="Compare-key" aria-hidden />
+								{team.name}
+							</div>
+							{players.length === 0 ? (
+								<p className="Compare-empty">No points yet.</p>
+							) : (
+								<ol className="TopScorers-list">
+									{players.map((p, rank) => (
+										<li
+											key={p.khlPlayerId}
+											className="TopScorers-row"
+										>
+											<span className="TopScorers-rank">
+												{rank + 1}
+											</span>
+											<span className="TopScorers-player">
+												<Link
+													className="TopScorers-name"
+													href={getPlayerHref(
+														p.playerId,
+													)}
+												>
+													{p.name}
+												</Link>
+												<span className="TopScorers-line">
+													{p.number &&
+														`#${p.number} · `}
+													{p.stats["G"] ?? 0} G ·{" "}
+													{p.stats["A"] ?? 0} A ·{" "}
+													{p.stats["GP"] ?? 0} GP
+												</span>
+											</span>
+											<span className="TopScorers-points">
+												{points(p)}
+												<span className="TopScorers-unit">
+													{" "}
+													PTS
+												</span>
+											</span>
+										</li>
+									))}
+								</ol>
+							)}
+						</div>
+					)
+				})}
+			</div>
+		</section>
 	)
 }
 
@@ -407,22 +746,27 @@ const SimplePicker = ({
 				}
 			}}
 		>
-			<Select.Trigger
-				className={cx("FilterPill", "Picker-trigger", className)}
-				title={title}
-			>
-				{triggerLabel ?? (
-					<Select.Value
-						className="Picker-value"
-						placeholder={placeholder}
-					/>
-				)}
-				<Select.Icon>
-					<ChevronIcon />
-				</Select.Icon>
-			</Select.Trigger>
+			<Hint label={title}>
+				<Select.Trigger
+					className={cx("FilterPill", "Picker-trigger", className)}
+				>
+					{triggerLabel ?? (
+						<Select.Value
+							className="Picker-value"
+							placeholder={placeholder}
+						/>
+					)}
+					<Select.Icon>
+						<ChevronIcon />
+					</Select.Icon>
+				</Select.Trigger>
+			</Hint>
 			<Select.Portal>
-				<Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
+				<Select.Positioner
+					className="Positioner"
+					sideOffset={6}
+					alignItemWithTrigger={false}
+				>
 					<Select.Popup className="SelectPopup">
 						<Select.List>
 							{groups.map((group, i) => (
@@ -479,21 +823,26 @@ const SearchablePicker = ({
 				}
 			}}
 		>
-			<Combobox.Trigger
-				className={cx("FilterPill", "Picker-trigger", className)}
-				title={title}
-			>
-				{triggerLabel ?? (
-					<span className="Picker-value">
-						<Combobox.Value placeholder={placeholder} />
-					</span>
-				)}
-				<Combobox.Icon>
-					<ChevronIcon />
-				</Combobox.Icon>
-			</Combobox.Trigger>
+			<Hint label={title}>
+				<Combobox.Trigger
+					className={cx("FilterPill", "Picker-trigger", className)}
+				>
+					{triggerLabel ?? (
+						<span className="Picker-value">
+							<Combobox.Value placeholder={placeholder} />
+						</span>
+					)}
+					<Combobox.Icon>
+						<ChevronIcon />
+					</Combobox.Icon>
+				</Combobox.Trigger>
+			</Hint>
 			<Combobox.Portal>
-				<Combobox.Positioner sideOffset={6} align="start">
+				<Combobox.Positioner
+					className="Positioner"
+					sideOffset={6}
+					align="start"
+				>
 					<Combobox.Popup
 						className={cx("SelectPopup", "Picker-popup")}
 					>
@@ -552,15 +901,24 @@ export const PageShell = ({children}: {children: React.ReactNode}) => {
 /** Renders loading/error states, or `children` once the data has loaded. */
 export function AsyncContent<T>({
 	state,
+	loadingLabel,
+	slowNote,
 	errorTitle = "Couldn't load this page",
+	size,
 	children,
 }: {
 	state: AsyncState<T>
+	/** What's loading, e.g. "Loading standings…" */
+	loadingLabel?: string
+	/** Shown if loading takes a while; see Loader */
+	slowNote?: string
 	errorTitle?: string
+	/** "inline" inside a section, "page" (default) for the whole page */
+	size?: "inline" | "page"
 	children: (data: T) => React.ReactNode
 }) {
 	if (state.status === "loading") {
-		return <div className="PageShell-message">Loading…</div>
+		return <Loader label={loadingLabel} slowNote={slowNote} size={size} />
 	}
 	if (state.status === "error") {
 		return (
@@ -572,6 +930,99 @@ export function AsyncContent<T>({
 		)
 	}
 	return <>{children(state.data)}</>
+}
+
+// --- Loader
+
+/** After this long, the loader says it's still working */
+const LOADER_SLOW_MS = 5000
+
+/**
+ * A puck sliding into a net, on repeat, over what's loading. If it takes a
+ * while, adds a note that it's still working.
+ */
+export const Loader = ({
+	label = "Loading…",
+	slowNote = "Still working. The first time this loads, it can take a little extra time.",
+	size = "page",
+}: {
+	label?: string
+	/** Shown once it's taken a while: why, so it doesn't look stuck */
+	slowNote?: string
+	/** "inline" inside a section, "page" for the whole page */
+	size?: "inline" | "page"
+}) => {
+	const [slow, setSlow] = React.useState(false)
+	React.useEffect(() => {
+		const timer = setTimeout(() => setSlow(true), LOADER_SLOW_MS)
+		return () => clearTimeout(timer)
+	}, [])
+	return (
+		<div
+			className={cx("Loader", `Loader--${size}`)}
+			role="status"
+			aria-live="polite"
+		>
+			<svg
+				className="Loader-rink"
+				viewBox="0 0 200 64"
+				aria-hidden="true"
+			>
+				<defs>
+					<pattern
+						id="Loader-mesh"
+						width="4"
+						height="4"
+						patternUnits="userSpaceOnUse"
+						patternTransform="rotate(45)"
+					>
+						<path d="M0 0V4M0 0H4" className="Loader-mesh" />
+					</pattern>
+				</defs>
+				<line className="Loader-ice" x1="6" y1="52" x2="194" y2="52" />
+				<path
+					className="Loader-crease"
+					d="M168 52 A14 7 0 0 0 154 52 Z"
+				/>
+				<g className="Loader-net">
+					<path
+						d="M168 52V28H182L190 52Z"
+						fill="url(#Loader-mesh)"
+						className="Loader-netting"
+					/>
+					<path className="Loader-frame" d="M168 52V28H182L190 52" />
+				</g>
+				<g className="Loader-puck">
+					<line
+						className="Loader-streak"
+						x1="-16"
+						y1="46"
+						x2="-4"
+						y2="46"
+					/>
+					<line
+						className="Loader-streak"
+						x1="-24"
+						y1="49"
+						x2="-6"
+						y2="49"
+					/>
+					<rect x="0" y="45" width="12" height="7" rx="2" />
+				</g>
+				<g className="Loader-spray">
+					<circle cx="160" cy="50" r="1.2" />
+					<circle cx="158" cy="47" r="1" />
+					<circle cx="162" cy="45" r="0.8" />
+				</g>
+			</svg>
+			<span className="Loader-label">{label}</span>
+			<span className="Loader-note">
+				{/* Most data is fetched from the league's site and cached, so
+				    a first load is the slow one */}
+				{slow && slowNote}
+			</span>
+		</div>
+	)
 }
 
 // --- Errors
@@ -681,27 +1132,6 @@ const AlertIcon = () => {
 	)
 }
 
-// --- FilterBar
-
-/** A stack of labelled filter rows, e.g. "Days", "Rinks", "Division". */
-export const FilterBar = ({children}: {children: React.ReactNode}) => {
-	return <div className="FilterBar">{children}</div>
-}
-
-interface FilterRowProps {
-	label: string
-	children: React.ReactNode
-}
-
-export const FilterRow = ({label, children}: FilterRowProps) => {
-	return (
-		<div className="FilterBar-row" role="group" aria-label={label}>
-			<span className="FilterBar-label">{label}</span>
-			<div className="FilterBar-controls">{children}</div>
-		</div>
-	)
-}
-
 interface SeasonFilterProps {
 	/** Newest first */
 	seasons: KHLSeason[]
@@ -709,26 +1139,187 @@ interface SeasonFilterProps {
 	onChange: (seasonId: string) => void
 }
 
-/** A filter row for picking a league season. */
+/** A filter toolbar's season picker. */
 export const SeasonFilter = ({seasons, value, onChange}: SeasonFilterProps) => {
 	return (
-		<FilterRow label="Season">
-			<Picker
-				groups={[
-					{
-						label: "",
-						items: seasons.map((s) => ({
-							value: s.id,
-							label: s.name,
-						})),
-					},
-				]}
-				value={value}
-				onChange={onChange}
-				placeholder="Season"
-				className="Detail-select"
-			/>
-		</FilterRow>
+		<Picker
+			groups={[
+				{
+					label: "",
+					items: seasons.map((s) => ({
+						value: s.id,
+						label: s.name,
+					})),
+				},
+			]}
+			value={value}
+			onChange={onChange}
+			placeholder="Season"
+			className="Detail-select"
+		/>
+	)
+}
+
+// --- SegmentedControl
+
+export interface SegmentedOption<V extends string> {
+	value: V
+	label: React.ReactNode
+	disabled?: boolean
+	/** Tooltip, e.g. why it's disabled */
+	hint?: string
+}
+
+/**
+ * Pick one of a few views: the options on one track, the picked one raised.
+ * Pressing the picked option again keeps it. `children` go at the end of the
+ * track, e.g. the home page's date picker.
+ */
+export function SegmentedControl<V extends string>({
+	label,
+	options,
+	value,
+	onChange,
+	children,
+}: {
+	/** For screen readers, e.g. "Days" */
+	label: string
+	options: SegmentedOption<V>[]
+	/** Null when none of the options is picked, e.g. a custom date */
+	value: V | null
+	onChange: (value: V) => void
+	children?: React.ReactNode
+}) {
+	return (
+		<ToggleGroup
+			className="Segmented"
+			aria-label={label}
+			value={value === null ? [] : [value]}
+			onValueChange={([next]) => {
+				if (next) {
+					onChange(next as V)
+				}
+			}}
+		>
+			{options.map((option) => (
+				<Hint key={option.value} label={option.hint}>
+					<Toggle
+						className="Segmented-item"
+						value={option.value}
+						disabled={option.disabled}
+					>
+						{option.label}
+					</Toggle>
+				</Hint>
+			))}
+			{children}
+		</ToggleGroup>
+	)
+}
+
+// --- Warnings
+
+/**
+ * Collapsed by default: a one-line summary of what's missing or wrong, which
+ * expands into an explanation (`detail`), the affected `items` and an optional
+ * retry.
+ */
+export const Warnings = ({
+	summary,
+	detail,
+	items,
+	onRetry,
+}: {
+	summary: string
+	detail: React.ReactNode
+	items: {key: string; label: React.ReactNode; meta?: React.ReactNode}[]
+	onRetry?: () => void
+}) => {
+	return (
+		<Collapsible.Root className="Warnings">
+			<Collapsible.Trigger className="Warnings-trigger">
+				<WarningIcon />
+				<span className="Warnings-label">Warnings</span>
+				<span className="Warnings-summary">{summary}</span>
+				<ChevronIcon />
+			</Collapsible.Trigger>
+			<Collapsible.Panel className="Warnings-panel">
+				<p className="Warnings-detail">{detail}</p>
+				<ul className="Warnings-list">
+					{items.map((item) => (
+						<li key={item.key}>
+							<span className="Warnings-item-label">
+								{item.label}
+							</span>
+							{item.meta && (
+								<span className="Warnings-item-meta">
+									{item.meta}
+								</span>
+							)}
+						</li>
+					))}
+				</ul>
+				{onRetry && (
+					<Button className="Warnings-retry" onClick={onRetry}>
+						Try again
+					</Button>
+				)}
+			</Collapsible.Panel>
+		</Collapsible.Root>
+	)
+}
+
+const WarningIcon = () => {
+	return (
+		<svg
+			className="Warnings-icon"
+			viewBox="0 0 16 16"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinejoin="round"
+			aria-hidden
+		>
+			<path d="M8 2.25 14.25 13.5H1.75Z" />
+			<path d="M8 6.5v3M8 11.25v.25" strokeLinecap="round" />
+		</svg>
+	)
+}
+
+// --- Notice
+
+/** A banner above a page's content: what's missing or changed, and why. */
+export const Notice = ({
+	title,
+	children,
+}: {
+	title: string
+	children?: React.ReactNode
+}) => {
+	return (
+		<div className="Notice" role="status">
+			<InfoIcon />
+			<div className="Notice-body">
+				<strong className="Notice-title">{title}</strong>
+				{children && <p className="Notice-text">{children}</p>}
+			</div>
+		</div>
+	)
+}
+
+const InfoIcon = () => {
+	return (
+		<svg
+			className="Notice-icon"
+			viewBox="0 0 16 16"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.5"
+			aria-hidden
+		>
+			<circle cx="8" cy="8" r="6.25" />
+			<path d="M8 7.25v4M8 4.75v.5" strokeLinecap="round" />
+		</svg>
 	)
 }
 
@@ -771,8 +1362,8 @@ export const SiteHeader = () => {
 
 const NAV_ITEMS = [
 	{href: "/teams", label: "Teams"},
-	{href: "/standings", label: "Standings"},
 	{href: "/matchup", label: "Matchup"},
+	...(IS_DEV ? [{href: "/admin", label: "Admin"}] : []),
 ]
 
 /** Top-level pages besides home, in the header. */
@@ -832,26 +1423,29 @@ const ThemeSwitch = () => {
 			: "light"
 	})
 	return (
-		<Switch.Root
-			className="ThemeSwitch"
-			checked={theme === "dark"}
-			onCheckedChange={(dark) => {
-				const next: Theme = dark ? "dark" : "light"
-				applyTheme(next)
-				writeStorage(THEME_STORAGE_KEY, next)
-				setTheme(next)
-			}}
-			aria-label="Dark mode"
-			title={
+		<Hint
+			label={
 				theme === "dark"
 					? "Switch to light mode"
 					: "Switch to dark mode"
 			}
 		>
-			<SunIcon />
-			<MoonIcon />
-			<Switch.Thumb className="ThemeSwitch-thumb" />
-		</Switch.Root>
+			<Switch.Root
+				className="ThemeSwitch"
+				checked={theme === "dark"}
+				onCheckedChange={(dark) => {
+					const next: Theme = dark ? "dark" : "light"
+					applyTheme(next)
+					writeStorage(THEME_STORAGE_KEY, next)
+					setTheme(next)
+				}}
+				aria-label="Dark mode"
+			>
+				<SunIcon />
+				<MoonIcon />
+				<Switch.Thumb className="ThemeSwitch-thumb" />
+			</Switch.Root>
+		</Hint>
 	)
 }
 
@@ -965,6 +1559,16 @@ const searchLogger = new Logger("SiteSearch")
  * Header search with autocomplete across players, teams, and rinks. Arrow
  * keys move through suggestions; Enter or a click opens one.
  */
+function isEditable(target: EventTarget | null): boolean {
+	return (
+		target instanceof HTMLElement &&
+		(target.isContentEditable ||
+			target instanceof HTMLInputElement ||
+			target instanceof HTMLTextAreaElement ||
+			target instanceof HTMLSelectElement)
+	)
+}
+
 const SiteSearch = () => {
 	const {history} = React.useContext(AppContext)
 	const location = useLocation()
@@ -973,6 +1577,29 @@ const SiteSearch = () => {
 	const [status, setStatus] = React.useState<SearchStatus>({kind: "idle"})
 	const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 	const latestQuery = React.useRef("")
+	const inputRef = React.useRef<HTMLInputElement>(null)
+
+	// "/" focuses the search from anywhere, unless you're typing somewhere
+	React.useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (
+				e.key !== "/" ||
+				e.defaultPrevented ||
+				e.metaKey ||
+				e.ctrlKey ||
+				e.altKey ||
+				isEditable(e.target)
+			) {
+				return
+			}
+			// Don't type the "/" into the input
+			e.preventDefault()
+			inputRef.current?.focus()
+			inputRef.current?.select()
+		}
+		document.addEventListener("keydown", onKeyDown)
+		return () => document.removeEventListener("keydown", onKeyDown)
+	}, [])
 
 	const search = (query: string) => {
 		latestQuery.current = query
@@ -1051,14 +1678,20 @@ const SiteSearch = () => {
 			<div className="SiteSearch">
 				<SearchIcon />
 				<Autocomplete.Input
+					ref={inputRef}
 					className="SiteSearch-input"
 					aria-label="Search players, teams, and rinks"
+					aria-keyshortcuts="/"
 					placeholder="Search players, teams, and rinks"
 				/>
+				{/* Hidden while focused or typed in; see styles.css */}
+				<kbd className="SiteSearch-key" aria-hidden>
+					/
+				</kbd>
 			</div>
 			<Autocomplete.Portal hidden={status.kind === "idle"}>
 				<Autocomplete.Positioner
-					className="SiteSearch-positioner"
+					className={cx("Positioner", "SiteSearch-positioner")}
 					sideOffset={6}
 					align="start"
 				>
@@ -1184,7 +1817,11 @@ const SuggestionIcon = ({suggestion}: {suggestion: Suggestion}) => {
 	)
 }
 
-const SearchIcon = ({className = "SiteSearch-icon"}: {className?: string}) => {
+export const SearchIcon = ({
+	className = "SiteSearch-icon",
+}: {
+	className?: string
+}) => {
 	return (
 		<svg
 			className={className}
@@ -1213,17 +1850,18 @@ interface HomeAwayBadgeProps {
 export const HomeAwayBadge = ({homeAway, truncated}: HomeAwayBadgeProps) => {
 	const label = homeAway === "home" ? "Home" : "Away"
 	return (
-		<span
-			className={cx(
-				"HomeAwayBadge",
-				`HomeAwayBadge--${homeAway}`,
-				truncated && "HomeAwayBadge--truncated",
-			)}
-			title={truncated ? label : undefined}
-			aria-label={truncated ? label : undefined}
-		>
-			{truncated ? label[0] : label}
-		</span>
+		<Hint label={truncated ? label : undefined}>
+			<span
+				className={cx(
+					"HomeAwayBadge",
+					`HomeAwayBadge--${homeAway}`,
+					truncated && "HomeAwayBadge--truncated",
+				)}
+				aria-label={truncated ? label : undefined}
+			>
+				{truncated ? label[0] : label}
+			</span>
+		</Hint>
 	)
 }
 
@@ -1234,6 +1872,74 @@ interface LiveBarnBadgeProps {
 	/** Shown instead of "LiveBarn" when a rink has several surfaces */
 	surfaceName?: string
 	title?: string
+	/** Just the camera icon; the label moves to a tooltip */
+	compact?: boolean
+}
+
+/**
+ * An external link shown as just an icon, in a compact LiveBarn badge's pill,
+ * with its label in a tooltip.
+ */
+const IconLink = ({
+	href,
+	label,
+	icon,
+}: {
+	href: string
+	label: string
+	icon: React.ReactNode
+}) => {
+	return (
+		<Hint label={label}>
+			<a
+				className={cx("LiveBarnBadge", "LiveBarnBadge--compact")}
+				href={href}
+				aria-label={label}
+				rel="noopener noreferrer"
+				target="_blank"
+			>
+				{icon}
+			</a>
+		</Hint>
+	)
+}
+
+/**
+ * A tooltip on `children`, the element that triggers it. Use this instead of
+ * a native `title` so every tooltip in the app looks the same. Without a
+ * `label`, renders `children` alone.
+ */
+export const Hint = ({
+	label,
+	children,
+}: {
+	label: string | undefined
+	children: React.ReactElement
+}) => {
+	if (!label) {
+		return children
+	}
+	return (
+		<Tooltip.Root>
+			<Tooltip.Trigger delay={100} render={children} />
+			<Tooltip.Portal>
+				<Tooltip.Positioner className="Positioner" sideOffset={6}>
+					<Tooltip.Popup className="InfoPopup">{label}</Tooltip.Popup>
+				</Tooltip.Positioner>
+			</Tooltip.Portal>
+		</Tooltip.Root>
+	)
+}
+
+/** The league's printable scoresheet for a finished game, as an icon. */
+export const ScoresheetLink = ({gameId}: {gameId: string}) => {
+	return (
+		<IconLink
+			href={getScoresheetUrl(gameId)}
+			label={`Open the official scoresheet on ${new URL(URLS.KHL).host}`}
+			icon={<DocumentIcon />}
+		/>
+	)
 }
 
 /** A pill linking out to a LiveBarn feed or replay. */
@@ -1241,12 +1947,24 @@ export const LiveBarnBadge = ({
 	href,
 	surfaceName,
 	title,
+	compact,
 }: LiveBarnBadgeProps) => {
+	if (compact) {
+		return (
+			<IconLink
+				href={href}
+				label={title ?? surfaceName ?? "LiveBarn"}
+				icon={<CameraIcon />}
+			/>
+		)
+	}
 	return (
-		<Link className="LiveBarnBadge" href={href} title={title}>
-			<CameraIcon />
-			{surfaceName ?? "LiveBarn"} ↗
-		</Link>
+		<Hint label={title}>
+			<Link className="LiveBarnBadge" href={href}>
+				<CameraIcon />
+				{surfaceName ?? "LiveBarn"} ↗
+			</Link>
+		</Hint>
 	)
 }
 
@@ -1254,21 +1972,25 @@ export const LiveBarnBadge = ({
  * A LiveBarn badge for a rink without a feed: greyed out, with a popover
  * explaining why. Opens on hover, and on tap where there's no hover.
  */
-export const NotOnLiveBarn = () => {
+export const NotOnLiveBarn = ({compact}: {compact?: boolean}) => {
 	return (
 		<Popover.Root>
 			<Popover.Trigger
 				openOnHover
 				delay={100}
-				className={cx("LiveBarnBadge", "LiveBarnBadge--unavailable")}
+				className={cx(
+					"LiveBarnBadge",
+					"LiveBarnBadge--unavailable",
+					compact && "LiveBarnBadge--compact",
+				)}
 				aria-disabled
 				aria-label="LiveBarn unavailable for this rink"
 			>
 				<CameraIcon />
-				LiveBarn
+				{!compact && "LiveBarn"}
 			</Popover.Trigger>
 			<Popover.Portal>
-				<Popover.Positioner sideOffset={6}>
+				<Popover.Positioner className="Positioner" sideOffset={6}>
 					<Popover.Popup className="InfoPopup">
 						<strong>No LiveBarn for this rink.</strong> LiveBarn
 						only streams and records rinks with its cameras. We
@@ -1278,6 +2000,23 @@ export const NotOnLiveBarn = () => {
 				</Popover.Positioner>
 			</Popover.Portal>
 		</Popover.Root>
+	)
+}
+
+const DocumentIcon = () => {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden
+		>
+			<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+			<path d="M14 2v6h6M8 13h8M8 17h5" />
+		</svg>
 	)
 }
 

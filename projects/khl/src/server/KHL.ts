@@ -11,6 +11,12 @@ import {
 	KHLBoxScoreSchema,
 	KHLBoxScoreTeam,
 	KHLGame,
+	KHLGameStats,
+	KHLGameStatsSchema,
+	KHLScoreboardGame,
+	KHLScoreboardGameSchema,
+	KHLScoreboardTeam,
+	KHLGameTeamStats,
 	KHLGoal,
 	KHLGameSchema,
 	KHLLeagueGame,
@@ -160,6 +166,25 @@ export async function getKHLBoxScore(gameId: string): Promise<KHLBoxScore> {
 	const url = new URL(`/game/${gameId}/summary`, URLS.KHL)
 	const root = await fetchKHLPage(url)
 	return KHLBoxScoreSchema.parse(parseKHLBoxScore(root, url, gameId))
+}
+
+/** Every game on one league-local day ("yyyy-MM-dd"), past or future. */
+export async function getKHLScoreboard(
+	date: string,
+): Promise<KHLScoreboardGame[]> {
+	const url = new URL("/scoreboard/", URLS.KHL)
+	url.searchParams.set("date", date)
+	const root = await fetchKHLPage(url)
+	return z
+		.array(KHLScoreboardGameSchema)
+		.parse(parseKHLScoreboard(root, url, date))
+}
+
+/** Each team's players in a game and their stats in it. */
+export async function getKHLGameStats(gameId: string): Promise<KHLGameStats> {
+	const url = new URL(`/game/${gameId}/team-stats`, URLS.KHL)
+	const root = await fetchKHLPage(url)
+	return KHLGameStatsSchema.parse(parseKHLGameStats(root, url, gameId))
 }
 
 export async function getKHLArena(arenaId: string): Promise<KHLArena> {
@@ -423,6 +448,120 @@ function parseKHLTeamStats(
 		goalieColumns: goalies.columns,
 		goalies: goalies.rows,
 	}
+}
+
+function parseKHLScoreboard(
+	root: HTMLElement,
+	pageUrl: URL,
+	date: string,
+): KHLScoreboardGame[] {
+	// A .score-card per game (the header's score ticker uses other markup):
+	// a header with the start time (or "FINAL") and rink, away then home
+	// .team-info rows, and footer links to the game. Each card is rendered
+	// once per layout, so keep the first of each game.
+	const games = new Map<string, KHLScoreboardGame>()
+	for (const card of root.querySelectorAll(".score-card")) {
+		const game = parseScoreboardCard(card, pageUrl, date)
+		if (!games.has(game.gameId)) {
+			games.set(game.gameId, game)
+		}
+	}
+	return [...games.values()]
+}
+
+function parseScoreboardCard(
+	card: HTMLElement,
+	pageUrl: URL,
+	date: string,
+): KHLScoreboardGame {
+	const gameLink = card.querySelector('.card-footer a[href^="/game/"]')
+	if (!gameLink) {
+		throw new Error(`${pageUrl}: score card without a game link`)
+	}
+	const status = card.querySelector(".game-time span")?.text.trim() ?? ""
+	const isFinal = /^final/i.test(status)
+	// The rink is listed twice, short and full; take the full name
+	const arenaLink = card
+		.querySelectorAll('.game-location a[href^="/arena/"]')
+		.at(-1)
+	const [away, home] = card
+		.querySelectorAll(".team-info")
+		.map((row): KHLScoreboardTeam => {
+			const link = row.querySelector('a[href^="/team/"]')
+			const details = row.querySelectorAll(".team-details > div")
+			if (!link || !details[0]) {
+				throw new Error(`${pageUrl}: malformed score card team`)
+			}
+			const goals = row.querySelector(".team-score")?.text.trim()
+			return {
+				id: matchHref(link, /^\/team\/(\d+)\//),
+				name: details[0].text.trim(),
+				logoUrl: getImageUrl(row, pageUrl),
+				divisionName: details[1]?.text.trim() || null,
+				goals: goals ? Number(goals) : null,
+			}
+		})
+	if (!away || !home) {
+		throw new Error(`${pageUrl}: score card without two teams`)
+	}
+	return {
+		gameId: matchHref(gameLink, /^\/game\/(\d+)\//),
+		isFinal,
+		startsAt: isFinal ? null : parseScoreboardTime(date, status),
+		arena: arenaLink
+			? {
+					id: matchHref(arenaLink, /^\/arena\/(\d+)/),
+					name: arenaLink.text.trim(),
+				}
+			: null,
+		away,
+		home,
+	}
+}
+
+/** "2026-10-14" + "10:35 PM" -> ISO instant; null for anything else */
+function parseScoreboardTime(date: string, time: string): string | null {
+	const match = time.match(/^(\d{1,2}):(\d{2}) (AM|PM)$/i)
+	if (!match) {
+		return null
+	}
+	const hour = (Number(match[1]) % 12) + (/pm/i.test(match[3]!) ? 12 : 0)
+	return zonedTimeToDate(
+		date,
+		`${pad2(hour)}:${match[2]}`,
+		LEAGUE.TIME_ZONE,
+	).toISOString()
+}
+
+function parseKHLGameStats(
+	root: HTMLElement,
+	pageUrl: URL,
+	gameId: string,
+): KHLGameStats {
+	// One tab per team (#away, #home): a players table (# | Player | G | A |
+	// P | PIM), then a goalies table (# | Goalie | SA | GA | ...) if any
+	// goalie was recorded.
+	const parseTeam = (paneId: string): KHLGameTeamStats => {
+		const pane = root.querySelector(`#${paneId}`)
+		if (!pane) {
+			throw new Error(`${pageUrl}: missing #${paneId} stats`)
+		}
+		const [skaterTable, goalieTable] = pane.querySelectorAll("table.table")
+		const empty = {columns: [], rows: []}
+		const skaters = skaterTable
+			? parseRosterTable(skaterTable, pageUrl)
+			: empty
+		const goalies = goalieTable
+			? parseRosterTable(goalieTable, pageUrl)
+			: empty
+		return {
+			skaterColumns: skaters.columns,
+			skaters: skaters.rows,
+			goalieColumns: goalies.columns,
+			goalies: goalies.rows,
+		}
+	}
+	return {gameId, away: parseTeam("away"), home: parseTeam("home")}
 }
 
 function parseRosterTable(

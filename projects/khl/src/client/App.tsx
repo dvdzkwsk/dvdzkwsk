@@ -6,12 +6,12 @@ import {Helmet} from "react-helmet"
 import {Logger} from "@dvdzkwsk/logger"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {ErrorBoundary, Link, PageShell, SiteHeader} from "./Components.js"
+import {AdminRoute} from "./pages/AdminPage.js"
 import {GameRoute} from "./pages/GamePage.js"
 import {HomeRoute} from "./pages/HomePage.js"
 import {MatchupRoute} from "./pages/MatchupPage.js"
 import {PlayerRoute} from "./pages/PlayerPage.js"
 import {RinkRoute} from "./pages/RinkPage.js"
-import {StandingsRoute} from "./pages/StandingsPage.js"
 import {TeamRoute} from "./pages/TeamPage.js"
 import {TeamsRoute} from "./pages/TeamsPage.js"
 import {
@@ -19,6 +19,7 @@ import {
 	AppContextValue,
 	createAppContext,
 	initClientLogging,
+	IS_DEV,
 	Route,
 	RouteProps,
 } from "./Util.js"
@@ -42,9 +43,9 @@ const ROUTES: Route[] = [
 	PlayerRoute,
 	TeamsRoute,
 	TeamRoute,
-	StandingsRoute,
 	RinkRoute,
 	MatchupRoute,
+	...(IS_DEV ? [AdminRoute] : []),
 ]
 
 export const CurrentRoute = () => {

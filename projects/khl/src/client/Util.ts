@@ -10,7 +10,7 @@ import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {History, Location} from "history"
 import * as React from "react"
 import {ClientLog, LOG_ENDPOINT} from "../shared/ApiJson.js"
-import {LEAGUE} from "../shared/KHLConfig.js"
+import {LEAGUE, URLS} from "../shared/KHLConfig.js"
 import {KHLGame} from "../shared/KHLJson.js"
 
 // --- App context and routes
@@ -51,12 +51,22 @@ export function getGameHref(gameId: string): string {
 	return `/games/${gameId}`
 }
 
+/** The league's printable scoresheet; it uses the same game id as /game/:id. */
+export function getScoresheetUrl(gameId: string): string {
+	return new URL(`/scoresheet/${encodeURIComponent(gameId)}`, URLS.KHL).href
+}
+
 export function getRinkHref(arenaId: string): string {
 	return `/rinks/${arenaId}`
 }
 
 export function getTeamHref(team: {id: string; seasonId: string}): string {
 	return `/teams/${team.id}?${new URLSearchParams({season: team.seasonId})}`
+}
+
+/** "Kraken Hockey League Fall/Winter 26/27" -> "Fall/Winter 26/27" */
+export function getShortSeasonName(name: string): string {
+	return name.replace(/^Kraken Hockey League\s+/i, "").trim()
 }
 
 // --- Game timing
@@ -126,6 +136,16 @@ export function formatGameTime(startsAt: string): string {
 	return timeFormat.format(new Date(startsAt))
 }
 
+const fullDateFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	dateStyle: "full",
+})
+
+/** "Wednesday, October 14, 2026" in league time */
+export function formatFullGameDate(startsAt: string): string {
+	return fullDateFormat.format(new Date(startsAt))
+}
+
 const relativeFormat = new Intl.RelativeTimeFormat("en-US", {numeric: "auto"})
 
 /** "in 5 days", "in 3 hours", "tomorrow" */
@@ -158,30 +178,6 @@ export function formatGameDay(startsAt: string, now: Date): string {
 		return "Tomorrow"
 	}
 	return formatGameDate(startsAt, now)
-}
-
-const shortWeekdayFormat = new Intl.DateTimeFormat("en-US", {
-	timeZone: LEAGUE.TIME_ZONE,
-	weekday: "short",
-})
-
-const shortDateFormat = new Intl.DateTimeFormat("en-US", {
-	timeZone: LEAGUE.TIME_ZONE,
-	month: "short",
-	day: "numeric",
-})
-
-/** Compact day for tight spaces: "Today", "Tomorrow", "Sun", or "Oct 25" */
-export function formatShortGameDay(startsAt: string, now: Date): string {
-	const day = formatGameDay(startsAt, now)
-	if (day === "Today" || day === "Tomorrow") {
-		return day
-	}
-	const daysAway = (Date.parse(startsAt) - now.getTime()) / (24 * 60 * 60_000)
-	const date = new Date(startsAt)
-	return daysAway < 6
-		? shortWeekdayFormat.format(date)
-		: shortDateFormat.format(date)
 }
 
 /** "yyyy-MM-dd" of the league-local (Pacific) day `date` falls on */
@@ -233,7 +229,7 @@ export function useAsync<T>(
 	React.useEffect(() => {
 		let current = true
 		setResult({status: "loading"})
-		load().then(
+		;(IS_DEV ? withSimulatedLoading(load) : load()).then(
 			(data) => current && setResult({status: "success", data}),
 			(cause: unknown) => {
 				const error =
@@ -251,6 +247,51 @@ export function useAsync<T>(
 	}, [...deps, attempt])
 	const reload = React.useCallback(() => setAttempt((n) => n + 1), [])
 	return {...result, reload}
+}
+
+// --- Dev tools
+
+/** True under the Vite dev server; dev-only code is dropped from builds. */
+export const IS_DEV = import.meta.env.DEV
+
+/** Set from the Admin page: makes every `useAsync` load slow, or never finish. */
+export type SimulatedLoading = "off" | "slow" | "hang"
+
+const SIMULATED_LOADING_KEY = "khl-dev-simulated-loading"
+export const SIMULATED_LOADING_DELAY_MS = 3000
+
+export function readSimulatedLoading(): SimulatedLoading {
+	try {
+		const value = sessionStorage.getItem(SIMULATED_LOADING_KEY)
+		return value === "slow" || value === "hang" ? value : "off"
+	} catch {
+		return "off"
+	}
+}
+
+export function writeSimulatedLoading(value: SimulatedLoading) {
+	try {
+		if (value === "off") {
+			sessionStorage.removeItem(SIMULATED_LOADING_KEY)
+		} else {
+			sessionStorage.setItem(SIMULATED_LOADING_KEY, value)
+		}
+	} catch {
+		// Not persisted; nothing to simulate
+	}
+}
+
+function withSimulatedLoading<T>(load: () => Promise<T>): Promise<T> {
+	const mode = readSimulatedLoading()
+	if (mode === "hang") {
+		return new Promise(() => {})
+	}
+	if (mode === "slow") {
+		return new Promise((resolve) =>
+			setTimeout(resolve, SIMULATED_LOADING_DELAY_MS),
+		).then(load)
+	}
+	return load()
 }
 
 /** The current location, re-rendering whenever it changes. */

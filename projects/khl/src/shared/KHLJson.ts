@@ -187,6 +187,11 @@ export const KHLTeamRefSchema = z.object({
 
 export type KHLHomeAway = "home" | "away"
 
+export const KHLHomeAwaySchema = z.enum([
+	"home",
+	"away",
+]) satisfies z.ZodType<KHLHomeAway>
+
 export interface KHLLeagueTeam {
 	id: string
 	name: string
@@ -250,7 +255,7 @@ export const KHLGameSchema = z.object({
 	seasonId: z.string(),
 	team: KHLTeamRefSchema,
 	opponent: KHLTeamRefSchema,
-	homeAway: z.enum(["home", "away"]),
+	homeAway: KHLHomeAwaySchema,
 	localDate: z.iso.date(),
 	localTime: z.string().regex(/^\d{2}:\d{2}$/),
 	startsAt: z.iso.datetime(),
@@ -259,6 +264,23 @@ export const KHLGameSchema = z.object({
 	score: z.string().nullable(),
 	isFinal: z.boolean(),
 }) satisfies z.ZodType<KHLGame>
+
+/**
+ * Schedules list the winner's score first ("4 - 2" for a 2-4 loss), so the
+ * result says which number is the team's own.
+ */
+export function getGoalsByTeam(game: KHLGame): Record<string, number> | null {
+	const match = game.score?.match(/^(\d+)\s*-\s*(\d+)$/)
+	const result = game.result?.toUpperCase() ?? ""
+	if (!match || !/^[WLT]/.test(result)) {
+		return null
+	}
+	const high = Math.max(Number(match[1]), Number(match[2]))
+	const low = Math.min(Number(match[1]), Number(match[2]))
+	const own = result.startsWith("L") ? low : high
+	const other = result.startsWith("W") ? low : high
+	return {[game.team.id]: own, [game.opponent.id]: other}
+}
 
 /** One row of a team's stats page: a player and their numbers that season. */
 export interface KHLRosterRow {
@@ -297,6 +319,78 @@ export const KHLTeamStatsSchema = z.object({
 	goalieColumns: z.array(z.string()),
 	goalies: z.array(KHLRosterRowSchema),
 }) satisfies z.ZodType<KHLTeamStats>
+
+/** A team on a /scoreboard card. */
+export interface KHLScoreboardTeam {
+	id: string
+	name: string
+	logoUrl: string | null
+	/** As the card lists it, e.g. "Division 4C" */
+	divisionName: string | null
+	/** Null until the game is final */
+	goals: number | null
+}
+
+export const KHLScoreboardTeamSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	logoUrl: z.url().nullable(),
+	divisionName: z.string().nullable(),
+	goals: z.number().nullable(),
+}) satisfies z.ZodType<KHLScoreboardTeam>
+
+/**
+ * One game on /scoreboard/?date=. Final games drop their start time and rink
+ * from the card, so those are null for them.
+ */
+export interface KHLScoreboardGame {
+	gameId: string
+	isFinal: boolean
+	/** ISO 8601 UTC instant; null once final */
+	startsAt: string | null
+	arena: KHLArenaRef | null
+	away: KHLScoreboardTeam
+	home: KHLScoreboardTeam
+}
+
+export const KHLScoreboardGameSchema = z.object({
+	gameId: z.string(),
+	isFinal: z.boolean(),
+	startsAt: z.iso.datetime().nullable(),
+	arena: KHLArenaRefSchema.nullable(),
+	away: KHLScoreboardTeamSchema,
+	home: KHLScoreboardTeamSchema,
+}) satisfies z.ZodType<KHLScoreboardGame>
+
+/** One team's players in a game, from /game/:id/team-stats. */
+export interface KHLGameTeamStats {
+	/** e.g. ["G", "A", "P", "PIM"] */
+	skaterColumns: string[]
+	skaters: KHLRosterRow[]
+	/** e.g. ["SA", "GA", "SV", "SV%", "MIN"] */
+	goalieColumns: string[]
+	goalies: KHLRosterRow[]
+}
+
+export const KHLGameTeamStatsSchema = z.object({
+	skaterColumns: z.array(z.string()),
+	skaters: z.array(KHLRosterRowSchema),
+	goalieColumns: z.array(z.string()),
+	goalies: z.array(KHLRosterRowSchema),
+}) satisfies z.ZodType<KHLGameTeamStats>
+
+/** /game/:id/team-stats: who played for each team and their numbers. */
+export interface KHLGameStats {
+	gameId: string
+	away: KHLGameTeamStats
+	home: KHLGameTeamStats
+}
+
+export const KHLGameStatsSchema = z.object({
+	gameId: z.string(),
+	away: KHLGameTeamStatsSchema,
+	home: KHLGameTeamStatsSchema,
+}) satisfies z.ZodType<KHLGameStats>
 
 /** One row of a division's standings table. */
 export interface KHLStandingsRow {

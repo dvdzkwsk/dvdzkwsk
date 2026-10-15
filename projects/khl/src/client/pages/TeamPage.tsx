@@ -1,5 +1,4 @@
 import * as React from "react"
-import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import {Helmet} from "react-helmet"
@@ -12,9 +11,11 @@ import {
 import {STRINGS} from "../../shared/KHLConfig.js"
 import {
 	AsyncContent,
+	Hint,
 	Link,
 	PageShell,
 	Picker,
+	SegmentedControl,
 	RosterTables,
 	TeamAvatar,
 } from "../Components.js"
@@ -40,7 +41,7 @@ const TeamPage = ({params, query}: RouteProps) => {
 
 	return (
 		<PageShell>
-			<AsyncContent state={state}>
+			<AsyncContent state={state} loadingLabel="Loading team details…">
 				{(team) => (
 					<div className="Detail">
 						<Helmet>
@@ -48,6 +49,9 @@ const TeamPage = ({params, query}: RouteProps) => {
 								{team.team.name} | {STRINGS.PRODUCT_NAME}
 							</title>
 						</Helmet>
+						<div className="Detail-toolbar">
+							<SeasonPicker team={team} />
+						</div>
 						<TeamHeader team={team} />
 						<section>
 							<h2
@@ -69,7 +73,7 @@ const TeamPage = ({params, query}: RouteProps) => {
 						<PastGames
 							games={team.games}
 							now={now}
-							showTeam={false}
+							getTeamLogoUrl={() => team.team.logoUrl}
 						/>
 						<Roster team={team} />
 					</div>
@@ -98,13 +102,11 @@ const TeamHeader = ({team}: {team: TeamResponse}) => {
 					{finals.length > 0 && (
 						<span>
 							{count("W")}-{count("L")}-{count("T")}
-							<span className="Detail-meta-hint"> W-L-T</span>
 						</span>
 					)}
 					<RecentResults games={finals} />
 				</div>
 			</div>
-			<SeasonPicker team={team} />
 		</header>
 	)
 }
@@ -116,19 +118,23 @@ const RecentResults = ({games}: {games: FeedGame[]}) => {
 		return null
 	}
 	return (
-		<span className="Detail-form" title="Last 5 games, oldest to newest">
-			{recent.map(({game}) => (
-				<span
-					key={game.startsAt}
-					className={cx(
-						"GameFeed-result",
-						`GameFeed-result--${game.result}`,
-					)}
-				>
-					{game.result}
-				</span>
-			))}
-		</span>
+		<Hint label={`Last ${recent.length} games, oldest to newest`}>
+			<span className="Detail-form">
+				{/* The real count: a team three games in has a "Last 3" */}
+				<span className="Detail-meta-hint">Last {recent.length}</span>
+				{recent.map(({game}) => (
+					<span
+						key={game.startsAt}
+						className={cx(
+							"GameFeed-result",
+							`GameFeed-result--${game.result}`,
+						)}
+					>
+						{game.result}
+					</span>
+				))}
+			</span>
+		</Hint>
 	)
 }
 
@@ -178,47 +184,53 @@ const GOALIE_LEADERS: LeaderCategory[] = [
 const LEADERS_PER_CATEGORY = 3
 
 /** Top skaters and goalies in a few categories, from the roster's stats. */
+type LeaderKind = "skaters" | "goalies"
+
 const TeamLeaders = ({roster}: {roster: TeamResponse["roster"]}) => {
+	const [kind, setKind] = React.useState<LeaderKind>("skaters")
 	if (roster.skaters.length === 0 && roster.goalies.length === 0) {
 		return null
 	}
 	return (
 		<section>
-			<Tabs.Root defaultValue="skaters">
-				<div className="Leaders-header">
-					<h2 className="SectionLabel">Team leaders</h2>
-					<Tabs.List className="Tabs-list">
-						<Tabs.Tab className="Tabs-tab" value="skaters">
-							Skaters
-						</Tabs.Tab>
-						<Tabs.Tab className="Tabs-tab" value="goalies">
-							Goalies
-						</Tabs.Tab>
-						<Tabs.Indicator className="Tabs-indicator" />
-					</Tabs.List>
-				</div>
-				<Tabs.Panel value="skaters" className="Leaders-grid">
-					{SKATER_LEADERS.map((category) => (
-						<LeaderCard
-							key={category.column}
-							category={category}
-							players={roster.skaters}
-						/>
-					))}
-				</Tabs.Panel>
-				<Tabs.Panel value="goalies" className="Leaders-grid">
-					{GOALIE_LEADERS.map((category) => (
-						<LeaderCard
-							key={category.column}
-							category={category}
-							// Rates only mean something for goalies who've played
-							players={roster.goalies.filter(
-								(g) => Number(g.stats["GP"]) > 0,
-							)}
-						/>
-					))}
-				</Tabs.Panel>
-			</Tabs.Root>
+			<div className="Leaders-header">
+				<h2 className="SectionLabel">Team leaders</h2>
+				<SegmentedControl<LeaderKind>
+					label="Leaders"
+					options={[
+						{value: "skaters", label: "Skaters"},
+						{value: "goalies", label: "Goalies"},
+					]}
+					value={kind}
+					onChange={setKind}
+				/>
+			</div>
+			<div className="Leaders-grid">
+				{kind === "skaters" ? (
+					<>
+						{SKATER_LEADERS.map((category) => (
+							<LeaderCard
+								key={category.column}
+								category={category}
+								players={roster.skaters}
+							/>
+						))}
+					</>
+				) : (
+					<>
+						{GOALIE_LEADERS.map((category) => (
+							<LeaderCard
+								key={category.column}
+								category={category}
+								// Rates only mean something for goalies who've played
+								players={roster.goalies.filter(
+									(g) => Number(g.stats["GP"]) > 0,
+								)}
+							/>
+						))}
+					</>
+				)}
+			</div>
 		</section>
 	)
 }

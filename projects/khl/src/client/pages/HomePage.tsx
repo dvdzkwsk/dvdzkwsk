@@ -1,7 +1,7 @@
 import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {LIST_RINKS_ENDPOINT} from "../../shared/ApiJson.js"
+import {LIST_GAMES_ENDPOINT, LIST_RINKS_ENDPOINT} from "../../shared/ApiJson.js"
 import {AsyncContent, PageShell} from "../Components.js"
 import {
 	filterScheduledGames,
@@ -9,18 +9,33 @@ import {
 	GameFilters,
 	GameFilterValues,
 	GameList,
+	getPastDays,
 	getScheduledGames,
+	includesUpcomingDays,
+	NoGames,
 	readGameFilters,
 	writeGameFilters,
 } from "../Games.js"
 import {AppContext, Route, RouteProps, useAsync, useNow} from "../Util.js"
 
-/** Every upcoming game in the league, filterable by day, rink and division. */
+/**
+ * Every upcoming game in the league, filterable by day, rink and division.
+ * Past days (or a range reaching into the past) show their results too.
+ */
 const HomePage = ({query}: RouteProps) => {
 	const {history} = React.useContext(AppContext)
 	const state = useAsync(() => doRequest(LIST_RINKS_ENDPOINT, {}), [])
 	const now = useNow()
 	const filters = readGameFilters(query)
+	const pastDays = getPastDays(filters.day, now)
+	const pastState = useAsync(
+		() =>
+			Promise.all(
+				pastDays.map((date) => doRequest(LIST_GAMES_ENDPOINT, {date})),
+			).then((days) => days.flatMap((day) => day.games)),
+		[pastDays.join(",")],
+	)
+	const hasPast = pastDays.length > 0
 	const setFilters = (changes: Partial<GameFilterValues>) => {
 		// Replace rather than push: filter tweaks shouldn't fill up history
 		history.replace({
@@ -32,13 +47,32 @@ const HomePage = ({query}: RouteProps) => {
 	return (
 		<PageShell>
 			<div className="HomePage">
-				<AsyncContent state={state}>
+				<AsyncContent
+					state={state}
+					loadingLabel="Loading the schedule…"
+				>
 					{({rinks, season}) => {
-						const games = getScheduledGames(rinks, now)
+						const pastGames =
+							pastState.status === "success" ? pastState.data : []
+						const games = [
+							...pastGames,
+							...(includesUpcomingDays(filters.day, now)
+								? getScheduledGames(rinks, now)
+								: []),
+						]
 						const {forDay, visible} = filterScheduledGames(
 							games,
 							filters,
 							now,
+						)
+						const noGames = (
+							<NoGames
+								filters={filters}
+								forDay={forDay}
+								upcoming={getScheduledGames(rinks, now)}
+								now={now}
+								onChange={setFilters}
+							/>
 						)
 						return (
 							<>
@@ -47,32 +81,53 @@ const HomePage = ({query}: RouteProps) => {
 									onChange={setFilters}
 									games={games}
 									gamesForDay={forDay}
+									now={now}
 								/>
-								{/* The next few matching games, as cards. Hidden when nothing
-								    matches; the list below says so. */}
-								{visible.length > 0 && (
-									<section>
-										<h2
-											className={cx(
-												"SectionLabel",
-												"HomePage-section-title",
-											)}
-										>
-											Up next
-										</h2>
-										<GameCards
+								{hasPast ? (
+									<AsyncContent
+										state={pastState}
+										loadingLabel="Loading past games…"
+										errorTitle="Couldn't load those days' games"
+									>
+										{() => (
+											<GameList
+												games={visible}
+												seasonId={season.id}
+												now={now}
+												empty={noGames}
+											/>
+										)}
+									</AsyncContent>
+								) : (
+									<>
+										{/* The next few matching games, as cards. Hidden when nothing
+										    matches; the list below says so. */}
+										{visible.length > 0 && (
+											<section>
+												<h2
+													className={cx(
+														"SectionLabel",
+														"HomePage-section-title",
+													)}
+												>
+													Up next
+												</h2>
+												<GameCards
+													games={visible}
+													seasonId={season.id}
+													now={now}
+													limit={3}
+												/>
+											</section>
+										)}
+										<GameList
 											games={visible}
 											seasonId={season.id}
 											now={now}
-											limit={3}
+											empty={noGames}
 										/>
-									</section>
+									</>
 								)}
-								<GameList
-									games={visible}
-									seasonId={season.id}
-									now={now}
-								/>
 							</>
 						)
 					}}

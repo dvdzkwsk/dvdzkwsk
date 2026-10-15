@@ -1,9 +1,9 @@
 ---
 name: run-khl
-description: Launch and drive the KHL Live app (projects/khl) locally - start the API server and Vite client on isolated ports, hit /api routes with curl, and take headless Chrome screenshots of pages at desktop and narrow widths. Use when asked to run, start, smoke-test or screenshot the KHL app, or to confirm a KHL change works in the real app.
+description: Launch and drive the KHL+ app (projects/khl) locally - start the API server and Vite client on isolated ports, hit /api routes with curl, and take headless Chrome screenshots of pages at desktop and narrow widths. Use when asked to run, start, smoke-test or screenshot the KHL app, or to confirm a KHL change works in the real app.
 ---
 
-# Run KHL Live
+# Run KHL+
 
 Two processes: the Express API (`src/server/Server.ts`, run with bun) and the
 Vite dev client (`vite.config.js`, proxies `/api` to `KHL_API_PORT`). Both

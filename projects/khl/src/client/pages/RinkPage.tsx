@@ -1,27 +1,23 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import {Helmet} from "react-helmet"
-import {GET_RINK_ENDPOINT, RinkGame} from "../../shared/ApiJson.js"
+import {GET_RINK_ENDPOINT} from "../../shared/ApiJson.js"
 import {STRINGS} from "../../shared/KHLConfig.js"
 import {
 	AsyncContent,
-	HomeAwayBadge,
+	Hint,
 	Link,
 	LiveBarnBadge,
 	NotOnLiveBarn,
 	PageShell,
-	StatsTable,
-	TeamLink,
 } from "../Components.js"
-import {GameSummary, getDivisionLabel, getRinkStatus} from "../Games.js"
 import {
-	formatGameDay,
-	formatGameTime,
-	Route,
-	RouteProps,
-	useAsync,
-	useNow,
-} from "../Util.js"
+	GameSummary,
+	GameTable,
+	getRinkStatus,
+	toGameTableRow,
+} from "../Games.js"
+import {Route, RouteProps, useAsync, useNow} from "../Util.js"
 
 // --- /rinks/:arenaId: one rink and its upcoming games
 
@@ -35,8 +31,8 @@ const RinkPage = ({params}: RouteProps) => {
 
 	return (
 		<PageShell>
-			<AsyncContent state={state}>
-				{({rink, address, season}) => {
+			<AsyncContent state={state} loadingLabel="Loading rink details…">
+				{({rink, address, season, recent}) => {
 					const status = getRinkStatus(rink, now)
 					return (
 						<div className="RinkRoute">
@@ -57,13 +53,16 @@ const RinkPage = ({params}: RouteProps) => {
 									</h1>
 									{address && (
 										<address className="RinkRoute-address">
-											<Link
-												className="RinkRoute-address-link"
-												href={getDirectionsUrl(address)}
-												title="Open in Google Maps"
-											>
-												{address} ↗
-											</Link>
+											<Hint label="Open in Google Maps">
+												<Link
+													className="RinkRoute-address-link"
+													href={getDirectionsUrl(
+														address,
+													)}
+												>
+													{address} ↗
+												</Link>
+											</Hint>
 										</address>
 									)}
 									<div className="RinkRoute-livebarn">
@@ -111,6 +110,37 @@ const RinkPage = ({params}: RouteProps) => {
 								</div>
 							</section>
 
+							{recent.length > 0 && (
+								<section className="RinkRoute-panel">
+									<h2 className="RinkRoute-section-title SectionLabel">
+										Recent games
+									</h2>
+									<GameTable
+										rows={recent.map(
+											({game, livebarn}) => ({
+												...toGameTableRow(
+													{rink, game},
+													season.id,
+													now,
+												),
+												// Finished: replays instead of the live feed
+												livebarn: livebarn.map(
+													(link) => ({
+														surfaceId:
+															link.surfaceId,
+														href: link.vodUrl,
+														title: `Watch the replay on LiveBarn (${link.surfaceName})`,
+													}),
+												),
+											}),
+										)}
+										now={now}
+										showDay
+										showRink={false}
+									/>
+								</section>
+							)}
+
 							<section className="RinkRoute-panel">
 								<h2 className="RinkRoute-section-title SectionLabel">
 									Upcoming games
@@ -120,65 +150,17 @@ const RinkPage = ({params}: RouteProps) => {
 										No games scheduled.
 									</p>
 								) : (
-									<StatsTable<RinkGame>
-										rows={rink.games}
-										rowKey={(game) => game.gameId}
-										rowClassName={(game) =>
-											game === status.live
-												? "RinkRoute-live-row"
-												: undefined
-										}
-										columns={[
-											{
-												header: "Day",
-												isLabel: true,
-												render: (game) =>
-													formatGameDay(
-														game.startsAt,
-														now,
-													),
-											},
-											{
-												header: "Time",
-												isLabel: true,
-												render: (game) =>
-													formatGameTime(
-														game.startsAt,
-													),
-											},
-											{
-												header: "Matchup",
-												isLabel: true,
-												render: (game) => (
-													<span className="RinkRoute-matchup">
-														<HomeAwayBadge
-															homeAway="away"
-															truncated
-														/>
-														<TeamLink
-															team={game.awayTeam}
-															seasonId={season.id}
-														/>
-														<span className="RinkRoute-at">
-															@
-														</span>
-														<HomeAwayBadge
-															homeAway="home"
-															truncated
-														/>
-														<TeamLink
-															team={game.homeTeam}
-															seasonId={season.id}
-														/>
-													</span>
-												),
-											},
-											{
-												header: "Division",
-												isLabel: true,
-												render: getDivisionLabel,
-											},
-										]}
+									<GameTable
+										rows={rink.games.map((game) =>
+											toGameTableRow(
+												{rink, game},
+												season.id,
+												now,
+											),
+										)}
+										now={now}
+										showDay
+										showRink={false}
 									/>
 								)}
 							</section>

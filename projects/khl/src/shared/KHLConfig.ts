@@ -1,7 +1,14 @@
 /** App-wide settings, shared by the server and client. */
 
 export const STRINGS = {
-	PRODUCT_NAME: "KHL Live",
+	PRODUCT_NAME: "KHL+",
+	/** Our game page's result: its tab, and links to it */
+	GAME_RESULT: "Result",
+	/** Links to the league's official scoresheet */
+	KHL_SCORESHEET: "KHL Scoresheet",
+	/** A finished (or past) game whose scoresheet isn't up yet */
+	SCORESHEET_NOT_POSTED:
+		"The league hasn't posted a scoresheet for this game yet.",
 }
 
 export const URLS = {
@@ -28,6 +35,8 @@ export const LIMITS = {
 	 * only the most recent seasons both teams played are searched.
 	 */
 	HEAD_TO_HEAD_SEASONS: 10,
+	/** How many results a game page's "Last 5" form shows */
+	GAME_RECENT_GAMES: 5,
 	/** How many results a matchup's "Last 10" form shows */
 	MATCHUP_RECENT_GAMES: 10,
 	/** How many of a season's meetings a matchup's head-to-head row shows */

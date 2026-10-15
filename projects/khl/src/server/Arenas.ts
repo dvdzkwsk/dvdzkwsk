@@ -92,6 +92,7 @@ export const KHL_ARENA_LIVEBARN_SURFACES: Record<string, ArenaMapping> = {
 	},
 	"18": {
 		khlArenaName: "Everett Comm Ice Rink",
+		displayName: "Everett Community Ice",
 		city: "everett-wa",
 		livebarnSurfaces: [
 			{
@@ -130,6 +131,7 @@ export const KHL_ARENA_LIVEBARN_SURFACES: Record<string, ArenaMapping> = {
 	},
 	"23": {
 		khlArenaName: "Winthrop Ice and Sports Rink",
+		displayName: "Winthrop Ice and Sports",
 		city: "winthrop-wa",
 		livebarnSurfaces: [],
 	},
@@ -172,6 +174,7 @@ export const KHL_ARENA_LIVEBARN_SURFACES: Record<string, ArenaMapping> = {
 	},
 	"28": {
 		khlArenaName: "KCI Starbucks Rink",
+		displayName: "KCI Starbucks",
 		city: "seattle-wa",
 		livebarnSurfaces: [
 			{
@@ -183,6 +186,7 @@ export const KHL_ARENA_LIVEBARN_SURFACES: Record<string, ArenaMapping> = {
 	},
 	"29": {
 		khlArenaName: "KCI Smartsheet Rink",
+		displayName: "KCI Smartsheet",
 		city: "seattle-wa",
 		livebarnSurfaces: [
 			{surfaceId: 2271, venueName: KCI, surfaceName: "Smartsheet Rink"},
@@ -190,6 +194,7 @@ export const KHL_ARENA_LIVEBARN_SURFACES: Record<string, ArenaMapping> = {
 	},
 	"30": {
 		khlArenaName: "KCI VMFH Rink",
+		displayName: "KCI VMFH",
 		city: "seattle-wa",
 		livebarnSurfaces: [
 			{
@@ -212,9 +217,13 @@ export const KHL_ARENA_LIVEBARN_SURFACES: Record<string, ArenaMapping> = {
 	},
 }
 
-/** What to call an arena: its display name, else the name KHL gave it. */
+/**
+ * What to call an arena: its display name, else its full KHL name. Schedules
+ * often abbreviate it ("OVA", "KVIC"), so the passed name comes last.
+ */
 export function getArenaName(arena: KHLArenaRef): string {
-	return KHL_ARENA_LIVEBARN_SURFACES[arena.id]?.displayName ?? arena.name
+	const mapping = KHL_ARENA_LIVEBARN_SURFACES[arena.id]
+	return mapping?.displayName ?? mapping?.khlArenaName ?? arena.name
 }
 
 /** `arena` renamed for display, for passing KHL data through to clients. */

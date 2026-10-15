@@ -19,12 +19,14 @@ import {
 	StatsTableColumn,
 	TeamAvatar,
 	TeamLink,
+	Warnings,
 } from "../Components.js"
 import {GameCards, PastGames} from "../Games.js"
 import {AppContext, Route, RouteProps, useAsync, useNow} from "../Util.js"
 
 /** Keeps upcoming games to one row of cards */
 const MAX_UPCOMING_GAMES = 3
+const MAX_PAST_GAMES = 20
 
 const PlayerPage = ({params, query}: RouteProps) => {
 	const {history} = React.useContext(AppContext)
@@ -49,7 +51,11 @@ const PlayerPage = ({params, query}: RouteProps) => {
 
 	return (
 		<PageShell>
-			<AsyncContent state={state}>
+			<AsyncContent
+				state={state}
+				loadingLabel="Loading player details…"
+				slowNote="Still working. The first time a player's details load, it can take a little extra time."
+			>
 				{(player) => {
 					const selected =
 						player.registrations.find(
@@ -80,11 +86,48 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									{player.name} | {STRINGS.PRODUCT_NAME}
 								</title>
 							</Helmet>
-							<PlayerHeader
-								player={player}
-								selected={selected}
-								onSelectTeam={selectTeam}
-							/>
+							{player.registrations.length > 1 && (
+								<div className="Detail-toolbar">
+									<PlayerTeamPicker
+										player={player}
+										selected={selected}
+										onSelectTeam={selectTeam}
+									/>
+								</div>
+							)}
+							<PlayerHeader player={player} />
+							{player.unavailableSchedules.length > 0 && (
+								<Warnings
+									summary={`${
+										player.unavailableSchedules.length === 1
+											? "A schedule"
+											: `${player.unavailableSchedules.length} schedules`
+									} couldn't be loaded, so some past games are missing`}
+									detail={`The league's site returned an error for ${
+										player.unavailableSchedules.length === 1
+											? "this schedule, so its"
+											: "these schedules, so their"
+									} games aren't in Past games. Season and career totals come from the player's stats and aren't affected.`}
+									items={player.unavailableSchedules.map(
+										(schedule) => ({
+											key: `${schedule.teamId}:${schedule.seasonId}`,
+											label: (
+												<TeamLink
+													team={{
+														id: schedule.teamId,
+														name: schedule.teamName,
+													}}
+													seasonId={schedule.seasonId}
+												/>
+											),
+											meta:
+												schedule.seasonName ??
+												`Season ${schedule.seasonId}`,
+										}),
+									)}
+									onRetry={state.reload}
+								/>
+							)}
 							<section>
 								<h2
 									className={cx(
@@ -105,9 +148,12 @@ const PlayerPage = ({params, query}: RouteProps) => {
 								key={selected?.khlPlayerId ?? "all"}
 								games={games}
 								now={now}
-								showTeam={
-									!selected && player.registrations.length > 1
+								getTeamLogoUrl={(teamId) =>
+									player.registrations.find(
+										(r) => r.teamId === teamId,
+									)?.teamLogoUrl ?? null
 								}
+								limit={MAX_PAST_GAMES}
 							/>
 							<PlayerStats player={player} selected={selected} />
 						</div>
@@ -162,7 +208,8 @@ function sumStat(
 	}, 0)
 }
 
-const PlayerHeader = ({
+/** Which of the player's teams to show: all of them, or one */
+const PlayerTeamPicker = ({
 	player,
 	selected,
 	onSelectTeam,
@@ -175,6 +222,30 @@ const PlayerHeader = ({
 		return isCurrentRegistration(player, r)
 	})
 	const past = player.registrations.filter((r) => !current.includes(r))
+	return (
+		<Picker
+			groups={[
+				{
+					label: "",
+					items: [{value: ALL_TEAMS, label: "All teams"}],
+				},
+				{label: "Current", items: current.map(toTeamItem)},
+				{label: "Past", items: past.map(toTeamItem)},
+			].filter((group) => group.items.length > 0)}
+			value={selected?.khlPlayerId ?? ALL_TEAMS}
+			onChange={(value) =>
+				onSelectTeam(value === ALL_TEAMS ? null : value)
+			}
+			placeholder="Team"
+			className="Detail-select"
+		/>
+	)
+}
+
+const PlayerHeader = ({player}: {player: PlayerResponse}) => {
+	const current = player.registrations.filter((r) => {
+		return isCurrentRegistration(player, r)
+	})
 	const numbers = [
 		...new Set(current.flatMap((r) => r.profile?.number ?? [])),
 	]
@@ -187,72 +258,86 @@ const PlayerHeader = ({
 		const gp = sumStat(registrations, "Games Played", section)
 		const g = sumStat(registrations, "Goals", section)
 		const a = sumStat(registrations, "Assists", section)
-		return `${gp} GP · ${g} G · ${a} A · ${g + a} PTS`
+		return {GP: gp, G: g, A: a, PTS: g + a}
 	}
 
 	return (
 		<header className="Detail-header Detail-header--player">
-			<div className="Detail-heading">
-				<h1 className="Detail-name">{player.name}</h1>
-				<div className="Detail-meta">
-					{[numbers.map((n) => `#${n}`).join(" / "), position]
-						.filter(Boolean)
-						.map((text) => (
-							<span key={text}>{text}</span>
-						))}
-				</div>
-				<div className="Detail-totals">
-					{current.length > 0 && (
-						<span>
-							<span className="Detail-meta-hint">
-								This season{" "}
+			<div className="PlayerHero">
+				<div className="PlayerHero-identity">
+					<h1 className="PlayerHero-name">
+						{player.name}
+						{numbers.length > 0 && (
+							<span className="PlayerHero-number">
+								{numbers.map((n) => `#${n}`).join(" / ")}
 							</span>
-							{totals(current, 0)}
-						</span>
+						)}
+					</h1>
+					<div className="PlayerHero-bio">
+						{position && (
+							<span className="PlayerHero-position">
+								{position}
+							</span>
+						)}
+						{current.map((r) => (
+							<span
+								key={r.khlPlayerId}
+								className="PlayerHero-team"
+							>
+								<TeamAvatar
+									name={r.teamName}
+									logoUrl={r.teamLogoUrl}
+									size={20}
+								/>
+								<TeamLink
+									team={{id: r.teamId, name: r.teamName}}
+									seasonId={player.currentSeason.id}
+								/>
+								{getDivision(r) && (
+									<span className="PlayerHero-division">
+										{getDivision(r)}
+									</span>
+								)}
+							</span>
+						))}
+					</div>
+				</div>
+				<div className="PlayerHero-stats">
+					{current.length > 0 && (
+						<StatGroup
+							label="This season"
+							stats={totals(current, 0)}
+						/>
 					)}
-					<span>
-						<span className="Detail-meta-hint">Career </span>
-						{totals(player.registrations, "Career Stats")}
-					</span>
+					<StatGroup
+						label="Career"
+						stats={totals(player.registrations, "Career Stats")}
+					/>
 				</div>
 			</div>
-
-			{player.registrations.length > 1 && (
-				<Picker
-					groups={[
-						{
-							label: "",
-							items: [{value: ALL_TEAMS, label: "All teams"}],
-						},
-						{label: "Current", items: current.map(toTeamItem)},
-						{label: "Past", items: past.map(toTeamItem)},
-					].filter((group) => group.items.length > 0)}
-					value={selected?.khlPlayerId ?? ALL_TEAMS}
-					onChange={(value) =>
-						onSelectTeam(value === ALL_TEAMS ? null : value)
-					}
-					placeholder="Team"
-					className="Detail-select"
-				/>
-			)}
-
-			{player.unavailableSchedules.length > 0 && (
-				<p className="Detail-note">
-					The KHL site couldn't load{" "}
-					{player.unavailableSchedules.length === 1
-						? "one schedule"
-						: `${player.unavailableSchedules.length} schedules`}
-					, so those games are missing:{" "}
-					{player.unavailableSchedules
-						.map(
-							(s) =>
-								`${s.teamName} (${s.seasonName ?? `season ${s.seasonId}`})`,
-						)
-						.join(", ")}
-					.
-				</p>
-			)}
 		</header>
+	)
+}
+
+const StatGroup = ({
+	label,
+	stats,
+}: {
+	label: string
+	stats: Record<string, number>
+}) => {
+	return (
+		<section className="PlayerHero-group" aria-label={label}>
+			<h2 className="PlayerHero-group-label">{label}</h2>
+			<dl className="PlayerHero-group-stats">
+				{Object.entries(stats).map(([name, value]) => (
+					<div key={name} className="PlayerHero-stat">
+						<dt>{name}</dt>
+						<dd>{value}</dd>
+					</div>
+				))}
+			</dl>
+		</section>
 	)
 }
 
@@ -349,6 +434,9 @@ const PlayerStats = ({
 							{
 								header: "Season",
 								isLabel: true,
+								// Season ids count up, so newest first
+								sortValue: (row) => Number(row.seasonId),
+								sortAscendingFirst: false,
 								render: (row) => row.seasonName,
 							},
 							{
@@ -418,13 +506,20 @@ const StatsByTeam = ({
 				row.kind === "total" ? (
 					"Total"
 				) : (
-					<TeamLink
-						team={{
-							id: row.registration.teamId,
-							name: row.registration.teamName,
-						}}
-						seasonId={row.registration.seasonIds.at(-1)!}
-					/>
+					<span className="StatsTable-team">
+						<TeamAvatar
+							name={row.registration.teamName}
+							logoUrl={row.registration.teamLogoUrl}
+							size={24}
+						/>
+						<TeamLink
+							team={{
+								id: row.registration.teamId,
+								name: row.registration.teamName,
+							}}
+							seasonId={row.registration.seasonIds.at(-1)!}
+						/>
+					</span>
 				),
 		},
 		{

@@ -1,23 +1,19 @@
 import * as React from "react"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {
-	GET_STANDINGS_ENDPOINT,
-	LIST_TEAMS_ENDPOINT,
-	StandingsResponse,
-} from "../../shared/ApiJson.js"
-import {KHLStandingsRow, KHLTeam} from "../../shared/KHLJson.js"
+import {GET_STANDINGS_ENDPOINT} from "../../shared/ApiJson.js"
+import {KHLStandingsDivision, KHLStandingsRow} from "../../shared/KHLJson.js"
 import {
 	AsyncContent,
-	FilterBar,
-	Link,
 	PageShell,
 	SeasonFilter,
+	StatsTable,
+	StatsTableColumn,
 	TeamAvatar,
+	TeamLink,
 } from "../Components.js"
-import {DivisionFilter, sortByDivision} from "../Games.js"
+import {DivisionMenu, sortByDivision} from "../Games.js"
 import {
-	getTeamHref,
 	getVisibleDivisions,
 	Route,
 	RouteProps,
@@ -25,90 +21,63 @@ import {
 	useSeasonFilters,
 } from "../Util.js"
 
-/** Every team in a season, by division, filterable by season and division. */
+/** Every division's standings, filterable by season and division. */
 const TeamsPage = ({query}: RouteProps) => {
 	const [filters, setFilters] = useSeasonFilters(query)
 	const state = useAsync(
 		() =>
-			Promise.all([
-				doRequest(LIST_TEAMS_ENDPOINT, {
-					season: filters.season ?? undefined,
-				}),
-				// Records are a nice-to-have; list the teams without them
-				doRequest(GET_STANDINGS_ENDPOINT, {
-					season: filters.season ?? undefined,
-				}).catch(() => null),
-			]),
+			doRequest(GET_STANDINGS_ENDPOINT, {
+				season: filters.season ?? undefined,
+			}),
 		[filters.season],
 	)
 
 	return (
 		<PageShell>
 			<div className="HomePage">
-				<AsyncContent state={state}>
-					{([teams, standings]) => {
-						const names = teams.divisions.map((d) => d.name)
+				<AsyncContent state={state} loadingLabel="Loading standings…">
+					{(standings) => {
+						const names = standings.divisions.map((d) => d.name)
 						const visible = getVisibleDivisions(
 							names,
 							filters.divisions,
 						)
-						const records = getRecords(standings)
 						return (
 							<>
-								<FilterBar>
-									<SeasonFilter
-										seasons={teams.seasons}
-										value={teams.season.id}
-										onChange={(season) =>
-											setFilters({season})
-										}
-									/>
-									<DivisionFilter
+								<div className="FilterToolbar">
+									<span className="FilterToolbar-spacer" />
+									<DivisionMenu
 										divisions={names}
 										selected={filters.divisions}
 										onChange={(divisions) =>
 											setFilters({divisions})
 										}
 									/>
-								</FilterBar>
-								{teams.divisions.length === 0 && (
+									<SeasonFilter
+										seasons={standings.seasons}
+										value={standings.season.id}
+										onChange={(season) =>
+											setFilters({season})
+										}
+									/>
+								</div>
+								{standings.divisions.length === 0 && (
 									<div className="GameList-empty">
-										No teams in {teams.season.name}.
+										No standings for {standings.season.name}
+										.
 									</div>
 								)}
-								{sortByDivision(teams.divisions, (d) => d.name)
+								{sortByDivision(
+									standings.divisions,
+									(d) => d.name,
+								)
 									.filter((d) => visible.has(d.name))
 									.map((division) => (
-										<section key={division.name}>
-											<h2
-												className={cx(
-													"SectionLabel",
-													"HomePage-section-title",
-												)}
-											>
-												{division.name} ·{" "}
-												{division.teams.length}{" "}
-												{division.teams.length === 1
-													? "team"
-													: "teams"}
-											</h2>
-											<ul className="TeamsGrid">
-												{division.teams.map((team) => (
-													<TeamCard
-														key={team.id}
-														team={team}
-														// Teams without a row haven't played
-														record={
-															records
-																? (records.get(
-																		team.id,
-																	) ?? null)
-																: undefined
-														}
-													/>
-												))}
-											</ul>
-										</section>
+										<DivisionStandings
+											key={division.name}
+											division={division}
+											seasonId={standings.season.id}
+										/>
 									))}
 							</>
 						)
@@ -119,57 +88,81 @@ const TeamsPage = ({query}: RouteProps) => {
 	)
 }
 
-/** Standings rows by team id; null if the standings didn't load */
-function getRecords(
-	standings: StandingsResponse | null,
-): Map<string, KHLStandingsRow> | null {
-	if (!standings) {
-		return null
-	}
-	const rows = standings.divisions.flatMap((d) => d.rows)
-	return new Map(rows.map((row) => [row.teamId, row]))
+/** Tooltips for the league's column abbreviations */
+const COLUMN_TITLES: Record<string, string> = {
+	GP: "Games played",
+	W: "Wins",
+	L: "Losses",
+	T: "Ties",
+	OTL: "Overtime losses",
+	PTS: "Points",
+	"PTS%": "Points percentage",
+	GF: "Goals for",
+	GFA: "Goals for per game",
+	GA: "Goals against",
+	GAA: "Goals against per game",
+	PIM: "Penalty minutes",
 }
 
-const TeamCard = ({
-	team,
-	record,
+interface RankedRow {
+	rank: number
+	row: KHLStandingsRow
+}
+
+const DivisionStandings = ({
+	division,
+	seasonId,
 }: {
-	team: KHLTeam
-	/** Null if the team hasn't played; undefined if records didn't load */
-	record: KHLStandingsRow | null | undefined
+	division: KHLStandingsDivision
+	seasonId: string
 }) => {
-	const stat = (column: string) => record?.stats[column] ?? "0"
-	const played = Number(stat("GP")) > 0
-	return (
-		<li>
-			<Link className="TeamCard" href={getTeamHref(team)}>
-				<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={40} />
-				<span className="TeamCard-body">
-					<span className="TeamCard-name">{team.name}</span>
-					{record !== undefined && (
-						<span className="TeamCard-record">
-							{played ? (
-								<>
-									{stat("W")}-{stat("L")}-{stat("T")}
-									<span className="Detail-meta-hint">
-										{" "}
-										W-L-T
-									</span>
-									{" · "}
-									{stat("PTS")}
-									<span className="Detail-meta-hint">
-										{" "}
-										PTS
-									</span>
-								</>
-							) : (
-								"No games yet"
-							)}
-						</span>
-					)}
+	const columns: StatsTableColumn<RankedRow>[] = [
+		{
+			header: "Team",
+			isLabel: true,
+			// The cell leads with the rank; sort by the name
+			sortValue: ({row}) => row.teamName.toLowerCase(),
+			render: ({rank, row}) => (
+				<span className="Standings-team">
+					<span className="Standings-rank">{rank}</span>
+					<TeamAvatar
+						name={row.teamName}
+						logoUrl={row.logoUrl}
+						size={24}
+					/>
+					<TeamLink
+						className="Standings-team-name"
+						team={{id: row.teamId, name: row.teamName}}
+						seasonId={seasonId}
+					/>
 				</span>
-			</Link>
-		</li>
+			),
+		},
+		...division.columns.map((column): StatsTableColumn<RankedRow> => ({
+			header: column,
+			title: COLUMN_TITLES[column],
+			render: ({row}) =>
+				column === "PTS" ? (
+					<strong>{row.stats[column]}</strong>
+				) : (
+					row.stats[column]
+				),
+		})),
+	]
+	return (
+		<section className="Detail-panel">
+			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
+				{division.name}
+			</h2>
+			<div className="Standings-table">
+				<StatsTable
+					columns={columns}
+					// Listed by rank
+					rows={division.rows.map((row, i) => ({rank: i + 1, row}))}
+					rowKey={({row}) => row.teamId}
+				/>
+			</div>
+		</section>
 	)
 }
 

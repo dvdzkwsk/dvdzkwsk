@@ -8,30 +8,27 @@ import {
 	LIST_TEAMS_ENDPOINT,
 	MatchupResponse,
 	MatchupTeam,
-	RosterPlayer,
 	TeamsResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeason, KHLTeam} from "../../shared/KHLJson.js"
-import {LIMITS, STRINGS} from "../../shared/KHLConfig.js"
+import {STRINGS} from "../../shared/KHLConfig.js"
 import {
 	AsyncContent,
 	ErrorState,
-	Link,
+	Hint,
 	PageShell,
 	Picker,
 	RosterPanels,
 	RosterTables,
 	TeamAvatar,
-	TeamLink,
+	TopScorers,
 } from "../Components.js"
+import {Comparison} from "../Compare.js"
 import {GameCards, HeadToHead} from "../Games.js"
 import {
 	AppContext,
 	AsyncState,
-	formatGameDate,
-	formatScore,
-	getGameHref,
-	getPlayerHref,
+	getShortSeasonName,
 	Route,
 	RouteProps,
 	useAsync,
@@ -100,6 +97,7 @@ const MatchupPage = ({query}: RouteProps) => {
 				</Helmet>
 				<header className={cx("Detail-header", "Matchup-header")}>
 					<MatchupSide
+						side="a"
 						teams={teamsA}
 						team={teamA}
 						teamSeasons={seasonsA}
@@ -113,24 +111,27 @@ const MatchupPage = ({query}: RouteProps) => {
 					/>
 					<div className="Matchup-center">
 						<span className="Matchup-vs">vs</span>
-						<button
-							type="button"
-							className="FilterPill"
-							disabled={!a && !b && !aSeason && !bSeason}
-							onClick={() =>
-								setParams({
-									a: b,
-									aSeason: bSeason,
-									b: a,
-									bSeason: aSeason,
-								})
-							}
-							title="Swap sides"
-						>
-							⇄ Swap
-						</button>
+						<Hint label="Swap sides">
+							<button
+								type="button"
+								className="Matchup-swap"
+								aria-label="Swap sides"
+								disabled={!a && !b && !aSeason && !bSeason}
+								onClick={() =>
+									setParams({
+										a: b,
+										aSeason: bSeason,
+										b: a,
+										bSeason: aSeason,
+									})
+								}
+							>
+								<SwapIcon />
+							</button>
+						</Hint>
 					</div>
 					<MatchupSide
+						side="b"
 						teams={teamsB}
 						team={teamB}
 						teamSeasons={seasonsB}
@@ -145,11 +146,7 @@ const MatchupPage = ({query}: RouteProps) => {
 				{ready ? (
 					<MatchupContent state={matchup} now={now} />
 				) : (
-					<p className="Detail-empty">
-						Pick a team and season on each side to compare their
-						records, head-to-head history, and leaders. Pick the
-						same team twice to compare two of its seasons.
-					</p>
+					<MatchupEmpty />
 				)}
 			</div>
 		</PageShell>
@@ -212,7 +209,11 @@ const MatchupContent = ({
 	now: Date
 }) => {
 	return (
-		<AsyncContent state={state} errorTitle="Couldn't load this matchup">
+		<AsyncContent
+			state={state}
+			loadingLabel="Loading matchup details…"
+			errorTitle="Couldn't load this matchup"
+		>
 			{(matchup) => {
 				if (!matchup) {
 					return null
@@ -248,7 +249,19 @@ const MatchupContent = ({
 								now={now}
 							/>
 						)}
-						<TopScorers matchup={matchup} />
+						<TopScorers
+							title="Top scorers"
+							teams={[
+								{
+									name: matchup.a.team.name,
+									roster: matchup.a.roster,
+								},
+								{
+									name: matchup.b.team.name,
+									roster: matchup.b.roster,
+								},
+							]}
+						/>
 						<RosterPanels
 							teams={[matchup.a, matchup.b].map((side) => ({
 								team: side.team,
@@ -266,11 +279,9 @@ const MatchupContent = ({
 	)
 }
 
-/** How many skaters each side of "Top scorers" lists */
-const TOP_SCORERS = 3
-
 /** One side's season and team pickers, logo and record. */
 const MatchupSide = ({
+	side,
 	teams,
 	team,
 	teamSeasons,
@@ -279,6 +290,8 @@ const MatchupSide = ({
 	onTeamChange,
 	onSeasonChange,
 }: {
+	/** Which color the side is keyed with in the comparison below */
+	side: "a" | "b"
 	teams: AsyncState<TeamsResponse>
 	team: KHLTeam | null
 	/** The seasons `team` played; null while loading or without a team */
@@ -291,7 +304,7 @@ const MatchupSide = ({
 }) => {
 	if (teams.status === "error") {
 		return (
-			<div className="Matchup-side">
+			<div className={cx("Matchup-side", `Matchup-side--${side}`)}>
 				<ErrorState
 					title="Couldn't load this season's teams"
 					error={teams.error}
@@ -303,12 +316,18 @@ const MatchupSide = ({
 	}
 	const data = teams.status === "success" ? teams.data : null
 	return (
-		<div className="Matchup-side">
-			<TeamAvatar
-				name={team?.name ?? "?"}
-				logoUrl={team?.logoUrl ?? null}
-				size={64}
-			/>
+		<div className={cx("Matchup-side", `Matchup-side--${side}`)}>
+			<span className="Matchup-label">
+				<span className="Compare-key" aria-hidden />
+				Team {side === "a" ? 1 : 2}
+			</span>
+			{team ? (
+				<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={72} />
+			) : (
+				<span className="Matchup-placeholder" aria-hidden>
+					<ShieldIcon />
+				</span>
+			)}
 			<TeamPicker
 				teams={data}
 				value={team}
@@ -338,7 +357,6 @@ const MatchupSide = ({
 					<span>{stats.divisionName}</span>
 					<span>
 						{stats.wins}-{stats.losses}-{stats.ties}
-						<span className="Detail-meta-hint"> W-L-T</span>
 					</span>
 				</div>
 			)}
@@ -370,11 +388,109 @@ const SeasonPicker = ({
 			]}
 			value={teams?.season.id ?? null}
 			onChange={onChange}
+			triggerLabel={teams && getShortSeasonName(teams.season.name)}
 			placeholder="Loading seasons…"
 			disabled={!teams}
 			className={cx("Matchup-picker", "Matchup-season")}
 			title={teams?.season.name}
 		/>
+	)
+}
+
+/** Before both teams are picked: what the page will show once they are. */
+const MatchupEmpty = () => {
+	return (
+		<section className="Matchup-empty">
+			<h2 className="Matchup-empty-title">Compare any two teams</h2>
+			<p className="Matchup-empty-text">
+				Pick a team and season on each side.
+			</p>
+			<ul className="Matchup-features">
+				<li className="Matchup-feature">
+					<ChartIcon />
+					<span>
+						<span className="Matchup-feature-title">
+							Season stats
+						</span>
+						Record, goals for and against, form and streaks, side by
+						side.
+					</span>
+				</li>
+				<li className="Matchup-feature">
+					<SwapIcon />
+					<span>
+						<span className="Matchup-feature-title">
+							Head-to-head
+						</span>
+						Every meeting between the two teams, across seasons.
+					</span>
+				</li>
+				<li className="Matchup-feature">
+					<PlayersIcon />
+					<span>
+						<span className="Matchup-feature-title">
+							Leaders and rosters
+						</span>
+						Each team's top scorers and full roster.
+					</span>
+				</li>
+			</ul>
+			<p className="Matchup-tip">
+				Tip: pick the same team on both sides to compare two of its
+				seasons.
+			</p>
+		</section>
+	)
+}
+
+const ICON_PROPS = {
+	viewBox: "0 0 24 24",
+	fill: "none",
+	stroke: "currentColor",
+	strokeWidth: 1.75,
+	strokeLinecap: "round",
+	strokeLinejoin: "round",
+	"aria-hidden": true,
+} as const
+
+const SwapIcon = () => {
+	return (
+		<svg {...ICON_PROPS}>
+			<path d="M7 4 3 8l4 4" />
+			<path d="M3 8h14" />
+			<path d="m17 20 4-4-4-4" />
+			<path d="M21 16H7" />
+		</svg>
+	)
+}
+
+const ShieldIcon = () => {
+	return (
+		<svg {...ICON_PROPS}>
+			<path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
+		</svg>
+	)
+}
+
+const ChartIcon = () => {
+	return (
+		<svg {...ICON_PROPS}>
+			<path d="M4 20V10" />
+			<path d="M10 20V4" />
+			<path d="M16 20v-7" />
+			<path d="M22 20H2" />
+		</svg>
+	)
+}
+
+const PlayersIcon = () => {
+	return (
+		<svg {...ICON_PROPS}>
+			<circle cx="9" cy="8" r="3.5" />
+			<path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5" />
+			<path d="M16 4.7a3.5 3.5 0 0 1 0 6.6" />
+			<path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" />
+		</svg>
 	)
 }
 
@@ -413,447 +529,6 @@ const TeamPicker = ({
 			disabled={!teams}
 			className="Matchup-picker"
 		/>
-	)
-}
-
-/** Which side a stat favors: more is better, less is better, or neither. */
-type Better = "higher" | "lower" | null
-
-type Side = "a" | "b"
-
-interface ComparisonStat {
-	label: string
-	get: (team: MatchupTeam) => number
-	format: (value: number) => string
-	better: Better
-	/** Draw bars; only for counts and rates, which can't be negative */
-	bar: boolean
-}
-
-const perGame = (total: (t: MatchupTeam) => number) => (t: MatchupTeam) =>
-	t.gamesPlayed > 0 ? total(t) / t.gamesPlayed : 0
-
-const RECORD_STATS: ComparisonStat[] = [
-	{
-		label: "Wins",
-		get: (t) => t.wins,
-		format: String,
-		better: "higher",
-		bar: true,
-	},
-	{
-		label: "Losses",
-		get: (t) => t.losses,
-		format: String,
-		better: "lower",
-		bar: true,
-	},
-	{
-		label: "Ties",
-		get: (t) => t.ties,
-		format: String,
-		better: null,
-		bar: true,
-	},
-]
-
-const GOAL_STATS: ComparisonStat[] = [
-	{
-		label: "For / game",
-		get: perGame((t) => t.goalsFor),
-		format: (v) => v.toFixed(2),
-		better: "higher",
-		bar: true,
-	},
-	{
-		label: "Against / game",
-		get: perGame((t) => t.goalsAgainst),
-		format: (v) => v.toFixed(2),
-		better: "lower",
-		bar: true,
-	},
-	{
-		label: "Differential",
-		get: (t) => t.goalsFor - t.goalsAgainst,
-		format: (v) => (v > 0 ? `+${v}` : String(v)),
-		better: "higher",
-		bar: false,
-	},
-]
-
-/**
- * The two teams' seasons side by side: each row's label in the middle, each
- * team's value beside it, and bars in the team's color growing outward.
- */
-const Comparison = ({matchup}: {matchup: MatchupResponse}) => {
-	const {a, b} = matchup
-	const sameSeason = a.season.id === b.season.id
-	return (
-		<section className={cx("Detail-panel", "Compare")}>
-			<header className="Compare-head">
-				<CompareTeam side="a" team={a} />
-				<h2 className={cx("SectionLabel", "Compare-title")}>
-					{sameSeason
-						? a.season.id === matchup.currentSeason.id
-							? "Season so far"
-							: a.season.name
-						: "Seasons"}
-				</h2>
-				<CompareTeam side="b" team={b} />
-			</header>
-			<CompareGroup label="Form">
-				<CompareRow
-					label="Last 10"
-					a={<ResultChips results={a.recent} />}
-					b={<ResultChips results={b.recent} />}
-				/>
-				{a.team.id !== b.team.id && <HeadToHeadRow matchup={matchup} />}
-				<CompareRow
-					label="Streak"
-					a={<StreakChip team={a} />}
-					b={<StreakChip team={b} />}
-				/>
-			</CompareGroup>
-			<CompareGroup label="Record">
-				{RECORD_STATS.map((stat) => (
-					<StatRow key={stat.label} stat={stat} a={a} b={b} />
-				))}
-			</CompareGroup>
-			<CompareGroup label="Goals">
-				{GOAL_STATS.map((stat) => (
-					<StatRow key={stat.label} stat={stat} a={a} b={b} />
-				))}
-			</CompareGroup>
-		</section>
-	)
-}
-
-/** A team's name, logo and color key, at its side of the comparison. */
-const CompareTeam = ({side, team}: {side: Side; team: MatchupTeam}) => {
-	return (
-		<div className={cx("Compare-team", `Compare-team--${side}`)}>
-			<TeamAvatar
-				name={team.team.name}
-				logoUrl={team.team.logoUrl}
-				size={36}
-			/>
-			<div className="Compare-team-text">
-				<div className="Compare-team-name">
-					<span className="Compare-key" aria-hidden />
-					<TeamLink team={team.team} seasonId={team.team.seasonId} />
-				</div>
-				<div className="Compare-team-meta" title={team.season.name}>
-					{team.season.name} · {team.gamesPlayed} GP
-				</div>
-			</div>
-		</div>
-	)
-}
-
-const CompareGroup = ({
-	label,
-	children,
-}: {
-	label: string
-	children: React.ReactNode
-}) => {
-	return (
-		<div className="Compare-group" role="group" aria-label={label}>
-			<h3 className="Compare-group-label">{label}</h3>
-			{children}
-		</div>
-	)
-}
-
-/** One row: team A's cell, the label, team B's cell. */
-const CompareRow = ({
-	label,
-	a,
-	b,
-	title,
-}: {
-	label: string
-	a: React.ReactNode
-	b: React.ReactNode
-	/** Both values, on hover */
-	title?: string
-}) => {
-	return (
-		<div className="Compare-row" title={title}>
-			<div className={cx("Compare-cell", "Compare-cell--a")}>{a}</div>
-			<div className="Compare-label">{label}</div>
-			<div className={cx("Compare-cell", "Compare-cell--b")}>{b}</div>
-		</div>
-	)
-}
-
-const StatRow = ({
-	stat,
-	a,
-	b,
-}: {
-	stat: ComparisonStat
-	a: MatchupTeam
-	b: MatchupTeam
-}) => {
-	const valueA = stat.get(a)
-	const valueB = stat.get(b)
-	const leader: Side | null =
-		stat.better === null || valueA === valueB
-			? null
-			: valueA > valueB === (stat.better === "higher")
-				? "a"
-				: "b"
-	// Both bars share a scale, so the larger value fills its side
-	const max = Math.max(valueA, valueB)
-	const cell = (side: Side, value: number) => (
-		<>
-			<span
-				className={cx(
-					"Compare-value",
-					leader === side && "Compare-value--leader",
-				)}
-			>
-				{stat.format(value)}
-			</span>
-			{stat.bar && (
-				<span className="Compare-track" aria-hidden>
-					{max > 0 && value > 0 && (
-						<span
-							className={cx(
-								"Compare-fill",
-								leader !== null &&
-									leader !== side &&
-									"Compare-fill--trailing",
-							)}
-							style={{width: `${(value / max) * 100}%`}}
-						/>
-					)}
-				</span>
-			)}
-		</>
-	)
-	return (
-		<CompareRow
-			label={stat.label}
-			title={`${a.team.name} ${stat.format(valueA)} · ${b.team.name} ${stat.format(valueB)}`}
-			a={cell("a", valueA)}
-			b={cell("b", valueB)}
-		/>
-	)
-}
-
-interface ChipResult {
-	key: string
-	result: string
-	/** Opens the game, when the league linked it */
-	gameId?: string | null
-	/** e.g. the score, on hover */
-	title?: string
-}
-
-/** W/L/T chips, oldest first. */
-const ResultChips = ({results}: {results: (string | ChipResult)[]}) => {
-	if (results.length === 0) {
-		return <span className="Compare-empty">No games yet</span>
-	}
-	return (
-		<span className="Compare-chips">
-			{results.map((r, i) => {
-				const chip =
-					typeof r === "string" ? {key: String(i), result: r} : r
-				const className = cx(
-					"GameFeed-result",
-					`GameFeed-result--${chip.result}`,
-					"Compare-chip",
-				)
-				return chip.gameId ? (
-					<Link
-						key={chip.key}
-						href={getGameHref(chip.gameId)}
-						className={className}
-						title={chip.title}
-					>
-						{chip.result}
-					</Link>
-				) : (
-					<span
-						key={chip.key}
-						className={className}
-						title={chip.title}
-					>
-						{chip.result}
-					</span>
-				)
-			})}
-		</span>
-	)
-}
-
-const StreakChip = ({team}: {team: MatchupTeam}) => {
-	if (!team.streak) {
-		return <span className="Compare-empty">–</span>
-	}
-	const {result, count} = team.streak
-	const word = {W: "win", L: "loss", T: "tie"}[result] ?? result
-	return (
-		<span
-			className={cx(
-				"GameFeed-result",
-				`GameFeed-result--${result}`,
-				"Compare-streak",
-			)}
-			title={`${count} ${count === 1 ? word : word === "loss" ? "losses" : `${word}s`} in a row`}
-		>
-			{result}
-			{count}
-		</span>
-	)
-}
-
-/**
- * Each side's latest meetings with the other team in its own season, or a
- * note that they didn't meet.
- */
-const HeadToHeadRow = ({matchup}: {matchup: MatchupResponse}) => {
-	const {a, b, currentSeason} = matchup
-	const meetings = (
-		team: MatchupTeam,
-		opponent: MatchupTeam,
-	): ChipResult[] => {
-		return (
-			matchup.headToHead
-				// Newest first; unscored games have no result to show
-				.filter((g) => g.seasonId === team.season.id && g.goals)
-				.slice(0, LIMITS.MATCHUP_HEAD_TO_HEAD_GAMES)
-				.reverse()
-				.map((game) => {
-					const own = game.goals![team.team.id]!
-					const other = game.goals![opponent.team.id]!
-					return {
-						key: game.gameId ?? game.startsAt,
-						gameId: game.gameId,
-						result: own > other ? "W" : own < other ? "L" : "T",
-						title: `${formatScore(own, other)} on ${formatGameDate(game.startsAt, new Date())}`,
-					}
-				})
-		)
-	}
-	const meetingsA = meetings(a, b)
-	const meetingsB = meetings(b, a)
-	if (
-		meetingsA.length === 0 &&
-		meetingsB.length === 0 &&
-		a.season.id === b.season.id
-	) {
-		const when =
-			a.season.id === currentSeason.id
-				? "this season"
-				: `in ${a.season.name}`
-		return (
-			<div className={cx("Compare-row", "Compare-row--note")}>
-				<div className="Compare-label">Head-to-head</div>
-				<p className="Compare-note">
-					They haven't played each other {when}.
-				</p>
-			</div>
-		)
-	}
-	const cell = (results: ChipResult[], team: MatchupTeam) =>
-		results.length === 0 ? (
-			<span className="Compare-empty">None in {team.season.name}</span>
-		) : (
-			<ResultChips results={results} />
-		)
-	return (
-		<CompareRow
-			label="Head-to-head"
-			a={cell(meetingsA, a)}
-			b={cell(meetingsB, b)}
-		/>
-	)
-}
-
-/** Each team's top point scorers, side by side. */
-const TopScorers = ({matchup}: {matchup: MatchupResponse}) => {
-	const points = (p: RosterPlayer) => Number(p.stats["PTS"]) || 0
-	const goals = (p: RosterPlayer) => Number(p.stats["G"]) || 0
-	const top = (team: MatchupTeam) =>
-		team.roster.skaters
-			.filter((p) => points(p) > 0)
-			.sort(
-				(x, y) =>
-					points(y) - points(x) ||
-					goals(y) - goals(x) ||
-					x.name.localeCompare(y.name),
-			)
-			.slice(0, TOP_SCORERS)
-	return (
-		<section className={cx("Detail-panel", "Compare")}>
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Top scorers
-			</h2>
-			<div className="TopScorers">
-				{(["a", "b"] as const).map((side) => {
-					const team = matchup[side]
-					const players = top(team)
-					return (
-						<div
-							key={side}
-							className={cx(
-								"TopScorers-team",
-								`Compare-team--${side}`,
-							)}
-						>
-							<div className="Compare-team-name">
-								<span className="Compare-key" aria-hidden />
-								{team.team.name}
-							</div>
-							{players.length === 0 ? (
-								<p className="Compare-empty">No points yet.</p>
-							) : (
-								<ol className="TopScorers-list">
-									{players.map((p, i) => (
-										<li
-											key={p.khlPlayerId}
-											className="TopScorers-row"
-										>
-											<span className="TopScorers-rank">
-												{i + 1}
-											</span>
-											<span className="TopScorers-player">
-												<Link
-													className="TopScorers-name"
-													href={getPlayerHref(
-														p.playerId,
-													)}
-												>
-													{p.name}
-												</Link>
-												<span className="TopScorers-line">
-													{p.number &&
-														`#${p.number} · `}
-													{p.stats["G"] ?? 0} G ·{" "}
-													{p.stats["A"] ?? 0} A ·{" "}
-													{p.stats["GP"] ?? 0} GP
-												</span>
-											</span>
-											<span className="TopScorers-points">
-												{points(p)}
-												<span className="TopScorers-unit">
-													{" "}
-													PTS
-												</span>
-											</span>
-										</li>
-									))}
-								</ol>
-							)}
-						</div>
-					)
-				})}
-			</div>
-		</section>
 	)
 }
 

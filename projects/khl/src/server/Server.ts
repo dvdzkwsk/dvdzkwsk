@@ -12,6 +12,7 @@ import {
 	LIST_TEAM_SEASONS_ENDPOINT,
 	MatchupResponse,
 	MatchupTeam,
+	RecentGame,
 	TeamSeasonsResponse,
 	TeamsResponse,
 	HeadToHeadGame,
@@ -19,11 +20,15 @@ import {
 	GET_TEAM_ENDPOINT,
 	GET_RINK_ENDPOINT,
 	GET_STANDINGS_ENDPOINT,
+	LIST_GAMES_ENDPOINT,
+	GamesResponse,
 	LIST_RINKS_ENDPOINT,
 	LOG_ENDPOINT,
 	Rink,
 	RinkGame,
+	RecentRinkGame,
 	RinkInfo,
+	RinkResponse,
 	RinkTeam,
 	RosterPlayer,
 	TeamRoster,
@@ -34,6 +39,7 @@ import {
 	SEARCH_ENDPOINT,
 	UnavailableSchedule,
 	SearchResponse,
+	SeasonSummary,
 	StandingsResponse,
 	TeamResponse,
 } from "../shared/ApiJson.js"
@@ -45,12 +51,14 @@ import {
 	toDisplayArena,
 } from "./Arenas.js"
 import {getCity} from "../shared/Cities.js"
-import {LIMITS} from "../shared/KHLConfig.js"
+import {LEAGUE, LIMITS} from "../shared/KHLConfig.js"
 import {normalizePlayerName, openDatabase} from "./Database.js"
 import {
 	KHL_ALL_SEASONS,
 	getKHLArena,
 	getKHLBoxScore,
+	getKHLGameStats,
+	getKHLScoreboard,
 	getKHLLeagueSchedule,
 	getKHLTeamStats,
 	getKHLPlayer,
@@ -60,10 +68,14 @@ import {
 	searchKHLPlayers,
 } from "./KHL.js"
 import {
+	getGoalsByTeam,
 	KHLBoxScore,
 	KHLBoxScoreTeam,
 	KHLGame,
+	KHLGameTeamStats,
 	KHLLeagueGame,
+	KHLScoreboardGame,
+	KHLScoreboardTeam,
 	KHLLeagueTeam,
 	KHLRosterRow,
 	KHLTeam,
@@ -94,6 +106,7 @@ const db = openDatabase(DB_PATH)
 
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
 
 const app = express()
 
@@ -324,26 +337,33 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 		getStats(away),
 		getStats(home),
 	])
-	const [headToHead, rosters] = await Promise.all([
-		awayStats && homeStats
-			? getHeadToHead(awayStats, homeStats, currentSeason.id, {
-					excludeGameId: boxScore.gameId,
-				})
-			: [],
-		// Once there's a box score it lists who actually played
-		!boxScore.hasSummary && awayStats && homeStats
-			? Promise.all([
-					getRoster(away.id, away.name, away.logoUrl, awayStats),
-					getRoster(home.id, home.name, home.logoUrl, homeStats),
-				]).then(([away, home]) => ({away, home}))
-			: null,
-	])
+	const [headToHead, rosters, lineups, awayForm, homeForm] =
+		await Promise.all([
+			awayStats && homeStats
+				? getHeadToHead(awayStats, homeStats, currentSeason.id, {
+						excludeGameId: boxScore.gameId,
+					})
+				: [],
+			awayStats && homeStats
+				? Promise.all([
+						getRoster(away.id, away.name, away.logoUrl, awayStats),
+						getRoster(home.id, home.name, home.logoUrl, homeStats),
+					]).then(([away, home]) => ({away, home}))
+				: null,
+			boxScore.hasSummary ? getGameLineups(boxScore) : null,
+			getGameSeasonSummary(away, boxScore.startsAt, currentSeason.id),
+			getGameSeasonSummary(home, boxScore.startsAt, currentSeason.id),
+		])
 	const response: GameResponse = {
 		boxScore: {...boxScore, arena: toDisplayArena(boxScore.arena)},
+		score: await getFinalScore(boxScore),
 		playerIds: Object.fromEntries(recordBoxScorePlayers(boxScore)),
 		livebarn: toLiveBarnLinks(surfaces, boxScore),
 		headToHead,
 		rosters,
+		lineups,
+		form: {away: awayForm, home: homeForm},
+		currentSeason,
 	}
 	return response
 })
@@ -504,20 +524,157 @@ registerEndpoint(app, LIST_RINKS_ENDPOINT, async () => {
 	return {season: teamsPage.season, rinks}
 })
 
+registerEndpoint(app, LIST_GAMES_ENDPOINT, async ({date}) => {
+	const teamsPage = await getTeamsPage()
+	const response: GamesResponse = {
+		season: teamsPage.season,
+		games: await getDayGames(date, teamsPage),
+	}
+	return response
+})
+
+/** A day's games from the scoreboard, with their rinks, soonest first. */
+async function getDayGames(
+	date: string,
+	teamsPage: KHLTeamsPage,
+): Promise<UpcomingGame[]> {
+	const scoreboard = await getScoreboard(date)
+	const games = await Promise.all(
+		scoreboard.map(async (game): Promise<UpcomingGame | null> => {
+			// Final games' cards drop their start time and rink; the box
+			// score has both
+			let {startsAt, arena} = game
+			if (!startsAt || !arena) {
+				const boxScore = await getBoxScore(game.gameId).catch(
+					(error: unknown) => {
+						logger.warn("listGames", "box score unavailable", {
+							gameId: game.gameId,
+							error,
+						})
+						return null
+					},
+				)
+				startsAt ??= boxScore?.startsAt ?? null
+				arena ??= boxScore?.arena ?? null
+			}
+			if (!startsAt) {
+				return null
+			}
+			const toRinkTeam = (team: KHLScoreboardTeam): RinkTeam => ({
+				id: team.id,
+				// The scoreboard doubles apostrophes ("Carl''s"); prefer the teams page
+				name:
+					teamsPage.teams.find((t) => t.id === team.id)?.name ??
+					team.name.replaceAll("''", "'"),
+				logoUrl: team.logoUrl,
+				divisionName:
+					getListedDivisionName(teamsPage, team.id) ??
+					team.divisionName,
+			})
+			const {away, home} = game
+			return {
+				rink: await getRinkInfoOrFallback(arena),
+				game: {
+					gameId: game.gameId,
+					startsAt,
+					awayTeam: toRinkTeam(away),
+					homeTeam: toRinkTeam(home),
+					score:
+						game.isFinal &&
+						away.goals !== null &&
+						home.goals !== null
+							? {away: away.goals, home: home.goals}
+							: null,
+				},
+			}
+		}),
+	)
+	return games
+		.filter((g) => g !== null)
+		.sort((a, b) => a.game.startsAt.localeCompare(b.game.startsAt))
+}
+
+/** How many finished games a rink page lists, and how far back it looks */
+const RECENT_RINK_GAMES = 5
+const RECENT_RINK_DAYS = 14
+
+/**
+ * A rink's latest finished games, newest first. Walks the scoreboard back a
+ * day at a time, stopping once it has enough: finished games' cards lack the
+ * rink, so each day costs a box score per game, and asking for weeks at once
+ * gets the KHL site to block us. Quiet rinks may have fewer than five.
+ */
+async function getRecentRinkGames(
+	arenaId: string,
+	teamsPage: KHLTeamsPage,
+): Promise<RecentRinkGame[]> {
+	const surfaces = await getVerifiedSurfaces(arenaId)
+	const now = new Date()
+	const found: UpcomingGame[] = []
+	for (
+		let i = 0;
+		i < RECENT_RINK_DAYS && found.length < RECENT_RINK_GAMES;
+		i++
+	) {
+		const date = getLeagueDayKey(new Date(now.getTime() - i * DAY))
+		const games = await getDayGames(date, teamsPage).catch(
+			(error: unknown) => {
+				logger.warn("getRink", "scoreboard unavailable", {date, error})
+				return []
+			},
+		)
+		found.push(
+			...games.filter((g) => g.rink.arenaId === arenaId && g.game.score),
+		)
+	}
+	return found
+		.sort((a, b) => b.game.startsAt.localeCompare(a.game.startsAt))
+		.slice(0, RECENT_RINK_GAMES)
+		.map(({game}) => ({
+			game,
+			livebarn: toLiveBarnLinks(
+				surfaces,
+				getLeagueLocalTime(game.startsAt),
+			),
+		}))
+}
+
+const leagueTimeFormat = new Intl.DateTimeFormat("en-US", {
+	timeZone: LEAGUE.TIME_ZONE,
+	hour: "2-digit",
+	minute: "2-digit",
+	hourCycle: "h23",
+})
+
+/** "yyyy-MM-dd" and "HH:mm" in league time, as KHL pages give them */
+function getLeagueLocalTime(startsAt: string): {
+	localDate: string
+	localTime: string
+} {
+	const date = new Date(startsAt)
+	return {
+		localDate: getLeagueDayKey(date),
+		localTime: leagueTimeFormat.format(date),
+	}
+}
+
 registerEndpoint(app, GET_RINK_ENDPOINT, async ({arenaId}) => {
 	if (!KHL_ARENA_LIVEBARN_SURFACES[arenaId]) {
 		throw new ApiError(404, `rink ${arenaId} not found`)
 	}
 	const teamsPage = await getTeamsPage()
-	const [rink, arena] = await Promise.all([
+	const [rink, arena, recent] = await Promise.all([
 		getRink(arenaId, teamsPage),
 		cached(`arena-page:${arenaId}`, 24 * HOUR, () => getKHLArena(arenaId)),
+		getRecentRinkGames(arenaId, teamsPage),
 	])
-	return {
+	const response: RinkResponse = {
 		season: teamsPage.season,
 		rink,
 		address: arena.address,
+		recent,
 	}
+	return response
 })
 
 app.use("/api", (_req, res) => {
@@ -668,20 +825,49 @@ function toHeadToHeadGame(
 }
 
 /**
- * Schedules list the winner's score first ("4 - 2" for a 2-4 loss), so the
- * result says which number is the team's own.
+ * A team's season going into a game, from its schedule. Null if the KHL site
+ * fails: the game page shows without it.
  */
-function getGoalsByTeam(game: KHLGame): Record<string, number> | null {
-	const match = game.score?.match(/^(\d+)\s*-\s*(\d+)$/)
-	const result = game.result?.toUpperCase() ?? ""
-	if (!match || !/^[WLT]/.test(result)) {
+async function getGameSeasonSummary(
+	team: KHLBoxScoreTeam,
+	startsAt: string,
+	currentSeasonId: string,
+): Promise<SeasonSummary | null> {
+	try {
+		const [teamsPage, schedule] = await Promise.all([
+			getTeamsPage(team.seasonId),
+			getSchedule(
+				team.id,
+				team.seasonId,
+				team.seasonId === currentSeasonId,
+			),
+		])
+		const listed = teamsPage.teams.find((t) => t.id === team.id)
+		return {
+			team: listed ?? {
+				id: team.id,
+				name: team.name,
+				seasonId: team.seasonId,
+				divisionId: "",
+				logoUrl: team.logoUrl,
+			},
+			season: teamsPage.season,
+			divisionName: listed
+				? getDivisionName(teamsPage, listed.divisionId)
+				: "",
+			// For a past game, its season going in rather than what came after
+			...getSeasonRecord(
+				schedule.filter((game) => game.startsAt < startsAt),
+			),
+		}
+	} catch (error) {
+		logger.warn("getGameSeasonSummary", "KHL schedule unavailable", {
+			teamId: team.id,
+			seasonId: team.seasonId,
+			error,
+		})
 		return null
 	}
-	const high = Math.max(Number(match[1]), Number(match[2]))
-	const low = Math.min(Number(match[1]), Number(match[2]))
-	const own = result.startsWith("L") ? low : high
-	const other = result.startsWith("W") ? low : high
-	return {[game.team.id]: own, [game.opponent.id]: other}
 }
 
 type SeasonRecord = Pick<
@@ -708,7 +894,7 @@ function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 		recent: [],
 		streak: null,
 	}
-	const results: string[] = []
+	const results: RecentGame[] = []
 	for (const game of schedule) {
 		const goals = game.isFinal ? getGoalsByTeam(game) : null
 		if (!goals) {
@@ -728,13 +914,22 @@ function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 		} else {
 			record.ties += 1
 		}
-		results.push(result)
+		results.push({
+			gameId: game.id,
+			startsAt: game.startsAt,
+			arena: toDisplayArena(game.arena),
+			opponent: {id: game.opponent.id, name: game.opponent.name},
+			homeAway: game.homeAway,
+			result,
+			goalsFor,
+			goalsAgainst,
+		})
 	}
 	record.recent = results.slice(-LIMITS.MATCHUP_RECENT_GAMES)
-	const last = results.at(-1)
+	const last = results.at(-1)?.result
 	if (last) {
 		let count = 0
-		while (results[results.length - 1 - count] === last) {
+		while (results[results.length - 1 - count]?.result === last) {
 			count += 1
 		}
 		record.streak = {result: last, count}
@@ -743,10 +938,16 @@ function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 }
 
 function getBoxScore(gameId: string): Promise<KHLBoxScore> {
-	// Summaries are posted (and sometimes corrected) after the game
-	return cached(`box-score:${gameId}`, 10 * MINUTE, () => {
-		return getKHLBoxScore(gameId)
-	})
+	// Summaries are posted (and sometimes corrected) after the game, so check
+	// again soon until there's one; after that, corrections are rare
+	return cached(
+		`box-score:${gameId}`,
+		10 * MINUTE,
+		() => {
+			return getKHLBoxScore(gameId)
+		},
+		(boxScore) => (boxScore.hasSummary ? 6 * HOUR : 10 * MINUTE),
+	)
 }
 
 /**
@@ -808,6 +1009,85 @@ async function getRink(
 			.filter((g) => g.arena?.id === arenaId)
 			.map((g) => toRinkGame(g, teamsPage)),
 	}
+}
+
+const leagueDayFormat = new Intl.DateTimeFormat("en-CA", {
+	timeZone: LEAGUE.TIME_ZONE,
+	year: "numeric",
+	month: "2-digit",
+	day: "2-digit",
+})
+
+/** A day's games from the league's scoreboard, "yyyy-MM-dd" */
+function getScoreboard(date: string): Promise<KHLScoreboardGame[]> {
+	// A finished day's scores only change when the league corrects one
+	const isPast = date < getLeagueDayKey(new Date())
+	return cached(`scoreboard:${date}`, isPast ? HOUR : 5 * MINUTE, () => {
+		return getKHLScoreboard(date)
+	})
+}
+
+/**
+ * The game's final score. The scoreboard often has it before the league
+ * posts the box score's summary.
+ */
+async function getFinalScore(
+	boxScore: KHLBoxScore,
+): Promise<{away: number; home: number} | null> {
+	const {away, home} = boxScore
+	if (boxScore.hasSummary && away.goals !== null && home.goals !== null) {
+		return {away: away.goals, home: home.goals}
+	}
+	if (Date.parse(boxScore.startsAt) > Date.now()) {
+		return null
+	}
+	const scoreboard = await getScoreboard(boxScore.localDate).catch(
+		(error: unknown) => {
+			logger.warn("getGame", "KHL scoreboard unavailable", {
+				date: boxScore.localDate,
+				error,
+			})
+			return []
+		},
+	)
+	const game = scoreboard.find((g) => g.gameId === boxScore.gameId)
+	if (
+		!game?.isFinal ||
+		game.away.goals === null ||
+		game.home.goals === null
+	) {
+		return null
+	}
+	return {away: game.away.goals, home: game.home.goals}
+}
+
+/** The league-local calendar day, "yyyy-MM-dd" */
+function getLeagueDayKey(date: Date): string {
+	return leagueDayFormat.format(date)
+}
+
+/** A rink we track, or a bare one for rinks off our list (or unknown) */
+async function getRinkInfoOrFallback(
+	arena: {id: string; name: string} | null,
+): Promise<RinkInfo> {
+	if (arena && KHL_ARENA_LIVEBARN_SURFACES[arena.id]) {
+		return getRinkInfo(arena.id)
+	}
+	return {
+		arenaId: arena?.id ?? "",
+		name: arena ? getArenaName(arena) : "Unknown rink",
+		city: "",
+		livebarn: [],
+	}
+}
+
+/** The team's current-season division, if the teams page lists it */
+function getListedDivisionName(
+	teamsPage: KHLTeamsPage,
+	teamId: string,
+): string | null {
+	const listed = teamsPage.teams.find((t) => t.id === teamId)
+	return listed ? getDivisionName(teamsPage, listed.divisionId) : null
 }
 
 async function getRinkInfo(arenaId: string): Promise<RinkInfo> {
@@ -885,11 +1165,47 @@ async function getUpcomingGames(teamIds: Set<string>): Promise<UpcomingGame[]> {
  * The team's roster for a season, with each player recorded in the database
  * so they link to a player page.
  */
+/**
+ * Who played for each team in a game, with their stats in it. Null if the
+ * KHL site fails: the box score shows without it.
+ */
+async function getGameLineups(
+	boxScore: KHLBoxScore,
+): Promise<{away: TeamRoster; home: TeamRoster} | null> {
+	try {
+		const stats = await cached(
+			`game-stats:${boxScore.gameId}`,
+			10 * MINUTE,
+			() => getKHLGameStats(boxScore.gameId),
+		)
+		const lineup = (team: KHLBoxScoreTeam, teamStats: KHLGameTeamStats) => {
+			return getRoster(team.id, team.name, team.logoUrl, {
+				...teamStats,
+				seasonId: team.seasonId,
+			})
+		}
+		const [away, home] = await Promise.all([
+			lineup(boxScore.away, stats.away),
+			lineup(boxScore.home, stats.home),
+		])
+		return {away, home}
+	} catch (error) {
+		logger.warn("getGameLineups", "KHL game stats unavailable", {
+			gameId: boxScore.gameId,
+			error,
+		})
+		return null
+	}
+}
+
 async function getRoster(
 	teamId: string,
 	teamName: string,
 	teamLogoUrl: string | null,
-	stats: KHLTeamStats,
+	stats: Pick<
+		KHLTeamStats,
+		"seasonId" | "skaterColumns" | "skaters" | "goalieColumns" | "goalies"
+	>,
 ): Promise<TeamRoster> {
 	const goalieIds = new Set(stats.goalies.map((g) => g.playerId))
 	const playerIds = db.recordRegistrations(
@@ -1092,13 +1408,24 @@ function cached<T>(
 	key: string,
 	ttlMs: number,
 	load: () => Promise<T>,
+	/** Once loaded, how long to keep this value instead of `ttlMs` */
+	getTtlMs?: (value: T) => number,
 ): Promise<T> {
 	const hit = cache.get(key)
 	if (hit && hit.expiresAt > Date.now()) {
 		return hit.value as Promise<T>
 	}
 	const value = load()
-	cache.set(key, {expiresAt: Date.now() + ttlMs, value})
+	const entry = {expiresAt: Date.now() + ttlMs, value}
+	cache.set(key, entry)
+	if (getTtlMs) {
+		void value.then(
+			(loaded) => {
+				entry.expiresAt = Date.now() + getTtlMs(loaded)
+			},
+			() => {},
+		)
+	}
 	value.catch(() => {
 		if (cache.get(key)?.value === value) {
 			cache.delete(key)

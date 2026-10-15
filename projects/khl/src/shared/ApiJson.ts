@@ -7,6 +7,8 @@ import {
 	KHLBoxScoreSchema,
 	KHLGame,
 	KHLGameSchema,
+	KHLHomeAway,
+	KHLHomeAwaySchema,
 	KHLPlayer,
 	KHLPlayerSchema,
 	KHLPlayerSearchResult,
@@ -16,6 +18,8 @@ import {
 	KHLStandingsDivision,
 	KHLStandingsDivisionSchema,
 	KHLTeam,
+	KHLTeamRef,
+	KHLTeamRefSchema,
 	KHLTeamSchema,
 } from "./KHLJson.js"
 
@@ -163,6 +167,8 @@ export interface RinkGame {
 	startsAt: string
 	homeTeam: RinkTeam
 	awayTeam: RinkTeam
+	/** The final score, once the league posts it; upcoming games have none */
+	score?: {away: number; home: number} | null
 }
 
 export const RinkGameSchema = z.object({
@@ -170,6 +176,7 @@ export const RinkGameSchema = z.object({
 	startsAt: z.iso.datetime(),
 	homeTeam: RinkTeamSchema,
 	awayTeam: RinkTeamSchema,
+	score: z.object({away: z.number(), home: z.number()}).nullish(),
 }) satisfies z.ZodType<RinkGame>
 
 export interface RinkLiveBarnSurface {
@@ -381,24 +388,43 @@ export const HeadToHeadGameSchema = z.object({
 
 export interface GameResponse {
 	boxScore: KHLBoxScore
+	/**
+	 * Once the game is final. Can come before the box score's summary: the
+	 * scoreboard often posts it first.
+	 */
+	score: {away: number; home: number} | null
 	/** Our player UUID for each KHL player id in the box score */
 	playerIds: Record<string, string>
 	/** Empty when the arena isn't on LiveBarn */
 	livebarn: LiveBarnLink[]
 	/** Finished games between the two teams, newest first */
 	headToHead: HeadToHeadGame[]
-	/** The teams' rosters for the game's season, until a box score is posted */
+	/** The teams' rosters with season stats; null if the KHL site failed */
 	rosters: {away: TeamRoster; home: TeamRoster} | null
+	/** Who played and their stats in this game, once the summary is posted */
+	lineups: {away: TeamRoster; home: TeamRoster} | null
+	/** Each team's season going into the game; null if the KHL site failed */
+	form: {away: SeasonSummary | null; home: SeasonSummary | null}
+	currentSeason: KHLSeason
 }
 
 export const GameResponseSchema = z.object({
 	boxScore: KHLBoxScoreSchema,
+	score: z.object({away: z.number(), home: z.number()}).nullable(),
 	playerIds: z.record(z.string(), z.uuid()),
 	livebarn: z.array(LiveBarnLinkSchema),
 	headToHead: z.array(HeadToHeadGameSchema),
 	rosters: z
 		.object({away: TeamRosterSchema, home: TeamRosterSchema})
 		.nullable(),
+	lineups: z
+		.object({away: TeamRosterSchema, home: TeamRosterSchema})
+		.nullable(),
+	form: z.object({
+		away: z.lazy(() => SeasonSummarySchema).nullable(),
+		home: z.lazy(() => SeasonSummarySchema).nullable(),
+	}),
+	currentSeason: KHLSeasonSchema,
 }) satisfies z.ZodType<GameResponse>
 
 export interface GetGameRequest {
@@ -521,8 +547,37 @@ export const GET_STANDINGS_ENDPOINT = {
 	responseSchema: StandingsResponseSchema,
 } satisfies ApiEndpoint<GetStandingsRequest, StandingsResponse>
 
-/** A team's season (so far, if it's the current one), from its schedule and roster. */
-export interface MatchupTeam {
+/** One of a team's finished games, from its side */
+export interface RecentGame {
+	/** Missing for some finished games the league never linked */
+	gameId: string | null
+	/** ISO 8601 UTC instant */
+	startsAt: string
+	arena: KHLArenaRef | null
+	opponent: KHLTeamRef
+	homeAway: KHLHomeAway
+	/** "W", "L" or "T" */
+	result: string
+	goalsFor: number
+	goalsAgainst: number
+}
+
+export const RecentGameSchema = z.object({
+	gameId: z.string().nullable(),
+	startsAt: z.iso.datetime(),
+	arena: KHLArenaRefSchema.nullable(),
+	opponent: KHLTeamRefSchema,
+	homeAway: KHLHomeAwaySchema,
+	result: z.string(),
+	goalsFor: z.number(),
+	goalsAgainst: z.number(),
+}) satisfies z.ZodType<RecentGame>
+
+/**
+ * A team's season (so far, if it's the current one, or up to a game), from
+ * its schedule: record, goals and form.
+ */
+export interface SeasonSummary {
 	team: KHLTeam
 	season: KHLSeason
 	divisionName: string
@@ -533,14 +588,13 @@ export interface MatchupTeam {
 	ties: number
 	goalsFor: number
 	goalsAgainst: number
-	/** "W", "L" or "T" for the last 10 games, oldest first */
-	recent: string[]
+	/** The last 10 games, oldest first */
+	recent: RecentGame[]
 	/** The result of the last game, and how many in a row; null before any */
 	streak: {result: string; count: number} | null
-	roster: TeamRoster
 }
 
-export const MatchupTeamSchema = z.object({
+export const SeasonSummarySchema = z.object({
 	team: KHLTeamSchema,
 	season: KHLSeasonSchema,
 	divisionName: z.string(),
@@ -550,8 +604,16 @@ export const MatchupTeamSchema = z.object({
 	ties: z.number(),
 	goalsFor: z.number(),
 	goalsAgainst: z.number(),
-	recent: z.array(z.string()),
+	recent: z.array(RecentGameSchema),
 	streak: z.object({result: z.string(), count: z.number()}).nullable(),
+}) satisfies z.ZodType<SeasonSummary>
+
+/** A team's season and roster, for one side of a matchup. */
+export interface MatchupTeam extends SeasonSummary {
+	roster: TeamRoster
+}
+
+export const MatchupTeamSchema = SeasonSummarySchema.extend({
 	roster: TeamRosterSchema,
 }) satisfies z.ZodType<MatchupTeam>
 
@@ -623,17 +685,59 @@ export const LIST_RINKS_ENDPOINT = {
 	responseSchema: RinksResponseSchema,
 } satisfies ApiEndpoint<ListRinksRequest, RinksResponse>
 
+export interface GamesResponse {
+	season: KHLSeason
+	/** The day's games, earliest first */
+	games: UpcomingGame[]
+}
+
+export const GamesResponseSchema = z.object({
+	season: KHLSeasonSchema,
+	games: z.array(UpcomingGameSchema),
+}) satisfies z.ZodType<GamesResponse>
+
+export interface ListGamesRequest {
+	/** League-local day, "yyyy-MM-dd" */
+	date: string
+}
+
+export const ListGamesRequestSchema = z.object({
+	date: z.iso.date(),
+}) satisfies z.ZodType<ListGamesRequest>
+
+/** Every game on one day, with final scores: the home page's past days. */
+export const LIST_GAMES_ENDPOINT = {
+	method: "GET",
+	uri: "/api/games",
+	requestSchema: ListGamesRequestSchema,
+	responseSchema: GamesResponseSchema,
+} satisfies ApiEndpoint<ListGamesRequest, GamesResponse>
+
+/** A finished game at a rink, with its replay */
+export interface RecentRinkGame {
+	game: RinkGame
+	livebarn: LiveBarnLink[]
+}
+
+export const RecentRinkGameSchema = z.object({
+	game: RinkGameSchema,
+	livebarn: z.array(LiveBarnLinkSchema),
+}) satisfies z.ZodType<RecentRinkGame>
+
 export interface RinkResponse {
 	season: KHLSeason
 	rink: Rink
 	/** From the KHL arena page */
 	address: string | null
+	/** The latest finished games here, newest first */
+	recent: RecentRinkGame[]
 }
 
 export const RinkResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	rink: RinkSchema,
 	address: z.string().nullable(),
+	recent: z.array(RecentRinkGameSchema),
 }) satisfies z.ZodType<RinkResponse>
 
 export interface GetRinkRequest {

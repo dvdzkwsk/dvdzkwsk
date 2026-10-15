@@ -41,6 +41,12 @@
 	--kind-team-fg: #7e22ce;
 	--kind-rink-bg: #e6f6f1;
 	--kind-rink-fg: #0f766e;
+	--info-bg: #f1f6ff;
+	--warn-bg: #fff8eb;
+	--warn-border: #f5dcaa;
+	--warn-fg: #b45309;
+	--info-border: #d3e1fd;
+	--info-fg: #1d4ed8;
 
 	--shadow-sm: 0 1px 2px rgb(10 10 11 / 0.07), 0 2px 8px rgb(10 10 11 / 0.05);
 	--shadow-md:
@@ -85,6 +91,12 @@
 	--kind-team-fg: #d8b4fe;
 	--kind-rink-bg: #042f2e;
 	--kind-rink-fg: #5eead4;
+	--info-bg: #111c2e;
+	--warn-bg: #261b0b;
+	--warn-border: #4a3413;
+	--warn-fg: #fbbf24;
+	--info-border: #1f3557;
+	--info-fg: #93c5fd;
 
 	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.3);
 	--shadow-md: 0 10px 28px rgb(0 0 0 / 0.5), 0 2px 6px rgb(0 0 0 / 0.4);
@@ -177,10 +189,239 @@ table {
 	text-decoration: none;
 }
 
-.PageShell-message {
-	padding: calc(var(--spacing) * 6);
+/* === Loader === */
+
+.Loader {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 8) calc(var(--spacing) * 4);
 	color: var(--muted-fg);
 	text-align: center;
+	/* Fast loads finish before the loader shows, so it never flashes */
+	animation: Loader-appear 0.3s 0.15s ease-out both;
+}
+
+/* Centered in the viewport below the header */
+.Loader--page {
+	min-height: calc(100dvh - 220px);
+}
+
+.Loader-rink {
+	width: min(320px, 100%);
+	height: auto;
+	aspect-ratio: 200 / 64;
+	overflow: visible;
+}
+
+.Loader--inline .Loader-rink {
+	width: 200px;
+}
+
+.Loader-label {
+	color: var(--site-fg);
+	font-size: 1.0625rem;
+	font-weight: 500;
+}
+
+.Loader--inline .Loader-label {
+	color: var(--muted-fg);
+	font-size: 0.9375rem;
+	font-weight: 400;
+}
+
+/* Reserves its line so the loader doesn't jump when the note appears */
+.Loader-note {
+	min-height: 1.25rem;
+	font-size: 0.875rem;
+	animation: Loader-appear 0.4s ease-out;
+}
+
+.Loader-ice {
+	stroke: var(--panel-border);
+	stroke-width: 2;
+	stroke-linecap: round;
+}
+
+.Loader-crease {
+	fill: var(--team-a);
+	opacity: 0.15;
+}
+
+.Loader-mesh {
+	stroke: var(--subtle-fg);
+	stroke-width: 0.6;
+	fill: none;
+}
+
+.Loader-netting {
+	opacity: 0.8;
+}
+
+.Loader-frame {
+	fill: none;
+	stroke: var(--live);
+	stroke-width: 2.5;
+	stroke-linejoin: round;
+}
+
+.Loader-net {
+	transform-box: fill-box;
+	transform-origin: left bottom;
+	animation: Loader-net 1.8s ease-out infinite;
+}
+
+.Loader-puck {
+	fill: var(--site-fg);
+	animation: Loader-puck 1.8s infinite;
+}
+
+.Loader-streak {
+	stroke: var(--subtle-fg);
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	animation: Loader-streak 1.8s infinite;
+}
+
+.Loader-spray {
+	fill: var(--subtle-fg);
+	transform-box: fill-box;
+	transform-origin: right bottom;
+	animation: Loader-spray 1.8s ease-out infinite;
+}
+
+@keyframes Loader-appear {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+}
+
+/* Slide in from the left, accelerate into the net, settle, fade, repeat */
+@keyframes Loader-puck {
+	0% {
+		transform: translateX(10px);
+		opacity: 0;
+		animation-timing-function: ease-out;
+	}
+	10% {
+		transform: translateX(20px);
+		opacity: 1;
+		animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
+	}
+	52% {
+		transform: translateX(166px);
+		animation-timing-function: ease-out;
+	}
+	62% {
+		transform: translateX(172px);
+		opacity: 1;
+	}
+	82%,
+	100% {
+		transform: translateX(172px);
+		opacity: 0;
+	}
+}
+
+@keyframes Loader-streak {
+	0%,
+	12% {
+		opacity: 0;
+	}
+	30%,
+	50% {
+		opacity: 1;
+	}
+	56%,
+	100% {
+		opacity: 0;
+	}
+}
+
+/* The net billows back as the puck hits it */
+@keyframes Loader-net {
+	0%,
+	50% {
+		transform: none;
+	}
+	58% {
+		transform: scaleX(1.18) skewX(-4deg);
+	}
+	70% {
+		transform: scaleX(0.96);
+	}
+	80%,
+	100% {
+		transform: none;
+	}
+}
+
+/* A spray of snow off the puck as it crosses the crease */
+@keyframes Loader-spray {
+	0%,
+	46% {
+		opacity: 0;
+		transform: none;
+	}
+	52% {
+		opacity: 1;
+	}
+	68%,
+	100% {
+		opacity: 0;
+		transform: translate(-6px, -6px) scale(1.4);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.Loader-puck,
+	.Loader-streak,
+	.Loader-net,
+	.Loader-spray {
+		animation: none;
+	}
+	.Loader-puck {
+		transform: translateX(120px);
+	}
+	.Loader-streak,
+	.Loader-spray {
+		opacity: 0;
+	}
+}
+
+/* === Admin (dev only) === */
+
+.Admin {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 6);
+}
+
+.Admin-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 2);
+}
+
+.Admin-preview {
+	display: grid;
+	place-items: center;
+	min-height: 180px;
+	margin-top: calc(var(--spacing) * 4);
+	border: 1px dashed var(--panel-border);
+	border-radius: var(--radius-sm);
+}
+
+.Admin-note {
+	margin: 0 0 calc(var(--spacing) * 3);
+	color: var(--muted-fg);
+}
+
+.Admin-preview .Admin-note {
+	margin: 0;
 }
 
 /* === Links === */
@@ -195,13 +436,23 @@ table {
 	text-decoration: none;
 }
 
+/* Every floating popup (menus, selects, tooltips, search). The z-index goes
+   on the positioner: it's the stacking context, so a z-index on the popup
+   inside can't lift it over positioned page content like the card links
+   below. Above the sticky site header too. */
+.Positioner {
+	z-index: 30;
+}
+
 .StretchedLink::after {
 	content: "";
 	position: absolute;
 	inset: 0;
 }
 
-.GameList-game :is(a, button):not(.StretchedLink),
+.GameTable-row :is(a, button):not(.StretchedLink),
+.GameFeed-item :is(a, button):not(.StretchedLink),
+.HeadToHead-row :is(a, button):not(.StretchedLink),
 .RinkCard :is(a, button):not(.StretchedLink),
 .RinkRoute-status :is(a, button):not(.StretchedLink) {
 	position: relative;
@@ -270,6 +521,40 @@ table {
 	color: var(--subtle-fg);
 }
 
+/* A sortable header: looks like the plain header, with an arrow on hover or
+   when it's the active sort */
+.StatsTable-sort {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0;
+	font: inherit;
+	color: inherit;
+	background: none;
+	border: none;
+	cursor: pointer;
+}
+
+.StatsTable th:not(.StatsTable-label) .StatsTable-sort {
+	flex-direction: row-reverse;
+}
+
+.StatsTable-sort:hover,
+.StatsTable-sort--active {
+	color: var(--site-fg);
+}
+
+.StatsTable-sort-arrow {
+	visibility: hidden;
+	width: 0.75em;
+	font-size: 0.6875rem;
+}
+
+.StatsTable-sort:hover .StatsTable-sort-arrow,
+.StatsTable-sort--active .StatsTable-sort-arrow {
+	visibility: visible;
+}
+
 .StatsTable tbody tr:hover td {
 	background: var(--subtle-bg);
 }
@@ -287,46 +572,9 @@ table {
 	border-bottom: none;
 }
 
-/* === Filter bar === */
+/* === Filter pills: toolbar buttons and menu triggers === */
 
-.FilterBar {
-	overflow: hidden;
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
-}
-
-.FilterBar-row {
-	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 4);
-	min-height: 56px;
-	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 4);
-}
-
-.FilterBar-row + .FilterBar-row {
-	border-top: 1px solid var(--panel-border);
-}
-
-.FilterBar-label {
-	flex: none;
-	width: 72px;
-	font-size: 0.8125rem;
-	font-weight: 600;
-	color: var(--muted-fg);
-}
-
-.FilterBar-controls {
-	flex: 1;
-	min-width: 0;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: calc(var(--spacing) * 1.5);
-}
-
-/* Shared pill used by toggles and buttons inside the bar */
+/* Shared pill used by toggles and buttons in a filter toolbar */
 .FilterPill {
 	appearance: none;
 	display: inline-flex;
@@ -374,6 +622,10 @@ table {
 	color: var(--subtle-fg);
 }
 
+.FilterPill[data-pressed] svg {
+	color: inherit;
+}
+
 .FilterPill[data-pressed] .FilterPill-count {
 	color: color-mix(in srgb, var(--accent-fg) 60%, transparent);
 }
@@ -384,13 +636,164 @@ table {
 	border-radius: 50%;
 }
 
+/* === Filter toolbar (home and teams pages) === */
+
+/* Day switch and date picker on the left; rink and division menus right.
+   Sits on the page background: the controls carry their own edges. */
+.FilterToolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 2.5);
+}
+
+.FilterToolbar-spacer {
+	flex: 1;
+}
+
+/* Choices on one track; the picked one is raised */
+.Segmented {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 3px;
+	border: 1px solid var(--panel-border);
+	border-radius: 999px;
+	background: var(--subtle-bg);
+}
+
+.Segmented-item {
+	appearance: none;
+	padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 3);
+	border: none;
+	border-radius: 999px;
+	background: none;
+	font: inherit;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background 120ms,
+		color 120ms;
+}
+
+.Segmented-item:hover {
+	color: var(--site-fg);
+}
+
+.Segmented-item:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+/* An option with an icon, e.g. the date picker */
+.Segmented-item--icon {
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+}
+
+.Segmented-item--icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+/* Just the icon, until it holds a picked day */
+.Segmented-item--icon-only {
+	padding-left: calc(var(--spacing) * 2.5);
+	padding-right: calc(var(--spacing) * 2.5);
+}
+
+.Segmented-item[data-popup-open] {
+	color: var(--site-fg);
+}
+
+.Segmented-item:disabled {
+	color: var(--subtle-fg);
+	cursor: default;
+}
+
+.Segmented-item[data-pressed] {
+	background: var(--panel-bg);
+	color: var(--site-fg);
+	box-shadow: var(--shadow-sm);
+}
+
+/* A menu with something picked */
+.FilterPill--active {
+	border-color: var(--site-fg);
+}
+
+.FilterMenu {
+	min-width: 16rem;
+}
+
+.FilterMenu-item--indent {
+	padding-left: calc(var(--spacing) * 6);
+}
+
+.FilterMenu-count {
+	margin-left: auto;
+	padding-left: calc(var(--spacing) * 4);
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--subtle-fg);
+}
+
+.FilterMenu-footer {
+	flex: none;
+	display: flex;
+	justify-content: flex-end;
+	margin-top: calc(var(--spacing) * 1);
+	padding-top: calc(var(--spacing) * 1);
+	border-top: 1px solid var(--panel-border);
+}
+
+.FilterMenu-clear {
+	appearance: none;
+	padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
+	border: none;
+	border-radius: 6px;
+	background: none;
+	font: inherit;
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+	cursor: pointer;
+}
+
+.FilterMenu-clear:hover {
+	background: var(--subtle-bg);
+	color: var(--site-fg);
+}
+
+.FilterMenu-clear:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+/* Close to what it filters, closer than the gap between sections */
+.HomePage > .FilterToolbar {
+	margin-bottom: calc(var(--spacing) * -1.5);
+}
+
 @media (max-width: 640px) {
-	.FilterBar-row {
-		flex-wrap: wrap;
+	.FilterToolbar-spacer {
+		display: none;
 	}
 
-	.FilterBar-label {
-		width: 100%;
+	/* The menus share the second row instead of hugging the left */
+	/* A picked range can wrap the switch onto a second line; a softer corner
+	   keeps that looking like one control */
+	.FilterToolbar > .Segmented {
+		border-radius: 18px;
+	}
+
+	.FilterToolbar > .FilterPill {
+		flex: 1 1 9rem;
+		justify-content: space-between;
+		min-width: 0;
 	}
 }
 
@@ -441,7 +844,7 @@ table {
 	min-width: 0;
 	overflow: hidden;
 	font-size: 0.875rem;
-	font-weight: 600;
+	font-weight: 400;
 	letter-spacing: -0.01em;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -477,6 +880,22 @@ table {
 	height: 12px;
 }
 
+/* Icon only, its label in a tooltip */
+.LiveBarnBadge--compact {
+	padding: calc(var(--spacing) * 1.5);
+}
+
+/* Room for two compact badges side by side (LiveBarn, scoresheet), so rows
+   line up whichever they have */
+:root {
+	--icon-links-width: 60px;
+}
+
+.LiveBarnBadge--compact svg {
+	width: 14px;
+	height: 14px;
+}
+
 /* No feed at this rink: looks like the badge, but greyed out; hovering or
    tapping explains why */
 .LiveBarnBadge--unavailable {
@@ -510,8 +929,9 @@ table {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	width: 76px;
+	min-width: 76px;
 	height: 76px;
+	padding: 0 calc(var(--spacing) * 2.5);
 	border-radius: 12px;
 	background: var(--subtle-bg);
 	text-align: center;
@@ -522,6 +942,15 @@ table {
 	font-weight: 650;
 	letter-spacing: -0.03em;
 	line-height: 1.1;
+}
+
+/* "PM" beside the time, smaller */
+.RinkCard-meridiem {
+	margin-left: 3px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0;
+	color: var(--muted-fg);
 }
 
 .RinkCard-time-sub {
@@ -687,9 +1116,16 @@ table {
 }
 
 .GameFeed-item {
+	position: relative;
 	display: grid;
-	grid-template-columns: 1fr auto;
-	gap: calc(var(--spacing) * 0.5) calc(var(--spacing) * 3);
+	/* Result chip on the left, beside the game's lines; LiveBarn top right */
+	grid-template-columns: 22px minmax(0, 1fr) auto;
+	grid-template-areas:
+		"outcome when links"
+		"outcome matchup matchup"
+		"outcome rink rink";
+	align-items: center;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
 	margin: 0 calc(var(--spacing) * 2);
 	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 2);
 	border-top: 1px solid var(--panel-border);
@@ -709,51 +1145,63 @@ table {
 	border-top-color: transparent;
 }
 
+/* Day · time on one line; stacked on wide cards */
 .GameFeed-when {
-	font-size: 0.78rem;
+	grid-area: when;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 calc(var(--spacing) * 1);
+	font-size: 0.8125rem;
 	color: var(--muted-fg);
 }
 
-.GameFeed-matchup {
-	font-weight: 600;
+.GameFeed-date {
+	font-weight: 650;
 	color: var(--site-fg);
 }
 
-.GameFeed-opponent {
+.GameFeed-time::before {
+	content: "· ";
+}
+
+.GameFeed-rink {
+	grid-area: rink;
 	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 2);
 	min-width: 0;
+}
+
+.GameFeed-rink-name {
+	overflow: hidden;
+	font-size: 0.9375rem;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--muted-fg);
+}
+
+/* Team, score, vs/@, opponent, score: one line, wrapping when narrow */
+.GameFeed-matchup {
+	grid-area: matchup;
+	min-width: 0;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 2.5);
+	color: var(--site-fg);
 }
 
 .GameFeed-vs {
 	flex: none;
-	min-width: 1.25em;
 	color: var(--muted-fg);
 	font-weight: 500;
 }
 
-.GameFeed-team {
-	margin-top: calc(var(--spacing) * 0.5);
-	font-size: 0.8rem;
-	color: var(--muted-fg);
-}
-
 .GameFeed-outcome {
-	grid-row: span 2;
-	align-self: center;
+	grid-area: outcome;
 	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 2);
-	font-size: 0.875rem;
-	font-weight: 600;
-	white-space: nowrap;
 }
 
-/* Fixed width, right-aligned, so the W/L badges line up across rows */
+/* A score the league didn't split per team, at the end of the matchup */
 .GameFeed-score {
-	min-width: 3rem;
-	text-align: right;
 	font-variant-numeric: tabular-nums;
 }
 
@@ -784,18 +1232,18 @@ table {
 	color: var(--tie);
 }
 
+/* Scoresheet, then LiveBarn at the end: right-aligned so LiveBarn stays in
+   place whether or not there's a scoresheet */
 .GameFeed-links {
-	grid-column: 1 / -1;
+	grid-area: links;
 	display: flex;
-	flex-wrap: wrap;
-	gap: calc(var(--spacing) * 3);
-	margin-top: calc(var(--spacing) * 1);
-	font-size: 0.8125rem;
-	font-weight: 500;
+	justify-content: flex-end;
+	gap: calc(var(--spacing) * 1);
 }
 
-.GameFeed-boxscore:empty {
-	display: none;
+.GameFeed-item:has(.StretchedLink:hover),
+.HeadToHead-row:has(.StretchedLink:hover) {
+	background: var(--subtle-bg);
 }
 
 .GameFeed-live {
@@ -810,44 +1258,35 @@ table {
 	container-type: inline-size;
 }
 
-/* Wide cards fit each game on one row: when | matchup | links | outcome */
+/* Wide cards fit each game on one row, like the home page's game list:
+   outcome | when | matchup | rink | LiveBarn */
 @container (min-width: 720px) {
 	.GameFeed-item {
-		/* Fixed side columns so links and scores line up from row to row */
-		grid-template-columns: 14rem minmax(0, 1fr) 15rem 7rem;
-		grid-template-areas: "when matchup links outcome";
-		align-items: center;
+		/* Fixed side columns so every row lines up, whatever it contains */
+		grid-template-columns:
+			22px 6.5rem minmax(0, 2fr) minmax(0, 1fr)
+			var(--icon-links-width);
+		grid-template-areas: "outcome when matchup rink links";
+		gap: calc(var(--spacing) * 4);
 		padding-top: calc(var(--spacing) * 2.5);
 		padding-bottom: calc(var(--spacing) * 2.5);
 	}
 
 	.GameFeed-when {
-		grid-area: when;
+		flex-direction: column;
+		gap: 2px;
 	}
 
-	.GameFeed-matchup {
-		grid-area: matchup;
-		min-width: 0;
+	.GameFeed-date {
+		font-size: 0.9375rem;
 	}
 
-	.GameFeed-links {
-		grid-area: links;
-		margin-top: 0;
-		align-items: center;
+	.GameFeed-time::before {
+		content: none;
 	}
 
-	/* Holds its width even when empty, so LiveBarn links line up */
-	.GameFeed-boxscore,
-	.GameFeed-boxscore:empty {
-		display: block;
-		flex: none;
-		width: 4.75rem;
-	}
-
-	.GameFeed-outcome {
-		grid-area: outcome;
-		grid-row: auto;
-		justify-content: flex-end;
+	.GameFeed-rink-name {
+		color: inherit;
 	}
 }
 
@@ -908,6 +1347,137 @@ table {
 .SelectOption[data-selected] .SelectOption-check,
 .SelectOption[data-checked] .SelectOption-check {
 	visibility: visible;
+}
+
+/* === Day picker: the Days filter's calendar === */
+
+.DayPicker {
+	width: 17rem;
+	padding: calc(var(--spacing) * 3);
+}
+
+.DayPicker-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: calc(var(--spacing) * 2);
+	font-size: 0.875rem;
+	font-weight: 600;
+}
+
+.DayPicker-nav,
+.DayPicker-day {
+	appearance: none;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: var(--site-fg);
+	cursor: pointer;
+}
+
+.DayPicker-nav {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 6px;
+}
+
+.DayPicker-nav svg {
+	width: 16px;
+	height: 16px;
+}
+
+.DayPicker-nav--prev svg {
+	transform: rotate(90deg);
+}
+
+.DayPicker-nav--next svg {
+	transform: rotate(-90deg);
+}
+
+.DayPicker-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+	text-align: center;
+}
+
+.DayPicker-weekday {
+	padding-bottom: calc(var(--spacing) * 1);
+	font-size: 0.6875rem;
+	font-weight: 500;
+	color: var(--subtle-fg);
+}
+
+.DayPicker-day {
+	aspect-ratio: 1;
+	border-radius: 999px;
+	font-size: 0.8125rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.DayPicker-day {
+	position: relative;
+}
+
+/* A dot under upcoming days with games */
+.DayPicker-day[data-has-games]::after {
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 4px;
+	width: 4px;
+	height: 4px;
+	margin-left: -2px;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.5;
+}
+
+.DayPicker-day[data-today] {
+	font-weight: 700;
+	box-shadow: inset 0 0 0 1px var(--panel-border);
+}
+
+.DayPicker-nav:hover:not(:disabled),
+.DayPicker-day:hover:not(:disabled) {
+	background: var(--subtle-bg);
+}
+
+.DayPicker-nav:focus-visible,
+.DayPicker-day:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+.DayPicker-nav:disabled,
+.DayPicker-day:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
+/* A range: its ends filled, the days between tinted */
+.DayPicker-day[aria-pressed="true"],
+.DayPicker-day[aria-pressed="true"]:hover {
+	border-radius: 6px;
+	background: var(--chip-bg);
+	color: var(--site-fg);
+}
+
+.DayPicker-day[data-range-start],
+.DayPicker-day[data-range-start]:hover,
+.DayPicker-day[data-range-end],
+.DayPicker-day[data-range-end]:hover {
+	border-radius: 999px;
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+.DayPicker-hint {
+	margin: calc(var(--spacing) * 2) 0 0;
+	font-size: 0.75rem;
+	color: var(--muted-fg);
 }
 
 /* === Picker === */
@@ -999,73 +1569,6 @@ table {
 	color: var(--muted-fg);
 }
 
-/* A pill that toggles a group, plus a chevron that opens its sub-choices */
-.FilterPill--split {
-	gap: 0;
-	padding: 0;
-	overflow: hidden;
-}
-
-/* The halves highlight on their own; the pill itself stays put (and keeps
-   its pressed background) */
-.FilterPill--split:not([data-pressed]):hover {
-	background: var(--panel-bg);
-}
-
-/* Ring the whole pill: an inset ring on a half gets clipped by the rounding */
-.FilterPill--split:has(:focus-visible) {
-	outline: 2px solid var(--link);
-	outline-offset: 1px;
-}
-
-.FilterPill-main,
-.FilterPill-menu {
-	appearance: none;
-	display: inline-flex;
-	align-items: center;
-	border: none;
-	background: none;
-	font: inherit;
-	color: inherit;
-	cursor: pointer;
-}
-
-.FilterPill-main {
-	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2)
-		calc(var(--spacing) * 1.5) calc(var(--spacing) * 3);
-}
-
-.FilterPill-menu {
-	align-self: stretch;
-	padding: 0 calc(var(--spacing) * 2.5) 0 calc(var(--spacing) * 1.5);
-	border-left: 1px solid var(--panel-border);
-}
-
-.FilterPill-main:hover,
-.FilterPill-menu:hover,
-.FilterPill-menu[data-popup-open] {
-	background: var(--subtle-bg);
-}
-
-.FilterPill-main:focus-visible,
-.FilterPill-menu:focus-visible {
-	outline: none;
-}
-
-.FilterPill--split[data-pressed] .FilterPill-menu {
-	border-left-color: color-mix(in srgb, var(--accent-fg) 25%, transparent);
-}
-
-.FilterPill--split[data-pressed] svg {
-	color: inherit;
-}
-
-.FilterPill--split[data-pressed] .FilterPill-main:hover,
-.FilterPill--split[data-pressed] .FilterPill-menu:hover,
-.FilterPill--split[data-pressed] .FilterPill-menu[data-popup-open] {
-	background: color-mix(in srgb, var(--accent-fg) 15%, transparent);
-}
-
 .GameList-days {
 	display: flex;
 	flex-direction: column;
@@ -1076,115 +1579,32 @@ table {
 	margin-bottom: calc(var(--spacing) * 2);
 }
 
-.GameList-list {
-	margin: 0;
-	padding: 0;
-	list-style: none;
-	overflow: hidden;
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
-}
-
-.GameList-game {
-	position: relative;
-	display: grid;
-	/* Fixed outer columns so every row lines up, whatever it contains */
-	grid-template-columns: 84px minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(
-			0,
-			0.9fr
-		) 132px;
-	align-items: center;
-	gap: calc(var(--spacing) * 4);
-	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
-}
-
-.GameList-game + .GameList-game {
-	border-top: 1px solid var(--panel-border);
-}
-
-/* A red edge marks live games; a tinted fill made the rows hard to read */
-.GameList-game--live {
-	box-shadow: inset 3px 0 0 var(--live);
-}
-
-.GameList-game:has(.StretchedLink:hover) {
+.GameTable-row:has(.StretchedLink:hover) {
 	background: var(--subtle-bg);
-}
-
-.GameList-time {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	font-weight: 650;
-	letter-spacing: -0.01em;
-}
-
-/* Under LIVE: when the game started */
-.GameList-started {
-	font-size: 0.8125rem;
-	font-weight: 500;
-	color: var(--site-fg);
-}
-
-.GameList-live {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	font-size: 0.8125rem;
-	font-weight: 700;
-	color: var(--live);
-}
-
-.GameList-live::before {
-	content: "";
-	width: 7px;
-	height: 7px;
-	border-radius: 50%;
-	background: currentColor;
-}
-
-.GameList-rink {
-	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 2.5);
-	min-width: 0;
-}
-
-.GameList-rink-text {
-	display: flex;
-	flex-direction: column;
-	min-width: 0;
-}
-
-.GameList-rink-name {
-	overflow: hidden;
-	font-size: 0.9375rem;
-	font-weight: 550;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-
-.GameList-rink-city {
-	font-size: 0.75rem;
-	color: var(--muted-fg);
-}
-
-.GameList-teams {
-	display: flex;
-	flex-direction: column;
-	gap: calc(var(--spacing) * 1);
-	min-width: 0;
 }
 
 .GameList-team {
 	display: flex;
+	flex: 0 1 auto;
 	align-items: center;
 	gap: calc(var(--spacing) * 1.5);
 	min-width: 0;
 	font-size: 0.9375rem;
-	font-weight: 550;
+	font-weight: 400;
+}
+
+/* A final game's score beside each team; the winner is bold, the loser muted */
+.GameList-goals {
+	flex: none;
+	font-variant-numeric: tabular-nums;
+}
+
+.GameList-team--won {
+	font-weight: 650;
+}
+
+.GameList-team--lost {
+	color: var(--muted-fg);
 }
 
 .GameList-team a {
@@ -1193,48 +1613,66 @@ table {
 	text-overflow: ellipsis;
 }
 
-.GameList-divisions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: calc(var(--spacing) * 1);
-}
-
-.GameList-division {
-	padding: 2px calc(var(--spacing) * 2);
-	border-radius: 6px;
-	background: var(--chip-bg);
-	font-size: 0.8125rem;
-	font-weight: 500;
-	color: var(--site-fg);
-	white-space: nowrap;
-}
-
-.GameList-links {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: calc(var(--spacing) * 1);
-}
-
 .GameList-empty {
 	padding: calc(var(--spacing) * 8);
 	text-align: center;
 	color: var(--muted-fg);
 }
 
-@media (max-width: 760px) {
-	.GameList-game {
-		grid-template-columns: 72px minmax(0, 1fr);
-		row-gap: calc(var(--spacing) * 1.5);
-	}
+/* Nothing matches: what's empty, then the way out */
+.NoGames {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	padding: calc(var(--spacing) * 12) calc(var(--spacing) * 6);
+	background: var(--panel-bg);
+	border: 1px dashed var(--panel-border);
+	border-radius: var(--radius);
+	text-align: center;
+}
 
-	.GameList-game > :nth-child(n + 3) {
-		grid-column: 2;
-	}
+.NoGames > svg {
+	width: 28px;
+	height: 28px;
+	margin-bottom: calc(var(--spacing) * 1);
+	color: var(--subtle-fg);
+}
 
-	.GameList-links {
-		align-items: flex-start;
-	}
+.NoGames-title {
+	margin: 0;
+	font-size: 1.0625rem;
+	font-weight: 600;
+	text-wrap: balance;
+}
+
+.NoGames-text {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+.NoGames-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: calc(var(--spacing) * 2);
+	margin-top: calc(var(--spacing) * 2);
+}
+
+.NoGames-actions:empty {
+	display: none;
+}
+
+/* The suggested way out */
+.FilterPill--primary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+.FilterPill--primary:hover {
+	background: color-mix(in srgb, var(--accent) 85%, var(--panel-bg));
 }
 
 /* === Rink page === */
@@ -1368,17 +1806,15 @@ table {
 }
 
 /* Name and totals on the left, team picker in the top right */
+/* Page-level controls (e.g. a team picker), above the header's top right */
+.Detail-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: calc(var(--spacing) * -3);
+}
+
 .Detail-header--player {
 	align-items: flex-start;
-}
-
-/* Narrow screens wrap the picker below rather than squeezing the name */
-.Detail-header--player .Detail-heading {
-	flex-basis: 320px;
-}
-
-.Detail-header--player .Detail-note {
-	flex-basis: 100%;
 }
 
 .Detail-heading {
@@ -1413,9 +1849,155 @@ table {
 	color: var(--subtle-fg);
 }
 
+/* Player page hero: name and number, bio line, then season/career totals */
+.PlayerHero {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 5);
+}
+
+.PlayerHero-identity {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+}
+
+.PlayerHero-name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 calc(var(--spacing) * 3);
+	font-size: 2rem;
+	font-weight: 650;
+	letter-spacing: -0.03em;
+	line-height: 1.15;
+}
+
+.PlayerHero-number {
+	font-weight: 500;
+	letter-spacing: -0.01em;
+	color: var(--subtle-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.PlayerHero-bio {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 2) calc(var(--spacing) * 4);
+	font-size: 0.9375rem;
+	color: var(--muted-fg);
+}
+
+.PlayerHero-position {
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2.5);
+	border-radius: 999px;
+	background: var(--chip-bg);
+	font-size: 0.8125rem;
+	font-weight: 600;
+	color: var(--site-fg);
+}
+
+.PlayerHero-team {
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	font-weight: 600;
+	color: var(--site-fg);
+}
+
+.PlayerHero-division {
+	font-weight: 400;
+	color: var(--muted-fg);
+}
+
+.PlayerHero-division::before {
+	content: "· ";
+}
+
+.PlayerHero-stats {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 4) calc(var(--spacing) * 10);
+	padding-top: calc(var(--spacing) * 5);
+	border-top: 1px solid var(--panel-border);
+}
+
+.PlayerHero-group {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+}
+
+.PlayerHero-group + .PlayerHero-group {
+	padding-left: calc(var(--spacing) * 10);
+	border-left: 1px solid var(--panel-border);
+}
+
+.PlayerHero-group-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted-fg);
+}
+
+.PlayerHero-group-stats {
+	display: flex;
+	gap: calc(var(--spacing) * 6);
+	margin: 0;
+}
+
+.PlayerHero-stat {
+	display: flex;
+	flex-direction: column-reverse;
+	gap: calc(var(--spacing) * 0.5);
+	min-width: 2.5ch;
+}
+
+.PlayerHero-stat dd {
+	margin: 0;
+	font-size: 1.5rem;
+	font-weight: 650;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.1;
+}
+
+.PlayerHero-stat dt {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+@media (max-width: 600px) {
+	.PlayerHero-name {
+		font-size: 1.625rem;
+	}
+
+	.PlayerHero-group + .PlayerHero-group {
+		padding-left: 0;
+		border-left: none;
+	}
+}
+
 .Detail-form {
 	display: inline-flex;
+	align-items: center;
 	gap: 3px;
+}
+
+/* Muted rather than subtle: it labels the chips, so it needs to be legible
+   (subtle-fg is ~2.5:1 on a panel; muted-fg clears 4.5:1) */
+.Detail-form .Detail-meta-hint {
+	margin-right: calc(var(--spacing) * 1);
+}
+
+.Detail-form .Detail-meta-hint,
+.BoxScore-form .Detail-meta-hint {
+	color: var(--muted-fg);
 }
 
 .Detail-select {
@@ -1430,9 +2012,191 @@ table {
 	color: var(--muted-fg);
 }
 
-.Detail-note {
+/* Collapsed: one line saying something's missing; expands into details */
+.Warnings {
+	background: var(--warn-bg);
+	border: 1px solid var(--warn-border);
+	border-radius: var(--radius);
+}
+
+.Warnings-trigger {
+	appearance: none;
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2.5);
+	width: 100%;
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+	border: none;
+	border-radius: var(--radius);
+	background: none;
+	font: inherit;
+	font-size: 0.875rem;
+	color: var(--site-fg);
+	text-align: left;
+	cursor: pointer;
+}
+
+.Warnings-trigger:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+.Warnings-icon {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	color: var(--warn-fg);
+}
+
+.Warnings-label {
+	flex: none;
+	font-weight: 600;
+}
+
+.Warnings-summary {
+	flex: 1;
+	min-width: 0;
+	color: var(--muted-fg);
+}
+
+.Warnings-trigger > svg:last-child {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	color: var(--muted-fg);
+	transition: rotate 150ms;
+}
+
+.Warnings-trigger[data-panel-open] > svg:last-child {
+	rotate: 180deg;
+}
+
+.Warnings-panel {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 3);
+	/* Indented to line up with the "Warnings" label, past the icon */
+	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 4)
+		calc(var(--spacing) * 10.5);
+}
+
+.Warnings-detail {
 	margin: 0;
-	font-size: 0.8rem;
+	max-width: 70ch;
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+.Warnings-list {
+	align-self: stretch;
+	max-width: 560px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	font-size: 0.875rem;
+	background: var(--panel-bg);
+	border: 1px solid var(--warn-border);
+	border-radius: var(--radius-sm);
+}
+
+.Warnings-list li {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+}
+
+.Warnings-list li + li {
+	border-top: 1px solid var(--warn-border);
+}
+
+.Warnings-item-label {
+	font-weight: 600;
+	min-width: 0;
+}
+
+.Warnings-item-meta {
+	color: var(--muted-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.Warnings-retry {
+	appearance: none;
+	padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 3.5);
+	border: 1px solid var(--warn-border);
+	border-radius: 999px;
+	background: var(--panel-bg);
+	color: var(--site-fg);
+	font: inherit;
+	font-size: 0.8125rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.Warnings-retry:hover {
+	border-color: var(--warn-fg);
+}
+
+.Warnings-retry:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+	.Warnings-panel {
+		padding-left: calc(var(--spacing) * 4);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.Warnings-trigger > svg:last-child {
+		transition: none;
+	}
+}
+
+/* A stat that isn't posted yet */
+.StatsTable-blank {
+	color: var(--subtle-fg);
+}
+
+/* A banner above a page's content: what's missing, and why */
+.Notice {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 3.5) calc(var(--spacing) * 4);
+	background: var(--info-bg);
+	border: 1px solid var(--info-border);
+	border-radius: var(--radius);
+}
+
+.Notice-icon {
+	flex: none;
+	width: 18px;
+	height: 18px;
+	margin-top: 1px;
+	color: var(--info-fg);
+}
+
+.Notice-body {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 0.5);
+	min-width: 0;
+}
+
+.Notice-title {
+	font-size: 0.9375rem;
+	font-weight: 600;
+	color: var(--site-fg);
+}
+
+.Notice-text {
+	margin: 0;
+	font-size: 0.875rem;
 	color: var(--muted-fg);
 }
 
@@ -1485,25 +2249,109 @@ table {
 
 /* === Game page === */
 
-/* Away | score, time and rink | home */
+/* Away | score, time and rink | home. Each side is tinted with its team's
+   color (away blue, home orange), like the matchup page. */
 .BoxScore-header {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: center;
+	gap: calc(var(--spacing) * 6);
+	padding: calc(var(--spacing) * 8) calc(var(--spacing) * 6);
+	background:
+		linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--team-a) 9%, transparent),
+			transparent 38%,
+			transparent 62%,
+			color-mix(in srgb, var(--team-b) 9%, transparent)
+		),
+		var(--panel-bg);
+}
+
+.BoxScore-team--away {
+	--team: var(--team-a);
+}
+
+.BoxScore-team--home {
+	--team: var(--team-b);
 }
 
 .BoxScore-team {
+	/* Top-aligned, so labels and logos line up when one name wraps */
+	align-self: start;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: calc(var(--spacing) * 2);
+	gap: calc(var(--spacing) * 2.5);
+	min-width: 0;
 	text-align: center;
 }
 
-.BoxScore-team-name {
-	font-size: 1.125rem;
+.BoxScore-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	font-size: 0.6875rem;
 	font-weight: 650;
-	letter-spacing: -0.01em;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted-fg);
+}
+
+.BoxScore-eyebrow .Compare-key {
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+}
+
+.BoxScore-team .TeamAvatar {
+	margin: calc(var(--spacing) * 1) 0;
+	box-shadow:
+		0 0 0 4px var(--panel-bg),
+		0 0 0 6px color-mix(in srgb, var(--team) 50%, transparent);
+}
+
+.BoxScore-team-name {
+	max-width: 100%;
+	font-size: 1.75rem;
+	font-weight: 750;
+	line-height: 1.15;
+	letter-spacing: -0.025em;
+	text-wrap: balance;
+}
+
+.BoxScore-team-name .InlineLink {
+	color: var(--site-fg);
+}
+
+/* Under the name, above the record */
+.BoxScore-division {
+	margin-top: calc(var(--spacing) * -1.5);
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+/* Record | Last 5 chips, on one line */
+.BoxScore-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: calc(var(--spacing) * 2);
+	font-size: 0.8125rem;
+	color: var(--muted-fg);
+}
+
+.BoxScore-record {
+	font-size: 0.9375rem;
+	font-weight: 700;
+	color: var(--site-fg);
+}
+
+.BoxScore-form-divider {
+	width: 1px;
+	height: 14px;
+	background: var(--panel-border);
 }
 
 .BoxScore-center {
@@ -1514,17 +2362,52 @@ table {
 	text-align: center;
 }
 
-.BoxScore-center .Detail-meta {
-	justify-content: center;
-	font-size: 0.875rem;
+/* "Final" or "Live", above the score or "@" */
+.BoxScore-status {
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted-fg);
+}
+
+.BoxScore-status--live {
+	color: var(--live);
 }
 
 .BoxScore-score {
 	font-size: 2.75rem;
-	font-weight: 700;
+	font-weight: 750;
 	letter-spacing: -0.03em;
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
+}
+
+.BoxScore-at {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	margin-bottom: calc(var(--spacing) * 2);
+	border-radius: 50%;
+	background: var(--accent);
+	color: var(--accent-fg);
+	font-size: 1.125rem;
+	font-weight: 700;
+	box-shadow: 0 0 0 6px var(--panel-bg);
+}
+
+.BoxScore-time {
+	font-size: 1.5rem;
+	font-weight: 750;
+	letter-spacing: -0.02em;
+	white-space: nowrap;
+}
+
+.BoxScore-when {
+	font-size: 0.875rem;
+	color: var(--muted-fg);
 }
 
 .BoxScore-links {
@@ -1546,27 +2429,67 @@ table {
 	color: var(--site-fg);
 }
 
+/* No scoresheet yet: greyed out, with a tooltip saying when it comes */
+.BoxScore-official--disabled,
+.BoxScore-official--disabled:hover {
+	color: var(--subtle-fg);
+	cursor: default;
+}
+
 @media (max-width: 600px) {
 	.BoxScore-header {
-		padding: calc(var(--spacing) * 4);
+		padding: calc(var(--spacing) * 5) calc(var(--spacing) * 3);
 		gap: calc(var(--spacing) * 2);
 	}
 
 	.BoxScore-team .TeamAvatar {
-		--TeamAvatar-size: 44px !important;
+		--TeamAvatar-size: 52px !important;
 	}
 
 	.BoxScore-team-name {
-		font-size: 0.9375rem;
+		font-size: 1.0625rem;
+	}
+
+	.BoxScore-form-divider {
+		display: none;
 	}
 
 	.BoxScore-score {
 		font-size: 2rem;
 	}
+
+	.BoxScore-time {
+		font-size: 1.125rem;
+	}
+
+	.BoxScore-at {
+		width: 34px;
+		height: 34px;
+		font-size: 0.9375rem;
+	}
 }
 
 .Timeline-title {
 	margin-bottom: calc(var(--spacing) * 4);
+}
+
+/* Team leaders | head-to-head, in equal halves on wide screens */
+.GamePage-insights {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	align-items: start;
+	gap: calc(var(--spacing) * 4);
+}
+
+/* The hero above already shows both logos */
+.GamePage-insights .Compare-head .TeamAvatar {
+	display: none;
+}
+
+@media (max-width: 900px) {
+	.GamePage-insights {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 /* Both teams' rosters, side by side until the screen gets narrow */
@@ -1596,115 +2519,201 @@ table {
 	margin-left: auto;
 }
 
-/* The series: team, wins – wins, team; the note underneath */
-.HeadToHead-series {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
-	align-items: center;
-	gap: 0 calc(var(--spacing) * 3);
-	margin-bottom: calc(var(--spacing) * 3);
+/* Series record: headline, one bar split into wins/ties/wins, legend */
+.SeriesRecord {
+	margin-bottom: calc(var(--spacing) * 4);
 }
 
-.HeadToHead-series-team {
+.SeriesRecord-headline {
+	margin: 0 0 calc(var(--spacing) * 2);
+	font-size: 1.0625rem;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+.SeriesRecord-ties {
+	font-weight: 500;
+	color: var(--muted-fg);
+}
+
+/* 2px surface gaps between segments; rounded only at the bar's ends */
+.SeriesRecord-bar {
+	display: flex;
+	gap: 2px;
+	height: 10px;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-weight: 600;
+	border-radius: 4px;
 }
 
-.HeadToHead-series-team:first-child {
-	text-align: right;
+.SeriesRecord-segment {
+	flex-basis: 0;
+	min-width: 4px;
 }
 
-.HeadToHead-series-wins {
-	font-size: 2rem;
-	font-weight: 700;
-	line-height: 1.1;
-	color: var(--subtle-fg);
+.SeriesRecord-segment--left {
+	background: var(--team-a);
 }
 
-.HeadToHead-series-wins--leader {
-	color: var(--site-fg);
+.SeriesRecord-segment--tie {
+	background: var(--subtle-fg);
 }
 
-.HeadToHead-series-sep {
-	font-size: 1.25rem;
-	color: var(--subtle-fg);
+.SeriesRecord-segment--right {
+	background: var(--team-b);
 }
 
-.HeadToHead-series-note {
-	grid-column: 1 / -1;
-	text-align: center;
+.SeriesRecord-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 5);
+	margin: calc(var(--spacing) * 2) 0 0;
+	padding: 0;
+	list-style: none;
 	font-size: 0.8125rem;
 	color: var(--muted-fg);
 }
 
-.HeadToHead-list {
-	list-style: none;
-	max-width: 640px;
-	margin: 0 auto;
-	padding: 0;
-}
-
-/* Left team, score, right team; date and rink under the score */
-.HeadToHead-item {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) 4.5rem minmax(0, 1fr);
-	align-items: center;
-	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
-	padding: calc(var(--spacing) * 2.5) 0;
-	border-top: 1px solid var(--panel-border);
-	font-size: 0.875rem;
-}
-
-.HeadToHead-team {
-	display: flex;
+.SeriesRecord-legend-item {
+	display: inline-flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 1.5);
-	min-width: 0;
+}
+
+.SeriesRecord-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 3px;
+}
+
+.SeriesRecord-count {
+	color: var(--site-fg);
+}
+
+/* Game table: date over rink, the score beside it, then links on the right.
+   The links column takes the slack so the score stays by the game. */
+.HeadToHead .StatsTable td:last-child {
+	width: 100%;
+}
+
+.HeadToHead-game {
+	display: flex;
+	flex-direction: column;
+}
+
+.HeadToHead-rink {
+	font-size: 0.75rem;
 	color: var(--muted-fg);
 }
 
-.HeadToHead-team:first-child {
-	flex-direction: row-reverse;
+.HeadToHead-score {
+	display: inline-flex;
+	align-items: baseline;
+	gap: calc(var(--spacing) * 1.5);
+	font-size: 1rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted-fg);
 }
 
-.HeadToHead-team-name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+.HeadToHead-score-dash {
+	color: var(--subtle-fg);
+}
+
+/* Team names beside their goals; the winner's stands out */
+.HeadToHead-team {
+	font-size: 0.875rem;
+	color: var(--muted-fg);
 }
 
 .HeadToHead-team--won {
-	font-weight: 650;
+	font-weight: 600;
 	color: var(--site-fg);
 }
 
-.HeadToHead-score {
-	padding: calc(var(--spacing) * 1) 0;
-	border-radius: 6px;
-	background: var(--subtle-bg);
-	text-align: center;
-	font-weight: 650;
-	font-variant-numeric: tabular-nums;
-	white-space: nowrap;
-	color: var(--site-fg);
+/* Narrow cards: one line per team ("Name 9" over "Name 2"), so the links
+   still fit. Sized by the card, which is half width beside the season. */
+.HeadToHead {
+	container-type: inline-size;
 }
 
-a.HeadToHead-score:hover {
-	text-decoration: none;
-	background: var(--chip-bg);
+@container (max-width: 520px) {
+	.HeadToHead-score {
+		display: grid;
+		grid-template-columns: auto auto;
+		justify-content: start;
+		column-gap: calc(var(--spacing) * 2);
+		row-gap: 2px;
+	}
+
+	.HeadToHead-score .HeadToHead-score-dash {
+		display: none;
+	}
+
+	.HeadToHead-team--left {
+		order: 1;
+	}
+
+	.HeadToHead-goals--left {
+		order: 2;
+	}
+
+	.HeadToHead-team--right {
+		order: 3;
+	}
+
+	.HeadToHead-goals--right {
+		order: 4;
+	}
 }
 
-.HeadToHead-when {
-	grid-column: 1 / -1;
-	display: flex;
+.HeadToHead-score-won--left {
+	font-weight: 700;
+	color: var(--team-a);
+}
+
+.HeadToHead-score-won--right {
+	font-weight: 700;
+	color: var(--team-b);
+}
+
+/* Replay above box score, so the names fit beside the score */
+.HeadToHead-links {
+	display: inline-flex;
 	flex-wrap: wrap;
-	justify-content: center;
-	align-items: center;
-	gap: calc(var(--spacing) * 2);
-	font-size: 0.75rem;
-	color: var(--subtle-fg);
+	justify-content: flex-end;
+	gap: calc(var(--spacing) * 1);
+}
+
+.HeadToHead-row {
+	position: relative;
+}
+
+/* About five games tall, then the table scrolls under its header. The half
+   row showing at the bottom hints there's more. */
+.HeadToHead .StatsTable-wrapper {
+	max-height: 21rem;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	/* Overlay scrollbars draw over content; this moves the scroll box's edge
+	   into the panel's padding so the scrollbar sits beside the rows */
+	margin-right: calc(var(--spacing) * -3.5);
+	padding-right: calc(var(--spacing) * 3.5);
+}
+
+.HeadToHead .StatsTable th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: var(--panel-bg);
+	/* A sticky cell's own border scrolls away with the rows beneath it */
+	border-bottom: none;
+	box-shadow: inset 0 -1px var(--panel-border);
+}
+
+/* Rows grow a line taller here, with each team on its own line */
+@container (max-width: 520px) {
+	.HeadToHead .StatsTable-wrapper {
+		max-height: 24.5rem;
+	}
 }
 
 .Timeline-period + .Timeline-period {
@@ -1780,25 +2789,71 @@ a.HeadToHead-score:hover {
 	font-variant-numeric: tabular-nums;
 }
 
+/* Each goal or penalty in its team's accent: away blue, home orange */
+.Timeline-item--away {
+	--team: var(--team-a);
+}
+
+.Timeline-item--home {
+	--team: var(--team-b);
+}
+
+/* Running score: the number that just changed in the scorer's color */
 .Timeline-score {
-	background: var(--accent);
-	color: var(--accent-fg);
+	display: inline-flex;
+	gap: 4px;
+	color: var(--muted-fg);
+}
+
+.Timeline-score-dash {
+	color: var(--subtle-fg);
+}
+
+.Timeline-score-changed {
+	font-weight: 800;
+	color: var(--team);
+}
+
+/* Penalty minutes, tinted with the penalized team's color */
+.Timeline-item--penalty .Timeline-tag {
+	background: color-mix(in srgb, var(--team) 12%, transparent);
+	color: var(--team);
 }
 
 /* === Matchup page === */
 
-/* Team A | vs | team B, like the game page's header */
+/* Team A | vs | team B, like the game page's header. Each side is tinted
+   with its team's comparison color, so the header doubles as the legend. */
 .Matchup-header {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 	align-items: start;
+	gap: calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 7) calc(var(--spacing) * 6);
+	background:
+		linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--team-a) 7%, transparent),
+			transparent 35%,
+			transparent 65%,
+			color-mix(in srgb, var(--team-b) 7%, transparent)
+		),
+		var(--panel-bg);
+}
+
+.Matchup-side--a {
+	--team: var(--team-a);
+}
+
+.Matchup-side--b {
+	--team: var(--team-b);
 }
 
 .Matchup-side {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: calc(var(--spacing) * 2);
+	gap: calc(var(--spacing) * 2.5);
 	min-width: 0;
 	text-align: center;
 }
@@ -1808,12 +2863,62 @@ a.HeadToHead-score:hover {
 	font-size: 0.875rem;
 }
 
+/* "■ Team 1": which comparison color is this side's */
+.Matchup-label {
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	font-size: 0.6875rem;
+	font-weight: 650;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted-fg);
+}
+
+.Matchup-label .Compare-key {
+	width: 8px;
+	height: 8px;
+	border-radius: 2px;
+}
+
+.Matchup-side .TeamAvatar {
+	box-shadow:
+		0 0 0 4px var(--panel-bg),
+		0 0 0 6px color-mix(in srgb, var(--team) 45%, transparent);
+}
+
+/* Room for the avatar's ring */
+.Matchup-side .TeamAvatar,
+.Matchup-placeholder {
+	margin: calc(var(--spacing) * 1) 0 calc(var(--spacing) * 2);
+}
+
+/* Stands in for the logo until a team is picked */
+.Matchup-placeholder {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 72px;
+	height: 72px;
+	border: 2px dashed color-mix(in srgb, var(--team) 45%, transparent);
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--team) 8%, var(--panel-bg));
+	color: color-mix(in srgb, var(--team) 70%, var(--muted-fg));
+}
+
+.Matchup-placeholder svg {
+	width: 28px;
+	height: 28px;
+}
+
 .Matchup-picker {
 	justify-content: space-between;
 	width: 100%;
-	max-width: 260px;
+	max-width: 280px;
+	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 4);
 	font-size: 1rem;
 	font-weight: 650;
+	box-shadow: var(--shadow-sm);
 }
 
 .Matchup-picker[data-placeholder] {
@@ -1821,28 +2926,171 @@ a.HeadToHead-score:hover {
 	font-weight: 500;
 }
 
-/* Secondary to the team, below it */
+/* Secondary to the team: a quiet chip below it */
 .Matchup-season {
-	max-width: 220px;
-	padding-block: calc(var(--spacing) * 1);
+	width: auto;
+	max-width: 280px;
+	padding: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
+	border-color: transparent;
+	background: var(--chip-bg);
+	box-shadow: none;
 	font-size: 0.8125rem;
 	font-weight: 500;
 	color: var(--muted-fg);
 }
 
+.Matchup-season:hover {
+	background: var(--chip-bg);
+	border-color: var(--panel-border);
+	color: var(--site-fg);
+}
+
+/* A hairline down the middle, broken by the "vs" badge and swap button */
 .Matchup-center {
+	position: relative;
+	align-self: stretch;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	gap: calc(var(--spacing) * 3);
-	/* Line the "vs" up with the logos */
-	padding-top: calc(var(--spacing) * 4);
+	/* Line the badge up with the logos */
+	padding-top: calc(var(--spacing) * 7);
+}
+
+.Matchup-center::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 50%;
+	width: 1px;
+	background: linear-gradient(
+		transparent,
+		var(--panel-border) 20%,
+		var(--panel-border) 80%,
+		transparent
+	);
 }
 
 .Matchup-vs {
-	font-size: 1.5rem;
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	background: var(--accent);
+	color: var(--accent-fg);
+	font-size: 0.8125rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	box-shadow: 0 0 0 6px var(--panel-bg);
+}
+
+.Matchup-swap {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid var(--panel-border);
+	border-radius: 50%;
+	background: var(--panel-bg);
+	color: var(--muted-fg);
+	cursor: pointer;
+	transition:
+		color 120ms,
+		border-color 120ms,
+		transform 200ms;
+}
+
+.Matchup-swap svg {
+	width: 16px;
+	height: 16px;
+}
+
+.Matchup-swap:hover:not(:disabled) {
+	border-color: var(--subtle-fg);
+	color: var(--site-fg);
+	transform: rotate(180deg);
+}
+
+.Matchup-swap:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Before both teams are picked */
+.Matchup-empty {
+	padding: calc(var(--spacing) * 8) calc(var(--spacing) * 6);
+	border: 1px dashed var(--panel-border);
+	border-radius: var(--radius);
+	text-align: center;
+}
+
+.Matchup-empty-title {
+	font-size: 1.25rem;
 	font-weight: 700;
+}
+
+.Matchup-empty-text {
+	margin: calc(var(--spacing) * 1.5) 0 0;
+	color: var(--muted-fg);
+}
+
+.Matchup-features {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: calc(var(--spacing) * 3);
+	max-width: 880px;
+	margin: calc(var(--spacing) * 6) auto 0;
+	padding: 0;
+	list-style: none;
+	text-align: left;
+}
+
+.Matchup-feature {
+	display: flex;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 4);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-sm);
+	font-size: 0.875rem;
+	color: var(--muted-fg);
+}
+
+.Matchup-feature svg {
+	flex: none;
+	width: 20px;
+	height: 20px;
+	margin-top: 1px;
+	color: var(--site-fg);
+}
+
+.Matchup-feature-title {
+	display: block;
+	margin-bottom: calc(var(--spacing) * 0.5);
+	font-weight: 600;
+	color: var(--site-fg);
+}
+
+.Matchup-tip {
+	margin: calc(var(--spacing) * 5) 0 0;
+	font-size: 0.8125rem;
 	color: var(--subtle-fg);
+}
+
+@media (max-width: 760px) {
+	.Matchup-features {
+		grid-template-columns: minmax(0, 1fr);
+		max-width: 420px;
+	}
 }
 
 /* Comparison: a header naming each team, then groups of rows */
@@ -2021,6 +3269,30 @@ a.HeadToHead-score:hover {
 	justify-content: flex-end;
 }
 
+/* Hover card for a form chip: result and score, opponent, when and where */
+.GamePreview {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 0.5);
+}
+
+.GamePreview-score {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	font-size: 1rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.GamePreview-opponent {
+	font-weight: 500;
+}
+
+.GamePreview-meta {
+	font-size: 0.75rem;
+	color: var(--muted-fg);
+}
+
 a.Compare-chip:hover {
 	text-decoration: none;
 	filter: brightness(0.95);
@@ -2035,18 +3307,6 @@ a.Compare-chip:hover {
 	margin: 0;
 	font-size: 0.8125rem;
 	color: var(--subtle-fg);
-}
-
-/* One message for both sides, under the label */
-.Compare-row--note .Compare-label {
-	grid-column: 2;
-}
-
-.Compare-note {
-	grid-column: 1 / -1;
-	margin: 0;
-	text-align: center;
-	font-size: 0.875rem;
 }
 
 /* Top scorers: each team's top three, side by side */
@@ -2128,12 +3388,32 @@ a.Compare-chip:hover {
 
 @media (max-width: 600px) {
 	.Matchup-header {
-		padding: calc(var(--spacing) * 4);
+		padding: calc(var(--spacing) * 5) calc(var(--spacing) * 3);
 		gap: calc(var(--spacing) * 2);
 	}
 
 	.Matchup-side .TeamAvatar {
-		--TeamAvatar-size: 44px !important;
+		--TeamAvatar-size: 48px !important;
+	}
+
+	.Matchup-placeholder {
+		width: 48px;
+		height: 48px;
+	}
+
+	.Matchup-placeholder svg {
+		width: 20px;
+		height: 20px;
+	}
+
+	.Matchup-vs {
+		width: 34px;
+		height: 34px;
+		font-size: 0.6875rem;
+	}
+
+	.Matchup-empty {
+		padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
 	}
 
 	.Matchup-picker {
@@ -2141,7 +3421,7 @@ a.Compare-chip:hover {
 	}
 
 	.Matchup-center {
-		padding-top: calc(var(--spacing) * 2);
+		padding-top: calc(var(--spacing) * 6);
 	}
 
 	.Compare-head {
@@ -2458,7 +3738,6 @@ a.Compare-chip:hover {
 
 /* "Not on LiveBarn", with an info icon that explains why on hover or tap */
 .InfoPopup {
-	z-index: 30;
 	max-width: 260px;
 	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
 	background: var(--panel-bg);
@@ -2506,8 +3785,39 @@ a.Compare-chip:hover {
 	box-shadow: 0 0 0 4px var(--focus-ring);
 }
 
+/* The "/" shortcut, shown until you focus or type in the search */
+.SiteSearch-key {
+	position: absolute;
+	top: 50%;
+	right: 10px;
+	translate: 0 -50%;
+	display: grid;
+	place-items: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 4px;
+	border: 1px solid var(--panel-border);
+	border-radius: 5px;
+	background: var(--subtle-bg);
+	color: var(--muted-fg);
+	font: inherit;
+	font-size: 0.75rem;
+	line-height: 1;
+	pointer-events: none;
+}
+
+.SiteSearch-input:is(:focus, :not(:placeholder-shown)) + .SiteSearch-key {
+	display: none;
+}
+
+/* No keyboard to press it with */
+@media (hover: none) {
+	.SiteSearch-key {
+		display: none;
+	}
+}
+
 .SiteSearch-positioner {
-	z-index: 20;
 	width: var(--anchor-width);
 	min-width: 360px;
 }
@@ -2659,16 +3969,118 @@ a.Compare-chip:hover {
 	color: var(--accent-fg);
 }
 
-.RinkRoute-matchup {
-	display: inline-flex;
-	flex-wrap: wrap;
+.GameTable-team {
+	display: flex;
 	align-items: center;
+	gap: calc(var(--spacing) * 2.5);
+}
+
+.GameTable-team-name {
+	display: flex;
+	align-items: baseline;
 	gap: calc(var(--spacing) * 1.5);
 }
 
-.RinkRoute-at {
-	margin: 0 calc(var(--spacing) * 0.5);
-	color: var(--subtle-fg);
+.GameTable-team-goals {
+	font-variant-numeric: tabular-nums;
+}
+
+.GameTable-team--won .GameTable-team-name {
+	font-weight: 650;
+}
+
+.GameTable-team--lost .GameTable-team-name {
+	color: var(--muted-fg);
+}
+
+.GameTable-team-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.RinkRoute-links,
+.GameTable-links {
+	display: flex;
+	justify-content: flex-end;
+	gap: calc(var(--spacing) * 1);
+}
+
+/* A day's games on the home page, in a card like a rink page's tables */
+.GameList-panel {
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 6);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+/* Each day is its own table; fixed column widths line them all up. Narrow
+   screens scroll it sideways rather than squeezing the names. */
+.GameTable {
+	table-layout: fixed;
+	min-width: 720px;
+}
+
+.GameTable th:nth-child(1) {
+	width: 7.5rem;
+}
+
+.GameTable th:nth-child(4) {
+	width: 24%;
+}
+
+.GameTable th:last-child {
+	width: calc(var(--icon-links-width) + var(--spacing) * 6);
+}
+
+/* Long team and rink names end in an ellipsis instead of widening a column */
+.GameTable td {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.GameTable .GameTable-team-name {
+	min-width: 0;
+}
+
+.GameTable .GameTable-team-name a,
+.GameTable-team-division {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.GameTable-row {
+	position: relative;
+}
+
+/* Above the row's stretched link, so it gets its own hover (a tooltip) */
+.GameTime {
+	position: relative;
+	z-index: 1;
+	width: fit-content;
+}
+
+.GameTable-time {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-weight: 600;
+}
+
+.GameTable-live {
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: var(--live);
+}
+
+.GameTable-row--live td:first-child {
+	box-shadow: inset 3px 0 0 var(--live);
+}
+
+.GameTable-team-division {
+	font-size: 0.75rem;
+	color: var(--muted-fg);
 }
 
 /* === Team leaders === */
@@ -2746,56 +4158,10 @@ a.Compare-chip:hover {
 	font-size: 1.5rem;
 }
 
-/* === Teams page === */
+/* === Teams page: standings by division === */
 
-.TeamsGrid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-	gap: calc(var(--spacing) * 3);
-	margin: 0;
-	padding: 0;
-	list-style: none;
-}
-
-.TeamCard {
-	display: flex;
-	align-items: center;
-	gap: calc(var(--spacing) * 3);
-	height: 100%;
-	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
-	color: var(--site-fg);
-}
-
-.TeamCard:hover {
-	text-decoration: none;
-	border-color: var(--subtle-fg);
-}
-
-.TeamCard-body {
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-}
-
-.TeamCard-name {
-	overflow: hidden;
-	font-weight: 600;
-	white-space: nowrap;
-	text-overflow: ellipsis;
-}
-
-.TeamCard-record {
-	font-size: 0.8125rem;
-	color: var(--muted-fg);
-}
-
-/* === Standings page === */
-
-.Standings-team {
+.Standings-team,
+.StatsTable-team {
 	display: inline-flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 2);

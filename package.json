@@ -11,7 +11,9 @@
 	"scripts": {
 		"build": "bun ./tools/Build.ts",
 		"start": "bun ./tools/Build.ts --dev",
-		"deploy": "bun ./tools/Build.ts --deploy"
+		"deploy": "bun ./tools/Build.ts --deploy",
+		"typecheck": "tsc -p . && tsc -p projects/khl",
+		"lint": "eslint ."
 	},
 	"devDependencies": {
 		"@base-ui/react": "^1.9.0",

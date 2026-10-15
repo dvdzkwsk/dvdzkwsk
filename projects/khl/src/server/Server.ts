@@ -47,6 +47,7 @@ import {
 	MatchupResponse,
 	MatchupTeam,
 	RecentGame,
+	toRecentGame,
 	TeamSeasonsResponse,
 	TeamsResponse,
 	HeadToHeadGame,
@@ -1403,34 +1404,24 @@ function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 	}
 	const results: RecentGame[] = []
 	for (const game of schedule) {
-		const goals = game.isFinal ? getGoalsByTeam(game) : null
-		if (!goals) {
+		const recent = toRecentGame({
+			...game,
+			arena: toDisplayArena(game.arena),
+		})
+		if (!recent) {
 			continue
 		}
-		const goalsFor = goals[game.team.id]!
-		const goalsAgainst = goals[game.opponent.id]!
-		const result =
-			goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "T"
 		record.gamesPlayed += 1
-		record.goalsFor += goalsFor
-		record.goalsAgainst += goalsAgainst
-		if (result === "W") {
+		record.goalsFor += recent.goalsFor
+		record.goalsAgainst += recent.goalsAgainst
+		if (recent.result === "W") {
 			record.wins += 1
-		} else if (result === "L") {
+		} else if (recent.result === "L") {
 			record.losses += 1
 		} else {
 			record.ties += 1
 		}
-		results.push({
-			gameId: game.id,
-			startsAt: game.startsAt,
-			arena: toDisplayArena(game.arena),
-			opponent: {id: game.opponent.id, name: game.opponent.name},
-			homeAway: game.homeAway,
-			result,
-			goalsFor,
-			goalsAgainst,
-		})
+		results.push(recent)
 	}
 	record.recent = results.slice(-LIMITS.MATCHUP_RECENT_GAMES)
 	const last = results.at(-1)?.result

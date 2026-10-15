@@ -23,6 +23,7 @@ import {
 	KHLTeamRef,
 	KHLTeamRefSchema,
 	KHLTeamSchema,
+	getGoalsByTeam,
 } from "./KHLJson.js"
 
 /**
@@ -659,6 +660,27 @@ export const RecentGameSchema = z.object({
 	goalsFor: z.number(),
 	goalsAgainst: z.number(),
 }) satisfies z.ZodType<RecentGame>
+
+/** A finished game from its team's side; null until it has a usable score */
+export function toRecentGame(game: KHLGame): RecentGame | null {
+	const goals = game.isFinal ? getGoalsByTeam(game) : null
+	if (!goals) {
+		return null
+	}
+	const goalsFor = goals[game.team.id]!
+	const goalsAgainst = goals[game.opponent.id]!
+	return {
+		gameId: game.id,
+		startsAt: game.startsAt,
+		arena: game.arena,
+		opponent: {id: game.opponent.id, name: game.opponent.name},
+		homeAway: game.homeAway,
+		result:
+			goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "T",
+		goalsFor,
+		goalsAgainst,
+	}
+}
 
 /**
  * A team's season (so far, if it's the current one, or up to a game), from

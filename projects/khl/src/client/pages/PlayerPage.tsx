@@ -252,9 +252,6 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 	const current = player.registrations.filter((r) => {
 		return isCurrentRegistration(player, r)
 	})
-	const numbers = [
-		...new Set(current.flatMap((r) => r.profile?.number ?? [])),
-	]
 	const position = player.registrations.find((r) => r.profile?.position)
 		?.profile?.position
 	const totals = (
@@ -273,14 +270,7 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 			<div className="PlayerHero">
 				<div className="PlayerHero-identity">
 					<div className="PlayerHero-heading">
-						<h1 className="PlayerHero-name">
-							{player.name}
-							{numbers.length > 0 && (
-								<span className="PlayerHero-number">
-									{numbers.map((n) => `#${n}`).join(" / ")}
-								</span>
-							)}
-						</h1>
+						<h1 className="PlayerHero-name">{player.name}</h1>
 						{position && (
 							<span className="PlayerHero-position">
 								{position}
@@ -288,29 +278,41 @@ const PlayerHeader = ({player}: {player: PlayerResponse}) => {
 						)}
 					</div>
 					<div className="PlayerHero-bio">
-						{current.map((r) => (
-							<span
-								key={r.khlPlayerId}
-								className="PlayerHero-team"
-							>
-								<TeamAvatar
-									name={r.teamName}
-									logoUrl={r.teamLogoUrl}
-									size={32}
-								/>
-								<span className="PlayerHero-team-text">
-									<TeamLink
-										team={{id: r.teamId, name: r.teamName}}
-										seasonId={player.currentSeason.id}
+						{current.map((r) => {
+							// "#43 · Division 7A": numbers differ between teams
+							const detail = [
+								r.profile?.number && `#${r.profile.number}`,
+								getDivision(r),
+							]
+								.filter(Boolean)
+								.join(" · ")
+							return (
+								<span
+									key={r.khlPlayerId}
+									className="PlayerHero-team"
+								>
+									<TeamAvatar
+										name={r.teamName}
+										logoUrl={r.teamLogoUrl}
+										size={32}
 									/>
-									{getDivision(r) && (
-										<span className="PlayerHero-division">
-											{getDivision(r)}
-										</span>
-									)}
+									<span className="PlayerHero-team-text">
+										<TeamLink
+											team={{
+												id: r.teamId,
+												name: r.teamName,
+											}}
+											seasonId={player.currentSeason.id}
+										/>
+										{detail && (
+											<span className="PlayerHero-division">
+												{detail}
+											</span>
+										)}
+									</span>
 								</span>
-							</span>
-						))}
+							)
+						})}
 					</div>
 				</div>
 				<div className="PlayerHero-stats">

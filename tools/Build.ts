@@ -2,6 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import {search} from "@inquirer/prompts"
 import crossSpawn from "cross-spawn"
+import {Cloudflare} from "./Cloudflare.js"
 import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
 import {getGitRevision} from "../pkg/util/GitUtil.js"
@@ -21,7 +22,7 @@ const PROJECTS: Project[] = [
 		type: "webapp",
 		server: "src/server/Server.ts",
 		// The server serves the app and /api from one process (see fly.toml)
-		deploy: {type: "fly"},
+		deploy: {type: "fly", domain: "khl.dvdzkwsk.com"},
 	},
 ]
 
@@ -36,8 +37,11 @@ interface Project {
 type DeployTarget =
 	/** Static hosting; `siteIdEnvVar` names the env var with the site id */
 	| {type: "netlify"; siteIdEnvVar: string}
-	/** A container running `server`, configured by the project's fly.toml */
-	| {type: "fly"}
+	/**
+	 * A container running `server`, configured by the project's fly.toml.
+	 * `domain` is served through the Cloudflare proxy (see ensureFlyDomain).
+	 */
+	| {type: "fly"; domain?: string}
 
 /** Run with --dev to start dev servers, --deploy to build and publish. */
 async function main() {
@@ -137,7 +141,7 @@ function deployWebApp(project: Project) {
 		case "netlify":
 			return deployToNetlify(project, project.deploy.siteIdEnvVar)
 		case "fly":
-			return deployToFly(project)
+			return deployToFly(project, project.deploy.domain)
 	}
 }
 
@@ -170,7 +174,7 @@ function deployToNetlify(project: Project, siteIdEnvVar: string) {
  * dist/server.js, and ships both in the image described by the project's
  * Dockerfile. Uses your `fly auth login` session, or FLY_API_TOKEN if set.
  */
-function deployToFly(project: Project) {
+async function deployToFly(project: Project, domain?: string) {
 	if (!project.server) {
 		throw logger.newError("deployToFly", "project has no server to run", {
 			project: project.path,
@@ -216,6 +220,93 @@ function deployToFly(project: Project) {
 		],
 		{cwd: project.path},
 	)
+	// After the deploy, since a new app has no IP addresses until then
+	if (domain) {
+		await ensureFlyDomain(config, domain)
+	}
+}
+
+/**
+ * Serves `domain` from the app through the Cloudflare proxy: a Fly
+ * certificate, proxied DNS records, an unproxied _acme-challenge CNAME so Fly
+ * can renew the certificate behind the proxy, and a Configuration Rule that
+ * makes Cloudflare connect over HTTPS (with Flexible SSL, fly.toml's
+ * force_https redirects forever).
+ */
+async function ensureFlyDomain(config: FlyConfig, domain: string) {
+	const token = getEnvVar("CLOUDFLARE_API_TOKEN", false)
+	if (!token) {
+		logger.warn("ensureFlyDomain", "skipping DNS and certificate setup", {
+			domain,
+		})
+		return
+	}
+
+	const certs = JSON.parse(
+		capture("fly", ["certs", "list", "--app", config.app, "--json"]) ??
+			"[]",
+	) as {hostname?: string}[]
+	if (!certs.some((c) => c.hostname === domain)) {
+		logger.info("ensureFlyDomain", "adding Fly certificate", {domain})
+		run("fly", ["certs", "add", domain, "--app", config.app])
+	}
+	const cert = readFlyCert(config, domain)
+	const {a, aaaa, acme_challenge} = cert.dns_requirements
+
+	const cloudflare = new Cloudflare(token)
+	const zone = await cloudflare.findZone(domain)
+	await cloudflare.syncDnsRecords(zone, domain, [
+		...a.map((ip) => ({type: "A" as const, content: ip, proxied: true})),
+		...aaaa.map((ip) => ({
+			type: "AAAA" as const,
+			content: ip,
+			proxied: true,
+		})),
+	])
+	await cloudflare.syncDnsRecords(zone, acme_challenge.name, [
+		{type: "CNAME", content: acme_challenge.target, proxied: false},
+	])
+	await cloudflare.upsertConfigRule(zone, {
+		ref: `ssl_strict_${domain.replaceAll(/[^a-z0-9]/gi, "_")}`,
+		description: `Full (strict) SSL for ${domain}, set by tools/Build.ts`,
+		expression: `(http.host eq "${domain}")`,
+		action: "set_config",
+		action_parameters: {ssl: "strict"},
+		enabled: true,
+	})
+
+	// Showing the certificate also has Fly recheck its DNS validation
+	logger.info("ensureFlyDomain", "domain configured", {
+		domain,
+		certificate: readFlyCert(config, domain).status,
+	})
+}
+
+interface FlyCert {
+	status: string
+	dns_requirements: {
+		a: string[]
+		aaaa: string[]
+		acme_challenge: {name: string; target: string}
+	}
+}
+
+function readFlyCert(config: FlyConfig, domain: string): FlyCert {
+	const json = capture("fly", [
+		"certs",
+		"show",
+		domain,
+		"--app",
+		config.app,
+		"--json",
+	])
+	if (!json) {
+		throw logger.newError("readFlyCert", "can't read Fly certificate", {
+			app: config.app,
+			domain,
+		})
+	}
+	return JSON.parse(json) as FlyCert
 }
 
 interface FlyConfig {

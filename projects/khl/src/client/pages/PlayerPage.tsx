@@ -308,7 +308,8 @@ const PlayerHeader = ({
 		const gp = sumStat(registrations, "Games Played", section)
 		const g = sumStat(registrations, "Goals", section)
 		const a = sumStat(registrations, "Assists", section)
-		return {GP: gp, G: g, A: a, PTS: g + a}
+		const pim = sumStat(registrations, "Penalty Minutes", section)
+		return {GP: gp, G: g, A: a, PTS: g + a, PIM: pim}
 	}
 
 	return (

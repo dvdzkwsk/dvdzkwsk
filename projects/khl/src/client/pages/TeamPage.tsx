@@ -114,6 +114,9 @@ const TeamHeader = ({team}: {team: TeamResponse}) => {
 	const goalsFor = goals.reduce((n, g) => n + g.for, 0)
 	const goalsAgainst = goals.reduce((n, g) => n + g.against, 0)
 	const diff = goalsFor - goalsAgainst
+	const penaltyMinutes = team.roster.skaters.reduce((n, p) => {
+		return n + (Number(p.stats["PIM"]) || 0)
+	}, 0)
 	return (
 		<header className="Detail-header Detail-header--player">
 			<div className="PlayerHero">
@@ -151,6 +154,10 @@ const TeamHeader = ({team}: {team: TeamResponse}) => {
 							GA: goalsAgainst,
 							Diff: diff > 0 ? `+${diff}` : diff,
 						}}
+					/>
+					<HeroStatGroup
+						label="Penalties"
+						stats={{PIM: penaltyMinutes}}
 					/>
 					<HeroLastResults games={team.games} />
 				</div>

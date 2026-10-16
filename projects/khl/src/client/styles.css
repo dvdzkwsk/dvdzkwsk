@@ -308,10 +308,10 @@ table {
 	margin-bottom: 0.3em;
 }
 
-/* Reserves two lines so the loader doesn't jump when the note appears.
-   A short measure, balanced, so it wraps into an even pair of lines */
+/* Reserves three lines so the loader doesn't jump when the note appears.
+   A short measure, balanced, so it wraps into even lines */
 .PageLoader-note {
-	min-height: 3em;
+	min-height: 4.5em;
 	max-width: 36ch;
 	font-size: var(--text-md);
 	line-height: 1.5;
@@ -361,19 +361,20 @@ table {
 	opacity: 0.35;
 }
 
-/* Fresh ice: drawn in behind the Zamboni, then fades for the next lap */
+/* Fresh ice: each layer's dash ends at the Zamboni and moves with it.
+   The layers overlap, so the ice is brightest right behind it. */
 .ZamboniLap-trail {
 	fill: none;
 	stroke: var(--ice-shine);
 	stroke-width: 12;
 	stroke-linecap: round;
-	stroke-dasharray: 100 100;
-	animation: ZamboniLap-trail 5s linear infinite;
+	opacity: 0.16;
+	animation: ZamboniLap-trail 8s linear infinite;
 }
 
 .ZamboniLap-zamboni {
 	offset-rotate: auto;
-	animation: ZamboniLap-lap 5s linear infinite;
+	animation: ZamboniLap-lap 8s linear infinite;
 }
 
 .ZamboniLap-body {
@@ -394,29 +395,25 @@ table {
 	fill: var(--panel-bg);
 }
 
-/* A lap, then a beat at the start line while the trail fades */
+/* Laps at a steady speed; the end of one lap is the start of the next */
 @keyframes ZamboniLap-lap {
-	0% {
+	from {
 		offset-distance: 0%;
 	}
-	90%,
-	100% {
+	to {
 		offset-distance: 100%;
 	}
 }
 
+/* Keeps a dash of length L ending where the Zamboni is: its end is at
+   L - offset along the lap, which runs 0 to 100 in step with it. In px,
+   since calc() can't make a plain number here; pathLength scales them. */
 @keyframes ZamboniLap-trail {
-	0% {
-		stroke-dashoffset: 100;
-		opacity: 1;
+	from {
+		stroke-dashoffset: calc(var(--ZamboniLap-trail) * 1px);
 	}
-	90% {
-		stroke-dashoffset: 0;
-		opacity: 1;
-	}
-	100% {
-		stroke-dashoffset: 0;
-		opacity: 0;
+	to {
+		stroke-dashoffset: calc((var(--ZamboniLap-trail) - 100) * 1px);
 	}
 }
 
@@ -503,7 +500,7 @@ table {
 		offset-distance: 35%;
 	}
 	.ZamboniLap-trail {
-		stroke-dashoffset: 65;
+		stroke-dashoffset: calc((var(--ZamboniLap-trail) - 35) * 1px);
 	}
 }
 

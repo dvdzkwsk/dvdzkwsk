@@ -109,7 +109,7 @@ const PlayersPage = ({query}: RouteProps) => {
 	// The first time, every team's stats page is fetched
 	const loadingLabel = "Loading every team's roster…"
 	const slowNote =
-		"Still working. Players are collected from every team's stats page, which takes a while the first time."
+		"Still working. We're gathering players from every team's stats page for the first time. Next time, it'll load much faster."
 	return (
 		<PageShell>
 			<div className="HomePage">

@@ -94,7 +94,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 			<AsyncContent
 				state={state}
 				loadingLabel="Loading player details…"
-				slowNote="Still working. The first time a player's details load, it can take a little extra time."
+				slowNote="Still working. We're grabbing this player's details fresh from the league for the first time. Next time, it'll load much faster."
 			>
 				{(player) => {
 					const selected =

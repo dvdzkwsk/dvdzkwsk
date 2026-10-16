@@ -952,7 +952,7 @@ export function AsyncContent<T>({
 const LOADER_SLOW_MS = 5000
 
 const DEFAULT_SLOW_NOTE =
-	"Still working. The first time this loads, it can take a little extra time."
+	"Still working. We're grabbing this fresh from the league for the first time. Next time, it'll load much faster."
 
 interface LoaderProps {
 	/** What's loading, e.g. "Loading standings…" */
@@ -1025,6 +1025,9 @@ export const InlineLoader = ({
 const LAP_PATH =
 	"M46 20H154A26 26 0 0 1 180 46V54A26 26 0 0 1 154 80H46A26 26 0 0 1 20 54V46A26 26 0 0 1 46 20Z"
 
+/** Each fresh-ice layer's length, as a share of the lap */
+const TRAIL_LENGTHS = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72]
+
 /** A rink from above, with a Zamboni lapping it and fresh ice behind it */
 const ZamboniLap = () => {
 	return (
@@ -1059,7 +1062,21 @@ const ZamboniLap = () => {
 				y2="94"
 			/>
 			<circle className="ZamboniLap-faceoff" cx="100" cy="50" r="12" />
-			<path className="ZamboniLap-trail" pathLength="100" d={LAP_PATH} />
+			{/* Fresh ice following the Zamboni: stacked faint trails that all
+			    end at it, so the ice is brightest right behind it and fades
+			    toward the tail */}
+			{TRAIL_LENGTHS.map((length) => (
+				<path
+					key={length}
+					className="ZamboniLap-trail"
+					pathLength="100"
+					d={LAP_PATH}
+					strokeDasharray={`${length} ${100 - length}`}
+					style={
+						{"--ZamboniLap-trail": length} as React.CSSProperties
+					}
+				/>
+			))}
 			{/* Rides the lap with CSS offset-path; points along it, tank at
 			    the front */}
 			<g

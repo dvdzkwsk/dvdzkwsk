@@ -952,7 +952,7 @@ export function AsyncContent<T>({
 const LOADER_SLOW_MS = 5000
 
 const DEFAULT_SLOW_NOTE =
-	"Still working. We're grabbing this fresh from the league for the first time. Next time, it'll load much faster."
+	"Still working. This is the first time we're loading this data, so it will take a little bit longer."
 
 interface LoaderProps {
 	/** What's loading, e.g. "Loading standings…" */

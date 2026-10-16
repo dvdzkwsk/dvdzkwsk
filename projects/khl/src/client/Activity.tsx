@@ -51,7 +51,7 @@ export const ActivityFeed = ({
 					state={state}
 					size="inline"
 					loadingLabel="Loading recent activity…"
-					slowNote="Still working. We're reading each game's scoresheet for the first time. Next time, it'll load much faster."
+					slowNote="Still working. This is the first time we're loading these scoresheets, so it will take a little bit longer."
 					errorTitle="Couldn't load recent activity"
 				>
 					{(activity) =>

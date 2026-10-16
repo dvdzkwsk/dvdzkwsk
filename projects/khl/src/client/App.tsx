@@ -1,7 +1,7 @@
 import "./styles.css"
 import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
-import {createBrowserHistory, Location} from "history"
+import {Action, createBrowserHistory, History, Location} from "history"
 import * as React from "react"
 import {createRoot} from "react-dom/client"
 import {Helmet} from "react-helmet"
@@ -96,6 +96,7 @@ export const CurrentRoute = () => {
 		forceUpdate()
 		return unlisten
 	}, [context.history])
+	useScrollRestoration(context.history)
 
 	const location = context.history.location
 	const match = matchRoute(location.pathname) ?? {
@@ -103,6 +104,88 @@ export const CurrentRoute = () => {
 		params: {},
 	}
 	return renderRoute(match.route, match.params, location)
+}
+
+/** Stop restoring a position after this long, e.g. if the page never grows */
+const SCROLL_RESTORE_TIMEOUT_MS = 5000
+
+/**
+ * A link to another page starts at its top, not wherever the last page was
+ * scrolled to. Query changes (e.g. picking a season) stay put. Back and
+ * forward return to where that page was scrolled, once it has loaded enough
+ * to get there: the browser's own restoration runs while the page is still
+ * loading and too short, so it lands near the top.
+ */
+function useScrollRestoration(history: History) {
+	const pending = React.useRef<
+		{kind: "top"} | {kind: "restore"; y: number} | null
+	>(null)
+
+	React.useEffect(() => {
+		window.history.scrollRestoration = "manual"
+		// Where each history entry was last scrolled, by location.key
+		const positions = new Map<string, number>()
+		let current = history.location
+		const unlisten = history.listen(({action, location}) => {
+			// Not rendered yet, so this is still the previous page's position
+			positions.set(current.key, window.scrollY)
+			if (action === Action.Pop) {
+				const y = positions.get(location.key)
+				pending.current = y === undefined ? null : {kind: "restore", y}
+			} else if (
+				action === Action.Push &&
+				location.pathname !== current.pathname
+			) {
+				pending.current = {kind: "top"}
+			}
+			current = location
+		})
+		return () => {
+			unlisten()
+			window.history.scrollRestoration = "auto"
+		}
+	}, [history])
+
+	// After the new page renders, before it paints
+	const {key} = history.location
+	React.useLayoutEffect(() => {
+		const scroll = pending.current
+		pending.current = null
+		if (scroll?.kind === "top") {
+			window.scrollTo(0, 0)
+		} else if (scroll?.kind === "restore") {
+			return restoreScroll(scroll.y)
+		}
+	}, [key])
+}
+
+/**
+ * Scrolls to `y`, retrying as the page grows until it's tall enough. Gives up
+ * when the person scrolls or after a timeout. Returns a cancel function.
+ */
+function restoreScroll(y: number): () => void {
+	const tryScroll = () => {
+		window.scrollTo(0, y)
+		if (Math.abs(window.scrollY - y) < 1) {
+			stop()
+		}
+	}
+	const observer = new ResizeObserver(tryScroll)
+	const timer = setTimeout(() => stop(), SCROLL_RESTORE_TIMEOUT_MS)
+	const userEvents = ["wheel", "touchstart", "keydown", "mousedown"] as const
+	function stop() {
+		observer.disconnect()
+		clearTimeout(timer)
+		for (const type of userEvents) {
+			window.removeEventListener(type, stop)
+		}
+	}
+	for (const type of userEvents) {
+		window.addEventListener(type, stop, {passive: true})
+	}
+	observer.observe(document.body)
+	tryScroll()
+	return stop
 }
 
 function matchRoute(

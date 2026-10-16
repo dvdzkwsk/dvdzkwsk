@@ -1702,10 +1702,48 @@ const GameTableTeam = ({
 
 /** Games that haven't finished yet, across every rink, soonest first. */
 export function getScheduledGames(rinks: Rink[], now: Date): ScheduledGame[] {
+	return getRinkGames(rinks).filter(({game}) => getGameEndsAt(game) > now)
+}
+
+/**
+ * Every game in the rinks' schedules, soonest first: today's (including
+ * ones that have ended but aren't final yet) and upcoming.
+ */
+function getRinkGames(rinks: Rink[]): ScheduledGame[] {
 	return rinks
 		.flatMap((rink) => rink.games.map((game) => ({rink, game})))
-		.filter(({game}) => getGameEndsAt(game) > now)
 		.sort((a, b) => a.game.startsAt.localeCompare(b.game.startsAt))
+}
+
+/**
+ * Today's and upcoming games, soonest first. The schedule drops today's games
+ * once they're final, so today's scoreboard fills those in, and its final
+ * scores replace the schedule's score-less entries.
+ */
+export function getTodayAndUpcomingGames(
+	rinks: Rink[],
+	todayScoreboard: ScheduledGame[],
+): ScheduledGame[] {
+	const games = new Map(getRinkGames(rinks).map((g) => [g.game.gameId, g]))
+	for (const g of todayScoreboard) {
+		if (g.game.score || !games.has(g.game.gameId)) {
+			games.set(g.game.gameId, g)
+		}
+	}
+	return [...games.values()].sort((a, b) => {
+		return a.game.startsAt.localeCompare(b.game.startsAt)
+	})
+}
+
+/** How many of today's scheduled games have ended, to know when to refetch */
+export function countEndedToday(rinks: Rink[], now: Date): number {
+	const today = getLeagueDayKey(now)
+	return getRinkGames(rinks).filter(({game}) => {
+		return (
+			getLeagueDayKey(new Date(game.startsAt)) === today &&
+			getGameEndsAt(game) <= now
+		)
+	}).length
 }
 
 /** Games matching the day filter, then those also matching rink and division */
@@ -1855,6 +1893,16 @@ export function getPastDays(day: DayFilter, now: Date): string[] {
 	return Array.from({length: getDaysBetween(range.from, last)}, (_, i) => {
 		return addDaysToKey(range.from, i)
 	})
+}
+
+/** Whether the filter picks today, whose finished games need the scoreboard */
+export function includesToday(day: DayFilter, now: Date): boolean {
+	const today = getLeagueDayKey(now)
+	if (day === "today" || day === "week") {
+		return true
+	}
+	const range = getDayRange(day)
+	return !!range && range.from <= today && today <= range.to
 }
 
 /** Whether the filter picks today or later, which the upcoming schedule has */

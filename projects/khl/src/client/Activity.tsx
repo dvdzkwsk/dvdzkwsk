@@ -188,6 +188,7 @@ const ActivityEventItem = ({
 						compact
 						href={replay.href}
 						title={replay.title}
+						estimated={replay.estimated}
 					/>
 				))}
 			</div>

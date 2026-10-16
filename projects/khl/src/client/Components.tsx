@@ -29,6 +29,7 @@ import {
 	getSearchHref,
 	IS_DEV,
 	useLocation,
+	readStorage,
 	useMediaQuery,
 	writeStorage,
 } from "./Util.js"
@@ -2445,6 +2446,11 @@ interface LiveBarnBadgeProps {
 	compact?: boolean
 	/** A game is on now: shown in red, and "Watch Now" instead of "LiveBarn" */
 	live?: boolean
+	/**
+	 * A replay at an estimated time (a goal or penalty): explains first that
+	 * it may take some scrubbing, unless the viewer turned that off
+	 */
+	estimated?: boolean
 }
 
 /**
@@ -2541,9 +2547,16 @@ export const LIVEBARN_TITLES = {
 		`Watch this moment on LiveBarn (${surfaceName})`,
 }
 
+/** Set once the viewer asks not to be told again that moments are estimates */
+const ESTIMATED_REPLAY_STORAGE_KEY = "khl-hide-estimated-replay-warning"
+
+/** Why a replay link asks before opening, if it does */
+type ReplayWarning = "expired" | "estimated"
+
 /**
  * A pill linking out to a LiveBarn feed or replay. A replay older than
- * LiveBarn keeps recordings asks first, since it may be gone.
+ * LiveBarn keeps recordings asks first, since it may be gone, and so does
+ * one at an estimated time, since it may take some scrubbing.
  */
 export const LiveBarnBadge = ({
 	href,
@@ -2551,14 +2564,26 @@ export const LiveBarnBadge = ({
 	title,
 	compact,
 	live,
+	estimated,
 }: LiveBarnBadgeProps) => {
-	const [confirming, setConfirming] = React.useState(false)
-	const onClick = isLiveBarnVodExpired(href, new Date())
-		? (e: React.MouseEvent) => {
-				e.preventDefault()
-				setConfirming(true)
-			}
-		: undefined
+	const [warning, setWarning] = React.useState<ReplayWarning | null>(null)
+	const expired = isLiveBarnVodExpired(href, new Date())
+	const onClick =
+		expired || estimated
+			? (e: React.MouseEvent) => {
+					// Expired matters more: the video may not be there at all.
+					// Read at click time, so turning it off applies everywhere.
+					const next: ReplayWarning | null = expired
+						? "expired"
+						: readStorage(ESTIMATED_REPLAY_STORAGE_KEY)
+							? null
+							: "estimated"
+					if (next) {
+						e.preventDefault()
+						setWarning(next)
+					}
+				}
+			: undefined
 	return (
 		<>
 			{compact ? (
@@ -2585,43 +2610,86 @@ export const LiveBarnBadge = ({
 				</Hint>
 			)}
 			{onClick && (
-				<ExpiredReplayDialog
+				<ReplayDialog
 					href={href}
-					open={confirming}
-					onOpenChange={setConfirming}
+					warning={warning}
+					onClose={() => setWarning(null)}
 				/>
 			)}
 		</>
 	)
 }
 
-/** Warns that a replay may be gone before opening it on LiveBarn. */
-const ExpiredReplayDialog = ({
+/** Explains `warning` before opening the replay on LiveBarn. */
+const ReplayDialog = ({
 	href,
-	open,
-	onOpenChange,
+	warning,
+	onClose,
 }: {
 	href: string
-	open: boolean
-	onOpenChange: (open: boolean) => void
+	warning: ReplayWarning | null
+	onClose: () => void
 }) => {
+	const [hideEstimated, setHideEstimated] = React.useState(false)
 	const date = getLiveBarnVodDate(href)
 	const recordedOn = date
 		? `, and this one is from ${formatGameDate(toLeagueInstant(date, "12:00"), new Date())}`
 		: ""
 	return (
-		<AlertDialog.Root open={open} onOpenChange={onOpenChange}>
+		<AlertDialog.Root
+			open={warning !== null}
+			onOpenChange={(open) => !open && onClose()}
+		>
 			<AlertDialog.Portal>
 				<AlertDialog.Backdrop className="ReplayDialog-backdrop" />
 				<AlertDialog.Popup className="ReplayDialog">
 					<AlertDialog.Title className="ReplayDialog-title">
-						This replay may be gone
+						{warning === "expired"
+							? "This replay may be gone"
+							: "This time is an estimate"}
 					</AlertDialog.Title>
-					<AlertDialog.Description className="ReplayDialog-text">
-						LiveBarn only keeps recordings for{" "}
-						{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}. The
-						video may no longer be available.
+					<AlertDialog.Description
+						className="ReplayDialog-text"
+						render={<div />}
+					>
+						{warning === "expired" ? (
+							<p>
+								LiveBarn only keeps recordings for{" "}
+								{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}.
+								The video may no longer be available.
+							</p>
+						) : (
+							<>
+								<p>
+									The league doesn't post the wall clock time for
+									game events, only the game clock, so
+									this link starts at our best estimate from
+									the game's scheduled start time.
+								</p>
+								<p>
+									You may need to scrub a little to find the
+									moment, but hopefully we get you pretty
+									close!
+								</p>
+							</>
+						)}
 					</AlertDialog.Description>
+					{warning === "estimated" && (
+						<label className="ReplayDialog-check">
+							<input
+								type="checkbox"
+								checked={hideEstimated}
+								onChange={(e) => {
+									setHideEstimated(e.target.checked)
+									writeStorage(
+										ESTIMATED_REPLAY_STORAGE_KEY,
+										e.target.checked ? "1" : null,
+									)
+								}}
+							/>
+							Don't warn me again
+						</label>
+					)}
 					<div className="ReplayDialog-actions">
 						<AlertDialog.Close className="FilterPill">
 							Cancel
@@ -2631,9 +2699,11 @@ const ExpiredReplayDialog = ({
 							href={href}
 							rel="noopener noreferrer"
 							target="_blank"
-							onClick={() => onOpenChange(false)}
+							onClick={onClose}
 						>
-							Open LiveBarn anyway ↗
+							{warning === "expired"
+								? "Open LiveBarn anyway ↗"
+								: "Open LiveBarn ↗"}
 						</a>
 					</div>
 				</AlertDialog.Popup>

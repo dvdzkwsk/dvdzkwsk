@@ -1275,7 +1275,13 @@ export interface GameTableRow {
 	highlight?: "away" | "home"
 	rink: {id: string; name: string} | null
 	/** Feeds or replays; empty when the rink isn't on LiveBarn */
-	livebarn: {surfaceId: number; href: string; title: string}[]
+	livebarn: {
+		surfaceId: number
+		href: string
+		title: string
+		/** Its time is estimated from the game's start: warns before opening */
+		estimated?: boolean
+	}[]
 	/** Playing now */
 	live?: boolean
 }
@@ -1649,6 +1655,7 @@ export function toEventReplayLinks(
 		surfaceId: link.surfaceId,
 		href: getLiveBarnVodUrl(link.surfaceId, at.localDate, at.localTime),
 		title: LIVEBARN_TITLES.moment(link.surfaceName),
+		estimated: true,
 	}))
 }
 

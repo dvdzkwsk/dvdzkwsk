@@ -2620,17 +2620,51 @@ table {
 }
 
 @media (max-width: 600px) {
-	/* Score or time, and rink, on top; the teams side by side below get the
-	   full width */
+	/* Score or time, and rink, on top; then away above home, each a row: the
+	   logo beside its label, name, and form */
 	.BoxScore-header {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		padding: calc(var(--spacing) * 5) calc(var(--spacing) * 3);
-		gap: calc(var(--spacing) * 5) calc(var(--spacing) * 2);
+		grid-template-columns: minmax(0, 1fr);
+		padding: calc(var(--spacing) * 5) calc(var(--spacing) * 4);
+		gap: calc(var(--spacing) * 5);
+		background:
+			linear-gradient(
+				180deg,
+				transparent 35%,
+				color-mix(in srgb, var(--team-a) 9%, transparent) 55%,
+				color-mix(in srgb, var(--team-b) 9%, transparent)
+			),
+			var(--panel-bg);
 	}
 
 	.BoxScore-center {
-		grid-column: 1 / -1;
 		grid-row: 1;
+	}
+
+	.BoxScore-team {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		justify-items: start;
+		align-items: center;
+		gap: calc(var(--spacing) * 1) calc(var(--spacing) * 4);
+		text-align: left;
+	}
+
+	.BoxScore-team > :not(.TeamAvatar) {
+		grid-column: 2;
+	}
+
+	.BoxScore-team .TeamAvatar {
+		grid-column: 1;
+		grid-row: 1 / span 4;
+		margin: 0 calc(var(--spacing) * 1);
+	}
+
+	.BoxScore-division {
+		margin-top: 0;
+	}
+
+	.BoxScore-team .BoxScore-form {
+		justify-content: flex-start;
 	}
 
 	/* Away and home are labeled on the teams below */
@@ -2883,6 +2917,11 @@ table {
 	grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
 	align-items: start;
 	gap: calc(var(--spacing) * 4);
+}
+
+/* Two halves, e.g. a game's period totals beside its timeline */
+.Detail-columns--even {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* Past games and the feed beside them: the same height, so both cards end
@@ -3579,21 +3618,34 @@ a.Compare-chip:hover {
 		padding-top: calc(var(--spacing) * 6);
 	}
 
-	/* The label moves up to its own line, so the sides get the full width */
+	/* The label on its own line, then team A above team B, each its value
+	   then its bar, so both bars grow the same way */
 	.Compare-row {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: calc(var(--spacing) * 1) calc(var(--spacing) * 4);
+		grid-template-columns: minmax(0, 1fr);
+		gap: calc(var(--spacing) * 1);
 		padding-block: calc(var(--spacing) * 2);
 	}
 
 	.Compare-label {
-		grid-column: 1 / -1;
 		grid-row: 1;
 		font-size: var(--text-xs);
+		text-align: left;
 	}
 
 	.Compare-cell {
 		gap: calc(var(--spacing) * 2);
+	}
+
+	.Compare-cell--a {
+		flex-direction: row;
+	}
+
+	.Compare-cell--a .Compare-track {
+		justify-content: flex-start;
+	}
+
+	.Compare-cell--a .Compare-chips {
+		justify-content: flex-start;
 	}
 
 	.Compare-value {
@@ -4024,7 +4076,7 @@ a.Compare-chip:hover {
 	translate: 28px 0;
 }
 
-/* === Expired replay warning (LiveBarnBadge) === */
+/* === Replay warnings (LiveBarnBadge): expired, or at an estimated time === */
 
 .ReplayDialog-backdrop {
 	position: fixed;
@@ -4056,10 +4108,32 @@ a.Compare-chip:hover {
 }
 
 .ReplayDialog-text {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 3);
 	margin: 0 0 calc(var(--spacing) * 5);
 	font-size: var(--text-base);
 	line-height: 1.5;
 	color: var(--prose-fg);
+}
+
+.ReplayDialog-text p {
+	margin: 0;
+}
+
+.ReplayDialog-check {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	margin: calc(var(--spacing) * -2) 0 calc(var(--spacing) * 5);
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+	cursor: pointer;
+}
+
+.ReplayDialog-check input {
+	margin: 0;
+	accent-color: var(--accent);
 }
 
 .ReplayDialog-actions {

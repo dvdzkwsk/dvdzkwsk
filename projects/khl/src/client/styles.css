@@ -2572,9 +2572,22 @@ table {
 }
 
 @media (max-width: 600px) {
+	/* Score or time, and rink, on top; the teams side by side below get the
+	   full width */
 	.BoxScore-header {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		padding: calc(var(--spacing) * 5) calc(var(--spacing) * 3);
-		gap: calc(var(--spacing) * 2);
+		gap: calc(var(--spacing) * 5) calc(var(--spacing) * 2);
+	}
+
+	.BoxScore-center {
+		grid-column: 1 / -1;
+		grid-row: 1;
+	}
+
+	/* Away and home are labeled on the teams below */
+	.BoxScore-at {
+		display: none;
 	}
 
 	.BoxScore-team .TeamAvatar {
@@ -3529,12 +3542,16 @@ a.Compare-chip:hover {
 		padding-top: calc(var(--spacing) * 6);
 	}
 
+	/* The label moves up to its own line, so the sides get the full width */
 	.Compare-row {
-		grid-template-columns: minmax(0, 1fr) 5.5rem minmax(0, 1fr);
-		gap: calc(var(--spacing) * 2);
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: calc(var(--spacing) * 1) calc(var(--spacing) * 4);
+		padding-block: calc(var(--spacing) * 2);
 	}
 
 	.Compare-label {
+		grid-column: 1 / -1;
+		grid-row: 1;
 		font-size: var(--text-xs);
 	}
 
@@ -3543,7 +3560,6 @@ a.Compare-chip:hover {
 	}
 
 	.Compare-value {
-		width: 3.75rem;
 		font-size: var(--text-md);
 	}
 }

@@ -3186,39 +3186,32 @@ table {
 	cursor: default;
 }
 
-/* Before both teams are picked */
-.Matchup-empty {
-	padding: calc(var(--spacing) * 8) calc(var(--spacing) * 6);
-	border: 1px dashed var(--panel-border);
-	border-radius: var(--radius);
-	text-align: center;
-}
-
-.Matchup-empty-title {
-	font-size: var(--text-2xl);
-	font-weight: var(--weight-bold);
-}
-
-.Matchup-empty-text {
-	margin: calc(var(--spacing) * 1.5) 0 0;
-	color: var(--muted-fg);
-}
-
 /* Until both teams are picked: between the teams, below "vs", covering the
    end of the divider line */
-.Matchup-tip {
+.Matchup-intro {
 	position: relative;
 	grid-area: 1 / 2;
 	align-self: end;
 	justify-self: center;
+	max-width: 14rem;
 	padding-top: calc(var(--spacing) * 2);
 	background: var(--panel-bg);
-	max-width: 12rem;
+	text-align: center;
+}
+
+.Matchup-intro-title {
 	margin: 0;
+	font-size: var(--text-lg);
+	font-weight: var(--weight-bold);
+	text-wrap: balance;
+}
+
+.Matchup-intro-text {
+	margin: calc(var(--spacing) * 1) 0 0;
 	font-size: var(--text-sm);
 	line-height: 1.4;
-	text-align: center;
 	color: var(--muted-fg);
+	text-wrap: balance;
 }
 
 /* Full-width card: keep its rows a readable width, centered */
@@ -3420,10 +3413,6 @@ a.Compare-chip:hover {
 		font-size: var(--text-2xs);
 	}
 
-	.Matchup-empty {
-		padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
-	}
-
 	.Matchup-picker {
 		font-size: var(--text-base);
 	}
@@ -3433,7 +3422,7 @@ a.Compare-chip:hover {
 	}
 
 	/* No room between the teams: under both instead */
-	.Matchup-tip {
+	.Matchup-intro {
 		grid-area: 2 / 1 / auto / -1;
 		max-width: none;
 		padding-top: 0;

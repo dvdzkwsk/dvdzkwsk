@@ -137,17 +137,18 @@ const MatchupPage = ({query}: RouteProps) => {
 						}
 					/>
 					{!ready && (
-						<p className="Matchup-tip">
-							Pick the same team on both sides to compare two of
-							its seasons.
-						</p>
+						<div className="Matchup-intro">
+							<h2 className="Matchup-intro-title">
+								Compare any two teams
+							</h2>
+							<p className="Matchup-intro-text">
+								Pick a team and season on each side, or the same
+								team twice to compare two of its seasons.
+							</p>
+						</div>
 					)}
 				</header>
-				{ready ? (
-					<MatchupContent state={matchup} now={now} />
-				) : (
-					<MatchupEmpty />
-				)}
+				{ready && <MatchupContent state={matchup} now={now} />}
 			</div>
 		</PageShell>
 	)
@@ -381,18 +382,6 @@ const SeasonPicker = ({
 			className={cx("Matchup-picker", "Matchup-season")}
 			title={teams?.season.name}
 		/>
-	)
-}
-
-/** Before both teams are picked: what the page will show once they are. */
-const MatchupEmpty = () => {
-	return (
-		<section className="Matchup-empty">
-			<h2 className="Matchup-empty-title">Compare any two teams</h2>
-			<p className="Matchup-empty-text">
-				Pick a team and season on each side.
-			</p>
-		</section>
 	)
 }
 

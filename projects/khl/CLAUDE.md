@@ -27,7 +27,7 @@ To run, smoke-test, typecheck, or screenshot the app, use the `run-khl` skill.
 - Render every list of games with `GameTable` by mapping the data to `GameTableRow`. For a few options, use `SegmentedControl`. For a dropdown, use `Picker`. For a tooltip, use `Hint` (never a native `title`).
 - Format scores through `formatScore` / `formatKHLScore`, and dates and times through the `format*` helpers in `Util.ts`.
 
-## Styles (`src/client/styles.css`)
+## Styles (`src/client/Styles.css`)
 
 - Class names are `Component-part--modifier`, prefixed with the component that renders them. Don't borrow another component's classes (e.g. a `Compare-*` class outside `Compare.tsx`). Give the shared piece its own name instead.
 - All values come from the `:root` tokens. Spacing is `calc(var(--spacing) * n)`, sizes are `var(--text-*)`, weights are `var(--weight-*)`, radii are `var(--radius-*)`, and colors are the theme variables. Pick the nearest step on a scale rather than adding a one-off value. When a new token is truly needed, add it to the scale, and for colors define it for both `:root` and `:root[data-theme="dark"]`.

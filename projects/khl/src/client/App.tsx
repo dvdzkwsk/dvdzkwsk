@@ -1,4 +1,4 @@
-import "./styles.css"
+import "./Styles.css"
 import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {Action, createBrowserHistory, History, Location} from "history"

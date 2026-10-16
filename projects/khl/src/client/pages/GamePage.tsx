@@ -77,7 +77,11 @@ const GamePage = ({params, query}: RouteProps) => {
 								view={getGameView(game, query)}
 							/>
 						</div>
-						<GameHeader game={game} now={now} />
+						<GameHeader
+							game={game}
+							view={getGameView(game, query)}
+							now={now}
+						/>
 						{getGameView(game, query) === "result" ? (
 							<ResultView game={game} />
 						) : (
@@ -170,7 +174,7 @@ const ResultView = ({game}: {game: GameResponse}) => {
 	}
 	return (
 		<>
-			<div className="Detail-columns">
+			<div className={cx("Detail-columns", "Detail-columns--even")}>
 				<PeriodTotals game={game} />
 				<Timeline game={game} />
 			</div>
@@ -221,7 +225,16 @@ const PreviewView = ({game, now}: {game: GameResponse; now: Date}) => {
 	)
 }
 
-const GameHeader = ({game, now}: {game: GameResponse; now: Date}) => {
+/** The teams, and the score in the result view; a preview shows the start time */
+const GameHeader = ({
+	game,
+	view,
+	now,
+}: {
+	game: GameResponse
+	view: GameView
+	now: Date
+}) => {
 	const {boxScore} = game
 	return (
 		<header className={cx("Detail-header", "BoxScore-header")}>
@@ -231,7 +244,7 @@ const GameHeader = ({game, now}: {game: GameResponse; now: Date}) => {
 				form={game.form.away}
 			/>
 			<div className="BoxScore-center">
-				{game.score ? (
+				{view === "result" && game.score ? (
 					<>
 						<span className="BoxScore-status">Final</span>
 						<div className="BoxScore-score">
@@ -528,6 +541,7 @@ const TimelineItem = ({
 			compact
 			href={replay.href}
 			title={replay.title}
+			estimated={replay.estimated}
 		/>
 	))
 	if (event.kind === "penalty") {

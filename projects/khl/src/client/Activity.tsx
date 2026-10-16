@@ -15,6 +15,7 @@ import {
 	ActivityGame,
 	ActivityResponse,
 } from "../shared/ApiJson.js"
+import {LIMITS} from "../shared/KHLConfig.js"
 
 /** Whose feed it is: a player's leaves their own name off their events */
 type ActivitySubject = "player" | "team"
@@ -50,16 +51,12 @@ export const ActivityFeed = ({
 					state={state}
 					size="inline"
 					loadingLabel="Loading recent activity…"
-					slowNote="Still working. Recent activity reads each game's scoresheet, so the first load can take a little extra time."
+					slowNote="Still working. This is the first time we're loading these scoresheets, so it will take a little bit longer."
 					errorTitle="Couldn't load recent activity"
 				>
 					{(activity) =>
 						activity.games.length === 0 ? (
-							<p className="Detail-empty">
-								{subject === "player"
-									? "No goals, assists, or penalties in recent games."
-									: "No goals or penalties yet."}
-							</p>
+							<ActivityEmpty subject={subject} />
 						) : (
 							<ol className="Activity-events">
 								{activity.games.flatMap((game) =>
@@ -80,6 +77,44 @@ export const ActivityFeed = ({
 				</AsyncContent>
 			</div>
 		</section>
+	)
+}
+
+/** How far back the feed looks, e.g. 6 */
+const LOOKBACK_MONTHS = Math.round(LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS / 30.4)
+
+/** Centered in the card, which is as tall as the past games beside it */
+const ActivityEmpty = ({subject}: {subject: ActivitySubject}) => {
+	return (
+		<div className="Activity-empty">
+			<PuckIcon />
+			<p className="Activity-empty-title">
+				Nothing on the scoresheet lately
+			</p>
+			<p className="Activity-empty-text">
+				{subject === "player"
+					? "Goals, assists, and penalties"
+					: "The team's goals and penalties"}{" "}
+				from the last {LOOKBACK_MONTHS} months of games will show up
+				here.
+			</p>
+		</div>
+	)
+}
+
+const PuckIcon = () => {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="1.75"
+			strokeLinecap="round"
+			aria-hidden
+		>
+			<ellipse cx="12" cy="9" rx="8" ry="3.5" />
+			<path d="M4 9v5c0 1.9 3.6 3.5 8 3.5s8-1.6 8-3.5V9" />
+		</svg>
 	)
 }
 

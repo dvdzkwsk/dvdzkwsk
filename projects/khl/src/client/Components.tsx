@@ -4,6 +4,7 @@ import {Avatar} from "@base-ui/react/avatar"
 import {Button} from "@base-ui/react/button"
 import {Collapsible} from "@base-ui/react/collapsible"
 import {Combobox} from "@base-ui/react/combobox"
+import {Drawer} from "@base-ui/react/drawer"
 import {Popover} from "@base-ui/react/popover"
 import {Select} from "@base-ui/react/select"
 import {Switch} from "@base-ui/react/switch"
@@ -25,8 +26,11 @@ import {
 	getRinkHref,
 	getScoresheetUrl,
 	getTeamHref,
+	getSearchHref,
 	IS_DEV,
 	useLocation,
+	useMediaQuery,
+	writeStorage,
 } from "./Util.js"
 import {
 	RosterPlayer,
@@ -949,7 +953,7 @@ export function AsyncContent<T>({
 const LOADER_SLOW_MS = 5000
 
 const DEFAULT_SLOW_NOTE =
-	"Still working. The first time this loads, it can take a little extra time."
+	"Still working. This is the first time we're loading this data, so it will take a little bit longer."
 
 interface LoaderProps {
 	/** What's loading, e.g. "Loading standings…" */
@@ -981,12 +985,17 @@ export const PageLoader = ({
 	return (
 		<div className="PageLoader" role="status" aria-live="polite">
 			<ZamboniLap />
-			<span className="PageLoader-label">{label}</span>
-			<span className="PageLoader-note">
-				{/* Most data is fetched from the league's site and cached, so
-				    a first load is the slow one */}
-				{slow && slowNote}
-			</span>
+			<div className="PageLoader-text">
+				<span className="PageLoader-label">
+					{withoutEllipsis(label)}
+					<PuckDots />
+				</span>
+				<span className="PageLoader-note">
+					{/* Most data is fetched from the league's site and cached,
+					    so a first load is the slow one */}
+					{slow && slowNote}
+				</span>
+			</div>
 		</div>
 	)
 }
@@ -1004,7 +1013,9 @@ export const InlineLoader = ({
 		<div className="InlineLoader" role="status" aria-live="polite">
 			<div className="InlineLoader-row">
 				<PuckDots />
-				<span className="InlineLoader-label">{label}</span>
+				<span className="InlineLoader-label">
+					{withoutEllipsis(label)}
+				</span>
 			</div>
 			<span className="InlineLoader-note">{slow && slowNote}</span>
 		</div>
@@ -1014,6 +1025,9 @@ export const InlineLoader = ({
 /** The Zamboni's lap, inset from the boards; the trail and Zamboni share it */
 const LAP_PATH =
 	"M46 20H154A26 26 0 0 1 180 46V54A26 26 0 0 1 154 80H46A26 26 0 0 1 20 54V46A26 26 0 0 1 46 20Z"
+
+/** Each fresh-ice layer's length, as a share of the lap */
+const TRAIL_LENGTHS = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72]
 
 /** A rink from above, with a Zamboni lapping it and fresh ice behind it */
 const ZamboniLap = () => {
@@ -1049,7 +1063,21 @@ const ZamboniLap = () => {
 				y2="94"
 			/>
 			<circle className="ZamboniLap-faceoff" cx="100" cy="50" r="12" />
-			<path className="ZamboniLap-trail" pathLength="100" d={LAP_PATH} />
+			{/* Fresh ice following the Zamboni: stacked faint trails that all
+			    end at it, so the ice is brightest right behind it and fades
+			    toward the tail */}
+			{TRAIL_LENGTHS.map((length) => (
+				<path
+					key={length}
+					className="ZamboniLap-trail"
+					pathLength="100"
+					d={LAP_PATH}
+					strokeDasharray={`${length} ${100 - length}`}
+					style={
+						{"--ZamboniLap-trail": length} as React.CSSProperties
+					}
+				/>
+			))}
 			{/* Rides the lap with CSS offset-path; points along it, tank at
 			    the front */}
 			<g
@@ -1083,6 +1111,11 @@ const ZamboniLap = () => {
 			</g>
 		</svg>
 	)
+}
+
+/** "Loading standings…" -> "Loading standings": the pucks stand in for the "…" */
+function withoutEllipsis(label: string): string {
+	return label.replace(/(…|\.\.\.)$/, "")
 }
 
 /** Three pucks lighting up and hopping in turn, like a typing indicator */
@@ -1498,21 +1531,113 @@ export const ChevronIcon = () => {
 
 // --- Site header
 
-/** Brand (home link), search, and nav, on every page. */
+/**
+ * Brand (home link), search, and nav, on every page. On phones the search
+ * collapses to a button and the nav moves into SiteMenu.
+ */
 export const SiteHeader = () => {
 	return (
 		<header className="SiteHeader">
 			<div className="SiteHeader-inner">
 				<Link className="SiteHeader-brand" href="/">
-					{STRINGS.PRODUCT_NAME}
+					<Logo />
 				</Link>
 				<SiteSearch />
 				<div className="SiteHeader-end">
 					<SiteNav />
 					<ThemeSwitch />
 				</div>
+				<SiteMenu />
 			</div>
 		</header>
+	)
+}
+
+/**
+ * The KHL+ logo: "KHL" in italics, then the slanted plus from the favicon
+ * (static/favicon.svg, which adds skate spray behind it). Sized and colored
+ * by its parent's text; screen readers hear "KHL+".
+ */
+const Logo = () => {
+	return (
+		<span className="Logo" role="img" aria-label={STRINGS.PRODUCT_NAME}>
+			{STRINGS.LOGO_TEXT}
+			{/* Cropped to the plus; same shapes as the favicon */}
+			<svg className="Logo-plus" viewBox="6 4 26 24" aria-hidden="true">
+				<g transform="skewX(-14) translate(5 0)">
+					<rect x="14.5" y="4" width="7" height="24" rx="2" />
+					<rect x="6" y="12.5" width="24" height="7" rx="2" />
+				</g>
+			</svg>
+		</span>
+	)
+}
+
+/** The nav and theme switch in a drawer from the right, on phones. */
+const SiteMenu = () => {
+	const location = useLocation()
+	const [open, setOpen] = React.useState(false)
+	// Back and forward close it too, not just its links
+	React.useEffect(() => setOpen(false), [location.pathname])
+	return (
+		<Drawer.Root open={open} onOpenChange={setOpen} swipeDirection="right">
+			<Drawer.Trigger className="SiteMenu-button" aria-label="Menu">
+				<MenuIcon />
+			</Drawer.Trigger>
+			<Drawer.Portal>
+				<Drawer.Backdrop className="SiteMenu-backdrop" />
+				<Drawer.Popup className="SiteMenu">
+					<div className="SiteMenu-header">
+						<Drawer.Title className="SiteMenu-title">
+							{STRINGS.PRODUCT_NAME}
+						</Drawer.Title>
+						<Drawer.Close
+							className="SiteMenu-button"
+							aria-label="Close menu"
+						>
+							<CloseIcon />
+						</Drawer.Close>
+					</div>
+					<SiteNav variant="menu" onNavigate={() => setOpen(false)} />
+					<div className="SiteMenu-theme">
+						<span>Dark mode</span>
+						<ThemeSwitch />
+					</div>
+				</Drawer.Popup>
+			</Drawer.Portal>
+		</Drawer.Root>
+	)
+}
+
+const MenuIcon = () => {
+	return (
+		<svg
+			className="SiteMenu-icon"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			aria-hidden
+		>
+			<path d="M4 7h16M4 12h16M4 17h16" />
+		</svg>
+	)
+}
+
+const CloseIcon = () => {
+	return (
+		<svg
+			className="SiteMenu-icon"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			aria-hidden
+		>
+			<path d="M6 6l12 12M18 6 6 18" />
+		</svg>
 	)
 }
 
@@ -1530,7 +1655,9 @@ export const SiteFooter = () => {
 	return (
 		<footer className="SiteFooter">
 			<div className="SiteFooter-inner">
-				<span className="SiteFooter-brand">{STRINGS.PRODUCT_NAME}</span>
+				<span className="SiteFooter-brand">
+					<Logo />
+				</span>
 				<nav className="SiteFooter-nav">
 					{FOOTER_LINKS.map((item) => (
 						<Link
@@ -1553,18 +1680,25 @@ const NAV_ITEMS = [
 	{href: "/teams", label: "Teams"},
 	// Also active on a player's page, /players/:id
 	{href: "/players", label: "Players"},
-	{href: "/matchup", label: "Matchup"},
+	{href: "/compare", label: "Compare"},
 	...(IS_DEV ? [{href: "/admin", label: "Admin"}] : []),
 ]
 
-/** Top-level pages besides home, in the header. */
-const SiteNav = () => {
+/** Top-level pages besides home: a row in the header, a list in SiteMenu. */
+const SiteNav = ({
+	variant = "bar",
+	onNavigate,
+}: {
+	variant?: "bar" | "menu"
+	onNavigate?: () => void
+}) => {
 	const location = useLocation()
 	return (
-		<nav className="SiteNav">
+		<nav className={cx("SiteNav", `SiteNav--${variant}`)}>
 			{NAV_ITEMS.map((item) => (
 				<Link
 					key={item.href}
+					onClick={onNavigate}
 					className={cx(
 						"SiteNav-link",
 						// A team page is under Teams too
@@ -1586,17 +1720,6 @@ const SiteNav = () => {
 type Theme = "light" | "dark"
 
 const THEME_STORAGE_KEY = "khl-theme"
-function writeStorage(key: string, value: string | null) {
-	try {
-		if (value === null) {
-			localStorage.removeItem(key)
-		} else {
-			localStorage.setItem(key, value)
-		}
-	} catch {
-		// Not persisted; the choice still applies until the page reloads
-	}
-}
 
 /** Keep in sync with the inline script in index.html. */
 function applyTheme(theme: Theme) {
@@ -1695,9 +1818,13 @@ const SUGGESTION_LIMITS: Record<SuggestionKind, number> = {
 	rink: 4,
 }
 
-function toSuggestions(response: SearchResponse): Suggestion[] {
+/** Every match, by kind, in the order the server returned them. */
+function toSuggestionsByKind(
+	response: SearchResponse,
+): Record<SuggestionKind, Suggestion[]> {
 	const players = response.players.map((player): Suggestion => {
-		const teams = player.registrations.map((r) => r.teamName)
+		// Once per team, though a player is registered once per season
+		const teams = [...new Set(player.registrations.map((r) => r.teamName))]
 		return {
 			key: `player:${player.playerId}`,
 			kind: "player",
@@ -1731,11 +1858,15 @@ function toSuggestions(response: SearchResponse): Suggestion[] {
 			city: rink.city,
 		}
 	})
-	return [
-		...players.slice(0, SUGGESTION_LIMITS.player),
-		...teams.slice(0, SUGGESTION_LIMITS.team),
-		...rinks.slice(0, SUGGESTION_LIMITS.rink),
-	]
+	return {player: players, team: teams, rink: rinks}
+}
+
+/** The first few of each kind, for the autocomplete. */
+function toSuggestions(response: SearchResponse): Suggestion[] {
+	const byKind = toSuggestionsByKind(response)
+	return SUGGESTION_KINDS.flatMap((kind) =>
+		byKind[kind].slice(0, SUGGESTION_LIMITS[kind]),
+	)
 }
 
 type SearchStatus =
@@ -1758,11 +1889,17 @@ function isEditable(target: EventTarget | null): boolean {
 
 /**
  * Header search with autocomplete across players, teams, and rinks. Arrow
- * keys move through suggestions; Enter or a click opens one.
+ * keys move through suggestions; Enter or a click opens one. Enter with none
+ * highlighted (always, on touch screens) opens every result on /search. On
+ * phones it's a button until tapped, then fills the header.
  */
 const SiteSearch = () => {
 	const {history} = React.useContext(AppContext)
 	const location = useLocation()
+	// No arrow keys to move off the first suggestion, so the keyboard's Search
+	// key should search rather than open it
+	const isTouch = useMediaQuery("(hover: none)")
+	const [expanded, setExpanded] = React.useState(false)
 	const [input, setInput] = React.useState("")
 	const [suggestions, setSuggestions] = React.useState<Suggestion[]>([])
 	const [status, setStatus] = React.useState<SearchStatus>({kind: "idle"})
@@ -1785,12 +1922,20 @@ const SiteSearch = () => {
 			}
 			// Don't type the "/" into the input
 			e.preventDefault()
+			setExpanded(true)
 			inputRef.current?.focus()
 			inputRef.current?.select()
 		}
 		document.addEventListener("keydown", onKeyDown)
 		return () => document.removeEventListener("keydown", onKeyDown)
 	}, [])
+
+	// The input is hidden until expanded on phones, so focus it once shown
+	React.useEffect(() => {
+		if (expanded) {
+			inputRef.current?.focus()
+		}
+	}, [expanded])
 
 	const search = (query: string) => {
 		latestQuery.current = query
@@ -1827,13 +1972,28 @@ const SiteSearch = () => {
 		}, 200)
 	}
 
-	// Leaving the page (e.g. after picking a suggestion) clears the search
-	React.useEffect(() => {
+	const clear = () => {
 		setInput("")
-		setSuggestions([])
-		setStatus({kind: "idle"})
-		latestQuery.current = ""
-	}, [location.pathname])
+		search("")
+	}
+
+	// Leaving the page (e.g. after picking a suggestion) clears the search.
+	// On /search it keeps the query instead, to refine it from here.
+	React.useEffect(() => {
+		clear()
+		setExpanded(false)
+		if (location.pathname === "/search") {
+			setInput(new URLSearchParams(location.search).get("q") ?? "")
+		}
+	}, [location.pathname, location.search])
+
+	const onSubmit = (e: React.FormEvent) => {
+		e.preventDefault()
+		const query = input.trim()
+		if (query.length >= 2) {
+			history.push(getSearchHref(query))
+		}
+	}
 
 	const message =
 		status.kind === "searching" && suggestions.length === 0
@@ -1847,7 +2007,7 @@ const SiteSearch = () => {
 			items={suggestions}
 			value={input}
 			filter={null}
-			autoHighlight
+			autoHighlight={!isTouch}
 			itemToStringValue={(item: Suggestion) => item.label}
 			onValueChange={(value, details) => {
 				if (details.reason === "item-press") {
@@ -1863,19 +2023,63 @@ const SiteSearch = () => {
 				search(value.trim())
 			}}
 		>
-			<div className="SiteSearch">
-				<SearchIcon />
-				<Autocomplete.Input
-					ref={inputRef}
-					className="SiteSearch-input"
-					aria-label="Search players, teams, and locations"
-					aria-keyshortcuts="/"
-					placeholder="Search players, teams, and locations"
-				/>
-				{/* Hidden while focused or typed in; see styles.css */}
-				<kbd className="SiteSearch-key" aria-hidden>
-					/
-				</kbd>
+			<div
+				className={cx("SiteSearch", expanded && "SiteSearch--expanded")}
+			>
+				{/* Phones only; see styles.css */}
+				<button
+					type="button"
+					className="SiteSearch-open"
+					aria-label="Search"
+					onClick={() => setExpanded(true)}
+				>
+					<SearchIcon className="SiteSearch-open-icon" />
+				</button>
+				<form
+					className="SiteSearch-form"
+					role="search"
+					action="/search"
+					onSubmit={onSubmit}
+				>
+					<SearchIcon />
+					<Autocomplete.Input
+						ref={inputRef}
+						className="SiteSearch-input"
+						name="q"
+						type="search"
+						enterKeyHint="search"
+						aria-label="Search players, teams, and locations"
+						aria-keyshortcuts="/"
+						placeholder="Search players, teams, and locations"
+						onBlur={() => {
+							if (!input.trim()) {
+								setExpanded(false)
+							}
+						}}
+						onKeyDown={(e) => {
+							if (e.key === "Escape" && !input) {
+								setExpanded(false)
+							}
+						}}
+					/>
+					{/* Hidden while focused or typed in; see styles.css */}
+					<kbd className="SiteSearch-key" aria-hidden>
+						/
+					</kbd>
+				</form>
+				{/* Phones only; see styles.css */}
+				<button
+					type="button"
+					className="SiteSearch-cancel"
+					// Before the input's blur, which would collapse it first
+					onMouseDown={(e) => e.preventDefault()}
+					onClick={() => {
+						clear()
+						setExpanded(false)
+					}}
+				>
+					Cancel
+				</button>
 			</div>
 			<Autocomplete.Portal hidden={status.kind === "idle"}>
 				<Autocomplete.Positioner
@@ -1927,17 +2131,18 @@ const SiteSearch = () => {
 											</span>
 										)}
 									</span>
-									<span
-										className={cx(
-											"SiteSearch-kind",
-											`SiteSearch-kind--${item.kind}`,
-										)}
-									>
-										{SUGGESTION_KIND_LABELS[item.kind]}
-									</span>
+									<SearchKind kind={item.kind} />
 								</Autocomplete.Item>
 							)}
 						</Autocomplete.List>
+						{status.kind === "done" && suggestions.length > 0 && (
+							<Link
+								className="SiteSearch-all"
+								href={getSearchHref(status.query)}
+							>
+								See all results for “{status.query}”
+							</Link>
+						)}
 					</Autocomplete.Popup>
 				</Autocomplete.Positioner>
 			</Autocomplete.Portal>
@@ -1945,10 +2150,108 @@ const SiteSearch = () => {
 	)
 }
 
+const SUGGESTION_KINDS: SuggestionKind[] = ["player", "team", "rink"]
+
 const SUGGESTION_KIND_LABELS: Record<SuggestionKind, string> = {
 	player: "Player",
 	team: "Team",
 	rink: "Location",
+}
+
+const SUGGESTION_KIND_HEADINGS: Record<SuggestionKind, string> = {
+	player: "Players",
+	team: "Teams",
+	rink: "Locations",
+}
+
+/** Every search match as full-width links, grouped by kind, for /search. */
+export const SearchResults = ({response}: {response: SearchResponse}) => {
+	const byKind = toSuggestionsByKind(response)
+	const kinds = SUGGESTION_KINDS.filter((kind) => byKind[kind].length > 0)
+	if (kinds.length === 0) {
+		return (
+			<p className="SearchResults-empty">
+				No players, teams, or locations match.
+			</p>
+		)
+	}
+	return (
+		<div className="SearchResults">
+			{kinds.map((kind) => (
+				<SearchResultsGroup
+					key={kind}
+					kind={kind}
+					items={byKind[kind]}
+				/>
+			))}
+		</div>
+	)
+}
+
+/** Results shown per kind before "Show more" */
+const SEARCH_RESULTS_LIMIT = 5
+
+const SearchResultsGroup = ({
+	kind,
+	items,
+}: {
+	kind: SuggestionKind
+	items: Suggestion[]
+}) => {
+	const [expanded, setExpanded] = React.useState(false)
+	const hidden = expanded
+		? 0
+		: Math.max(0, items.length - SEARCH_RESULTS_LIMIT)
+	return (
+		<section className="SearchResults-group">
+			<h2 className="SectionLabel">
+				{SUGGESTION_KIND_HEADINGS[kind]} · {items.length}
+			</h2>
+			<div className="SearchResults-card">
+				<ul className="SearchResults-list">
+					{items.slice(0, items.length - hidden).map((item) => (
+						<li key={item.key}>
+							<Link
+								className="SearchResults-item"
+								href={item.href}
+							>
+								<SuggestionIcon suggestion={item} />
+								<span className="SearchResults-item-text">
+									<span className="SearchResults-item-label">
+										{item.label}
+									</span>
+									{item.detail && (
+										<span className="SearchResults-item-detail">
+											{item.detail}
+										</span>
+									)}
+								</span>
+								<SearchKind kind={item.kind} />
+							</Link>
+						</li>
+					))}
+				</ul>
+				{hidden > 0 && (
+					<button
+						type="button"
+						className="SearchResults-more"
+						onClick={() => setExpanded(true)}
+					>
+						Show {hidden} more
+					</button>
+				)}
+			</div>
+		</section>
+	)
+}
+
+/** "Player", "Team", or "Location", in that kind's color, on a search result */
+const SearchKind = ({kind}: {kind: SuggestionKind}) => {
+	return (
+		<span className={cx("SearchKind", `SearchKind--${kind}`)}>
+			{SUGGESTION_KIND_LABELS[kind]}
+		</span>
+	)
 }
 
 /** Team logo, a person for players, or a pin in the city's color for rinks. */

@@ -18,9 +18,11 @@ export interface Badge {
 	icon: React.ReactNode
 	label: string
 	description: string
-	/** Hand-given badges: who has it, by name */
+	/** Hand-given badges: who has it, by name, once per time given */
 	players?: string[]
 	earned: (stats: BadgeStats) => boolean
+	/** How many times they have it, for badges given more than once */
+	count?: (stats: BadgeStats) => number
 }
 
 /** Windows draws the 🇯🇵 emoji as the letters "JP", so the flag is drawn here */
@@ -69,7 +71,8 @@ const gamesMilestone = (
 	earned: (stats) => stats.gamesPlayed >= games,
 })
 
-/** Given out by hand, matched on the player's name */
+/** Given out by hand, matched on the player's name. List a name again for
+    each extra time they've earned it. */
 const customBadge = (
 	id: string,
 	icon: React.ReactNode,
@@ -77,14 +80,21 @@ const customBadge = (
 	description: string,
 	players: string[],
 ): Badge => {
-	const names = new Set(players.map(normalizePlayerName))
+	const counts = new Map<string, number>()
+	for (const name of players.map(normalizePlayerName)) {
+		counts.set(name, (counts.get(name) ?? 0) + 1)
+	}
+	const getCount = (stats: BadgeStats) => {
+		return counts.get(normalizePlayerName(stats.name)) ?? 0
+	}
 	return {
 		id,
 		icon,
 		label,
 		description,
 		players,
-		earned: (stats) => names.has(normalizePlayerName(stats.name)),
+		earned: (stats) => getCount(stats) > 0,
+		count: getCount,
 	}
 }
 
@@ -100,6 +110,26 @@ export const BADGES: Badge[] = [
 	customBadge("japanese", <JapanFlag />, "日本語", "Speaks Japanese.", [
 		"Emily Sorg",
 	]),
+	customBadge(
+		"broken-bone",
+		"🦴",
+		"Broken Bone",
+		"Broke a bone playing in the KHL.",
+		[
+			"Helen Mahan",
+			"Dave Persing",
+			"Dave Persing",
+			"Nicole McVarish",
+			"Patrick Austin",
+		],
+	),
+	customBadge(
+		"concussion",
+		"🤕",
+		"Concussion",
+		"Took a concussion playing in the KHL.",
+		["Trina Sida"],
+	),
 	{
 		id: "angel",
 		icon: "😇",
@@ -120,29 +150,54 @@ export const BADGES: Badge[] = [
 			return rate !== null && rate > 1 / 2
 		},
 	},
-	gamesMilestone(1, "🏒", "First Game", "Played a first KHL game."),
+	gamesMilestone(1, "🏒", "First Game", "Played their first KHL game."),
 	gamesMilestone(100, "💯", "100 Games", "Played 100 career games."),
 	gamesMilestone(500, "🏆", "500 Games", "Played 500 career games."),
 ]
 
-export function getBadges(stats: BadgeStats): Badge[] {
-	return BADGES.filter((badge) => badge.earned(stats))
+export interface EarnedBadge {
+	badge: Badge
+	/** 1, unless it was given more than once */
+	count: number
 }
 
-/** A badge's emoji in a rounded tile */
-export const BadgeIcon = ({badge}: {badge: Badge}) => {
+export function getBadges(stats: BadgeStats): EarnedBadge[] {
+	return BADGES.filter((badge) => badge.earned(stats)).map((badge) => ({
+		badge,
+		count: badge.count?.(stats) ?? 1,
+	}))
+}
+
+/** A badge's emoji in a rounded tile, with "×2" in the corner if earned twice */
+export const BadgeIcon = ({
+	badge,
+	count = 1,
+}: {
+	badge: Badge
+	count?: number
+}) => {
 	return (
 		<span className="BadgeIcon" aria-hidden>
 			{badge.icon}
+			{count > 1 && <span className="BadgeIcon-count">×{count}</span>}
 		</span>
 	)
 }
 
 /** A badge's name and how it's earned, for a popover */
-export const BadgeHint = ({badge}: {badge: Badge}) => {
+export const BadgeHint = ({
+	badge,
+	count = 1,
+}: {
+	badge: Badge
+	count?: number
+}) => {
 	return (
 		<span className="BadgeHint">
-			<strong className="BadgeHint-label">{badge.label}</strong>
+			<strong className="BadgeHint-label">
+				{badge.label}
+				{count > 1 && ` ×${count}`}
+			</strong>
 			{badge.description}
 		</span>
 	)

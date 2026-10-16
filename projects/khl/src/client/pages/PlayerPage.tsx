@@ -94,7 +94,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 			<AsyncContent
 				state={state}
 				loadingLabel="Loading player details…"
-				slowNote="Still working. The first time a player's details load, it can take a little extra time."
+				slowNote="Still working. This is the first time we're loading this player's details, so it will take a little bit longer."
 			>
 				{(player) => {
 					const selected =
@@ -296,9 +296,6 @@ const PlayerHeader = ({
 	const current = player.registrations.filter((r) => {
 		return isCurrentRegistration(player, r)
 	})
-	const numbers = [
-		...new Set(current.flatMap((r) => r.profile?.number ?? [])),
-	]
 	const position = player.registrations.find((r) => r.profile?.position)
 		?.profile?.position
 	const totals = (
@@ -308,7 +305,8 @@ const PlayerHeader = ({
 		const gp = sumStat(registrations, "Games Played", section)
 		const g = sumStat(registrations, "Goals", section)
 		const a = sumStat(registrations, "Assists", section)
-		return {GP: gp, G: g, A: a, PTS: g + a}
+		const pim = sumStat(registrations, "Penalty Minutes", section)
+		return {GP: gp, G: g, A: a, PTS: g + a, PIM: pim}
 	}
 
 	return (
@@ -316,14 +314,7 @@ const PlayerHeader = ({
 			<div className="PlayerHero">
 				<div className="PlayerHero-identity">
 					<div className="PlayerHero-heading">
-						<h1 className="PlayerHero-name">
-							{player.name}
-							{numbers.length > 0 && (
-								<span className="PlayerHero-number">
-									{numbers.map((n) => `#${n}`).join(" / ")}
-								</span>
-							)}
-						</h1>
+						<h1 className="PlayerHero-name">{player.name}</h1>
 						{position && (
 							<span className="PlayerHero-position">
 								{position}
@@ -331,29 +322,41 @@ const PlayerHeader = ({
 						)}
 					</div>
 					<div className="PlayerHero-bio">
-						{current.map((r) => (
-							<span
-								key={r.khlPlayerId}
-								className="PlayerHero-team"
-							>
-								<TeamAvatar
-									name={r.teamName}
-									logoUrl={r.teamLogoUrl}
-									size={32}
-								/>
-								<span className="PlayerHero-team-text">
-									<TeamLink
-										team={{id: r.teamId, name: r.teamName}}
-										seasonId={player.currentSeason.id}
+						{current.map((r) => {
+							// "#43 · Division 7A": numbers differ between teams
+							const detail = [
+								r.profile?.number && `#${r.profile.number}`,
+								getDivision(r),
+							]
+								.filter(Boolean)
+								.join(" · ")
+							return (
+								<span
+									key={r.khlPlayerId}
+									className="PlayerHero-team"
+								>
+									<TeamAvatar
+										name={r.teamName}
+										logoUrl={r.teamLogoUrl}
+										size={32}
 									/>
-									{getDivision(r) && (
-										<span className="PlayerHero-division">
-											{getDivision(r)}
-										</span>
-									)}
+									<span className="PlayerHero-team-text">
+										<TeamLink
+											team={{
+												id: r.teamId,
+												name: r.teamName,
+											}}
+											seasonId={player.currentSeason.id}
+										/>
+										{detail && (
+											<span className="PlayerHero-division">
+												{detail}
+											</span>
+										)}
+									</span>
 								</span>
-							</span>
-						))}
+							)
+						})}
 					</div>
 				</div>
 				<div className="PlayerHero-stats">
@@ -406,14 +409,17 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 				</Link>
 			</h2>
 			<ul className="PlayerBadges">
-				{badges.map((badge) => (
-					<Hint key={badge.id} label={<BadgeHint badge={badge} />}>
+				{badges.map(({badge, count}) => (
+					<Hint
+						key={badge.id}
+						label={<BadgeHint badge={badge} count={count} />}
+					>
 						<li
 							className="PlayerBadges-badge"
 							tabIndex={0}
-							aria-label={`${badge.label}: ${badge.description}`}
+							aria-label={`${badge.label}${count > 1 ? ` ×${count}` : ""}: ${badge.description}`}
 						>
-							<BadgeIcon badge={badge} />
+							<BadgeIcon badge={badge} count={count} />
 						</li>
 					</Hint>
 				))}

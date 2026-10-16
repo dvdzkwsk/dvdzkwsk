@@ -1,7 +1,7 @@
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
-import {Route} from "../Util.js"
+import {getBadgesHref, Route} from "../Util.js"
 
 // --- /about: what the site adds on top of the league's
 
@@ -14,29 +14,30 @@ interface Feature {
 
 const FEATURES: Feature[] = [
 	{
-		title: "LiveBarn links",
-		text: "Jump straight from any game or player to the feed, past or present.",
-		art: LiveBarnArt,
-	},
-	{
-		title: "Replay any goal",
-		text: "Every goal and penalty links to that moment on LiveBarn, so you can rewatch it in one tap.",
+		title: "Jump straight to LiveBarn",
+		text: "Stop struggling to find a game or highlight on LiveBarn. KHL+ gives you links so it's easy to watch every game and key moment.†",
 		art: ReplayArt,
 	},
 	{
-		title: "Improved player profiles",
-		text: "Career stats across every team a player has been on, not one team at a time.",
+		title: "Consolidated player profiles",
+		text: "The league site splits you into a separate profile for every team you join. We merge them into one, with career stats across all your teams.",
 		art: PlayerArt,
 	},
 	{
-		title: "Improved filters",
-		text: "Filter games by location, and pick several locations or divisions at once.",
-		art: FiltersArt,
+		title: "Player badges",
+		text: (
+			<>
+				Badges on your profile celebrate your time in the KHL. The more
+				you play, the more you collect.{" "}
+				<Link href={getBadgesHref()}>See every badge</Link>.
+			</>
+		),
+		art: BadgesArt,
 	},
 	{
-		title: "Play-by-play recaps",
-		text: "Goals and penalties in the order they happened, with the score after each goal.",
-		art: TimelineArt,
+		title: "Activity feed",
+		text: "Every player and team page shows their latest goals, assists, and penalties, with direct links to LiveBarn.†",
+		art: ActivityArt,
 	},
 	{
 		title: "Compare any two teams",
@@ -58,6 +59,16 @@ const FEATURES: Feature[] = [
 		),
 		art: SearchArt,
 	},
+	{
+		title: "Box scores",
+		text: "Every game's goals and shots by period, plus each team's lineup and what every player did.",
+		art: BoxScoreArt,
+	},
+	{
+		title: "Improved filters",
+		text: "Filter games by location, and pick several locations or divisions at once.",
+		art: FiltersArt,
+	},
 ]
 
 const AboutPage = () => {
@@ -67,18 +78,14 @@ const AboutPage = () => {
 			<div className="AboutPage">
 				<header className="AboutPage-hero">
 					<h1 className="AboutPage-title">
-						The KHL site, rebuilt for players and fans.
+						The KHL website, reimagined by players and fans.
 					</h1>
 					<p className="AboutPage-lede">
 						Find your next game, watch it on LiveBarn, and see your
 						stats from every team you've played on. Same data as{" "}
-						<Link href={URLS.KHL}>{leagueHost} ↗</Link>, but faster
-						to load, easier to read at a glance, and with some cool
-						new features requested by the community.
-					</p>
-					<p className="AboutPage-note">
-						*Unofficial and not run by the league. {leagueHost} is
-						the official record.
+						<Link href={URLS.KHL}>{leagueHost} ↗</Link>*, but with
+						faster load times, smarter player profiles, direct links
+						to LiveBarn feeds, and so much more.
 					</p>
 				</header>
 
@@ -87,6 +94,21 @@ const AboutPage = () => {
 						<FeatureCard key={feature.title} feature={feature} />
 					))}
 				</ul>
+
+				<footer className="AboutPage-notes">
+					<p className="AboutPage-note">
+						*Unofficial and not run by the league. {leagueHost} is
+						the official record.
+					</p>
+					{/* See getGameEventClockTime for how the times are estimated */}
+					<p className="AboutPage-note">
+						†Scoresheets only give the game clock, not the time of
+						day, so we estimate when each game event happened from
+						the scheduled start, typical warmups and intermissions,
+						and stoppages. Replays can land a minute or two off, so
+						you may need to scrub a little.
+					</p>
+				</footer>
 			</div>
 		</PageShell>
 	)
@@ -229,112 +251,6 @@ function FiltersArt() {
 	)
 }
 
-/** A player, a past game, and a live game, each a tap from its feed */
-function LiveBarnArt() {
-	const rows: [y: number, kind: "player" | "final" | "live"][] = [
-		[8, "player"],
-		[46, "final"],
-		[84, "live"],
-	]
-	return (
-		<Art>
-			{rows.map(([y, kind]) => (
-				<g key={y}>
-					<rect
-						className="AboutArt-surface"
-						x="8"
-						y={y}
-						width="224"
-						height="28"
-						rx="6"
-					/>
-					{kind === "player" ? (
-						<>
-							<circle
-								className="AboutArt-ink"
-								cx="26"
-								cy={y + 14}
-								r="7"
-							/>
-							<rect
-								className="AboutArt-muted"
-								x="40"
-								y={y + 12}
-								width="64"
-								height="4"
-								rx="2"
-							/>
-						</>
-					) : (
-						<>
-							<circle
-								className="AboutArt-a"
-								cx="24"
-								cy={y + 14}
-								r="5"
-							/>
-							<rect
-								className="AboutArt-muted"
-								x="34"
-								y={y + 12}
-								width="40"
-								height="4"
-								rx="2"
-							/>
-							<circle
-								className="AboutArt-b"
-								cx="92"
-								cy={y + 14}
-								r="5"
-							/>
-							<rect
-								className="AboutArt-muted"
-								x="102"
-								y={y + 12}
-								width="36"
-								height="4"
-								rx="2"
-							/>
-						</>
-					)}
-					{kind === "live" && (
-						<>
-							<rect
-								className="AboutArt-live"
-								x="164"
-								y={y + 8}
-								width="28"
-								height="12"
-								rx="3"
-							/>
-							<text
-								className="AboutArt-badge-text"
-								x="178"
-								y={y + 17}
-								textAnchor="middle"
-							>
-								LIVE
-							</text>
-						</>
-					)}
-					<circle
-						className={
-							kind === "live" ? "AboutArt-live" : "AboutArt-ink"
-						}
-						cx="214"
-						cy={y + 14}
-						r="9"
-					/>
-					<path
-						className="AboutArt-on-ink"
-						d={`M211 ${y + 9} L219 ${y + 14} L211 ${y + 19} Z`}
-					/>
-				</g>
-			))}
-		</Art>
-	)
-}
-
 /** Goals and penalties, one jumping to its moment in a LiveBarn replay */
 function ReplayArt() {
 	const events: [y: number, side: "a" | "b", w: number][] = [
@@ -426,78 +342,62 @@ function ReplayArt() {
 	)
 }
 
-/** A final score over three periods, goals above and below the line */
-function TimelineArt() {
-	const goals: [x: number, side: "a" | "b"][] = [
-		[36, "a"],
-		[64, "b"],
-		[112, "a"],
-		[176, "b"],
-		[206, "a"],
+/** Goals, assists, and penalties, newest first, each with a replay */
+function ActivityArt() {
+	const events: [y: number, cls: string, w: number][] = [
+		[20, "AboutArt-win", 64],
+		[44, "AboutArt-a", 48],
+		[68, "AboutArt-warn", 72],
+		[92, "AboutArt-win", 56],
 	]
 	return (
 		<Art>
 			<rect
-				className="AboutArt-a"
-				x="70"
-				y="14"
-				width="10"
-				height="10"
-				rx="2"
+				className="AboutArt-card"
+				x="16"
+				y="8"
+				width="208"
+				height="104"
+				rx="8"
 			/>
-			<text className="AboutArt-score" x="120" y="27" textAnchor="middle">
-				3 – 2
-			</text>
-			<rect
-				className="AboutArt-b"
-				x="160"
-				y="14"
-				width="10"
-				height="10"
-				rx="2"
-			/>
-			<rect
-				className="AboutArt-track"
-				x="12"
-				y="74"
-				width="216"
-				height="4"
-				rx="2"
-			/>
-			<rect
-				className="AboutArt-divider"
-				x="83"
-				y="64"
-				width="2"
-				height="24"
-			/>
-			<rect
-				className="AboutArt-divider"
-				x="155"
-				y="64"
-				width="2"
-				height="24"
-			/>
-			{goals.map(([x, side]) => {
-				const y = side === "a" ? 56 : 96
-				return (
-					<g key={x}>
-						<rect
-							className="AboutArt-divider"
-							x={x - 0.75}
-							y={side === "a" ? y : 78}
-							width="1.5"
-							height="18"
-						/>
-						<circle
-							className={`AboutArt-${side}`}
-							cx={x}
-							cy={y}
-							r="6"
-						/>
-					</g>
-				)
-			})}
+			{events.map(([y, cls, w]) => (
+				<g key={y}>
+					<rect
+						className={cls}
+						x="28"
+						y={y - 5}
+						width="26"
+						height="10"
+						rx="5"
+					/>
+					<rect
+						className="AboutArt-muted"
+						x="64"
+						y={y - 2}
+						width={w}
+						height="4"
+						rx="2"
+					/>
+					<rect
+						className="AboutArt-track"
+						x="164"
+						y={y - 2}
+						width="18"
+						height="4"
+						rx="2"
+					/>
+					<circle
+						className="AboutArt-outline"
+						cx="202"
+						cy={y}
+						r="7"
+					/>
+					<path
+						className="AboutArt-muted"
+						d={`M199.5 ${y - 3.5} L205.5 ${y} L199.5 ${y + 3.5} Z`}
+					/>
+				</g>
+			))}
 		</Art>
 	)
 }
@@ -639,6 +539,143 @@ function PlayerArt() {
 						height="4"
 						rx="2"
 					/>
+				</g>
+			))}
+		</Art>
+	)
+}
+
+/** Goals by period and the total, one row per team */
+function BoxScoreArt() {
+	const columns: [x: number, label: string][] = [
+		[128, "1"],
+		[152, "2"],
+		[176, "3"],
+		[206, "T"],
+	]
+	const rows: [y: number, cls: string, goals: number[]][] = [
+		[58, "AboutArt-a", [1, 0, 2, 3]],
+		[84, "AboutArt-b", [0, 1, 1, 2]],
+	]
+	return (
+		<Art>
+			<rect
+				className="AboutArt-card"
+				x="20"
+				y="14"
+				width="200"
+				height="92"
+				rx="8"
+			/>
+			{columns.map(([x, label]) => (
+				<text
+					key={label}
+					className="AboutArt-key"
+					x={x}
+					y="36"
+					textAnchor="middle"
+				>
+					{label}
+				</text>
+			))}
+			<rect
+				className="AboutArt-track"
+				x="32"
+				y="44"
+				width="176"
+				height="1"
+			/>
+			{rows.map(([y, cls, goals]) => (
+				<g key={y}>
+					<rect
+						className={cls}
+						x="34"
+						y={y}
+						width="10"
+						height="10"
+						rx="2"
+					/>
+					<rect
+						className="AboutArt-muted"
+						x="52"
+						y={y + 3}
+						width="48"
+						height="4"
+						rx="2"
+					/>
+					{goals.map((n, i) => (
+						<text
+							key={i}
+							className={
+								i === goals.length - 1
+									? "AboutArt-total"
+									: "AboutArt-cell"
+							}
+							x={columns[i]![0]}
+							y={y + 9}
+							textAnchor="middle"
+						>
+							{n}
+						</text>
+					))}
+				</g>
+			))}
+		</Art>
+	)
+}
+
+/** A player's card with a row of badges */
+function BadgesArt() {
+	const badges: [x: number, emoji: string][] = [
+		[54, "🏒"],
+		[102, "💯"],
+		[150, "😇"],
+	]
+	return (
+		<Art>
+			<rect
+				className="AboutArt-card"
+				x="36"
+				y="14"
+				width="168"
+				height="92"
+				rx="8"
+			/>
+			<circle className="AboutArt-ink" cx="62" cy="40" r="12" />
+			<rect
+				className="AboutArt-muted"
+				x="82"
+				y="33"
+				width="72"
+				height="5"
+				rx="2.5"
+			/>
+			<rect
+				className="AboutArt-track"
+				x="82"
+				y="44"
+				width="44"
+				height="4"
+				rx="2"
+			/>
+			{badges.map(([x, emoji]) => (
+				<g key={x}>
+					<rect
+						className="AboutArt-tile"
+						x={x}
+						y="64"
+						width="36"
+						height="30"
+						rx="6"
+					/>
+					<text
+						className="AboutArt-emoji"
+						x={x + 18}
+						y="85"
+						textAnchor="middle"
+					>
+						{emoji}
+					</text>
 				</g>
 			))}
 		</Art>

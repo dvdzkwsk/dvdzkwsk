@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+	<!-- The KHL+ mark: a slanted plus with skate spray behind it. Keep in
+	     sync with Logo in src/client/Components.tsx. -->
+	<style>
+		.mark { fill: #2a78d6; }
+		.spray { stroke: #2a78d6; }
+		@media (prefers-color-scheme: dark) {
+			.mark { fill: #3987e5; }
+			.spray { stroke: #3987e5; }
+		}
+	</style>
+	<g class="mark" transform="skewX(-14) translate(5 0)">
+		<rect x="14.5" y="4" width="7" height="24" rx="2" />
+		<rect x="6" y="12.5" width="24" height="7" rx="2" />
+	</g>
+	<path class="spray" d="M1 9.5h6M2.5 22.5h5" stroke-opacity="0.45" stroke-width="2.4" stroke-linecap="round" fill="none" />
+</svg>

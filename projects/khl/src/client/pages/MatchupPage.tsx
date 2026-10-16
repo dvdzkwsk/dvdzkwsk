@@ -1,6 +1,9 @@
+import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
+import {z} from "zod"
 import {
 	GET_MATCHUP_ENDPOINT,
 	LIST_TEAM_SEASONS_ENDPOINT,
@@ -15,6 +18,7 @@ import {
 	AsyncContent,
 	ErrorState,
 	Hint,
+	Link,
 	PageShell,
 	PageTitle,
 	Picker,
@@ -26,10 +30,12 @@ import {
 	AppContext,
 	AsyncState,
 	getShortSeasonName,
+	readStorage,
 	Route,
 	RouteProps,
 	useAsync,
 	useNow,
+	writeStorage,
 } from "../Util.js"
 
 /** Any two teams' seasons compared, like the league's game previews. */
@@ -68,6 +74,14 @@ const MatchupPage = ({query}: RouteProps) => {
 	)
 	const now = useNow()
 	const data = matchup.status === "success" ? matchup.data : null
+	const recent = useRecentComparisons(
+		ready && teamsA.status === "success" && teamsB.status === "success"
+			? {
+					a: toRecentSide(teamA, teamsA.data),
+					b: toRecentSide(teamB, teamsB.data),
+				}
+			: null,
+	)
 
 	const setParams = (next: MatchupParams) => {
 		const search = new URLSearchParams()
@@ -78,7 +92,7 @@ const MatchupPage = ({query}: RouteProps) => {
 		}
 		const queryString = search.toString()
 		// Picking teams isn't worth a back-button stop each
-		history.replace(`/matchup${queryString ? `?${queryString}` : ""}`)
+		history.replace(`/compare${queryString ? `?${queryString}` : ""}`)
 	}
 
 	return (
@@ -87,8 +101,21 @@ const MatchupPage = ({query}: RouteProps) => {
 				<PageTitle>
 					{teamA && teamB
 						? `${teamA.name} vs ${teamB.name}`
-						: "Matchup"}
+						: "Compare"}
 				</PageTitle>
+				<header className="Matchup-intro">
+					<h1 className="Matchup-intro-title">
+						Compare any two teams
+					</h1>
+					<p className="Matchup-intro-text">
+						Pick a team and season on each side to see their stats,
+						rosters, and head-to-head games side by side.
+					</p>
+					<p className="Matchup-intro-tip">
+						Tip: pick the same team twice to compare two of its
+						seasons.
+					</p>
+				</header>
 				<header className={cx("Detail-header", "Matchup-header")}>
 					<MatchupSide
 						side="a"
@@ -140,7 +167,7 @@ const MatchupPage = ({query}: RouteProps) => {
 				{ready ? (
 					<MatchupContent state={matchup} now={now} />
 				) : (
-					<MatchupEmpty />
+					<RecentComparisons comparisons={recent} />
 				)}
 			</div>
 		</PageShell>
@@ -155,6 +182,143 @@ interface MatchupParams {
 }
 
 /** A season's teams, for one side's pickers. Null means the current season. */
+// --- Recent comparisons, remembered in this browser
+
+const RECENT_STORAGE_KEY = "khl-recent-comparisons"
+const RECENT_LIMIT = 5
+
+const RecentSideSchema = z.object({
+	id: z.string(),
+	seasonId: z.string(),
+	name: z.string(),
+	logoUrl: z.string().nullable(),
+	seasonName: z.string(),
+})
+type RecentSide = z.infer<typeof RecentSideSchema>
+
+const RecentComparisonSchema = z.object({
+	a: RecentSideSchema,
+	b: RecentSideSchema,
+})
+type RecentComparison = z.infer<typeof RecentComparisonSchema>
+
+const recentLogger = new Logger("RecentComparisons")
+
+function toRecentSide(team: KHLTeam, teams: TeamsResponse): RecentSide {
+	return {
+		id: team.id,
+		seasonId: team.seasonId,
+		name: team.name,
+		logoUrl: team.logoUrl,
+		seasonName: getShortSeasonName(teams.season.name),
+	}
+}
+
+/** The same two picks either way round, so a swap isn't a new entry */
+function getComparisonKey({a, b}: RecentComparison): string {
+	return [`${a.id}@${a.seasonId}`, `${b.id}@${b.seasonId}`].sort().join("|")
+}
+
+function getCompareHref({a, b}: RecentComparison): string {
+	const search = new URLSearchParams({
+		a: a.id,
+		aSeason: a.seasonId,
+		b: b.id,
+		bSeason: b.seasonId,
+	})
+	return `${MatchupRoute.path}?${search}`
+}
+
+function readRecentComparisons(): RecentComparison[] {
+	const raw = readStorage(RECENT_STORAGE_KEY)
+	if (!raw) {
+		return []
+	}
+	try {
+		return z.array(RecentComparisonSchema).parse(JSON.parse(raw))
+	} catch (cause) {
+		recentLogger.warn("read", "ignoring unreadable recent comparisons", {
+			error: toError(cause),
+		})
+		return []
+	}
+}
+
+/**
+ * The last few comparisons, newest first. `current` (once both teams have
+ * loaded) goes to the top, replacing an earlier entry for the same pair.
+ */
+function useRecentComparisons(
+	current: RecentComparison | null,
+): RecentComparison[] {
+	const [recent, setRecent] = React.useState(readRecentComparisons)
+	const key = current && getComparisonKey(current)
+	React.useEffect(() => {
+		if (!current) {
+			return
+		}
+		const next = [
+			current,
+			...readRecentComparisons().filter(
+				(c) => getComparisonKey(c) !== key,
+			),
+		].slice(0, RECENT_LIMIT)
+		writeStorage(RECENT_STORAGE_KEY, JSON.stringify(next))
+		setRecent(next)
+	}, [key])
+	return recent
+}
+
+const RecentComparisons = ({
+	comparisons,
+}: {
+	comparisons: RecentComparison[]
+}) => {
+	if (comparisons.length === 0) {
+		return null
+	}
+	return (
+		<section className="RecentComparisons">
+			<h2 className="SectionLabel">Recent comparisons</h2>
+			<ul className="RecentComparisons-list">
+				{comparisons.map((comparison) => {
+					const {a, b} = comparison
+					return (
+						<li key={getComparisonKey(comparison)}>
+							<Link
+								className="RecentComparisons-item"
+								href={getCompareHref(comparison)}
+							>
+								<span className="RecentComparisons-teams">
+									<RecentTeam side={a} />
+									<span className="RecentComparisons-vs">
+										vs
+									</span>
+									<RecentTeam side={b} />
+								</span>
+								<span className="RecentComparisons-seasons">
+									{a.seasonName === b.seasonName
+										? a.seasonName
+										: `${a.seasonName} · ${b.seasonName}`}
+								</span>
+							</Link>
+						</li>
+					)
+				})}
+			</ul>
+		</section>
+	)
+}
+
+const RecentTeam = ({side}: {side: RecentSide}) => {
+	return (
+		<span className="RecentComparisons-team">
+			<TeamAvatar name={side.name} logoUrl={side.logoUrl} size={24} />
+			<span className="RecentComparisons-name">{side.name}</span>
+		</span>
+	)
+}
+
 function useTeams(seasonId: string | null): AsyncState<TeamsResponse> {
 	return useAsync(
 		() => doRequest(LIST_TEAMS_ENDPOINT, {season: seasonId ?? undefined}),
@@ -378,50 +542,6 @@ const SeasonPicker = ({
 	)
 }
 
-/** Before both teams are picked: what the page will show once they are. */
-const MatchupEmpty = () => {
-	return (
-		<section className="Matchup-empty">
-			<h2 className="Matchup-empty-title">Compare any two teams</h2>
-			<p className="Matchup-empty-text">
-				Pick a team and season on each side.
-			</p>
-			<ul className="Matchup-features">
-				<li className="Matchup-feature">
-					<ChartIcon />
-					<span>
-						<span className="Matchup-feature-title">
-							Season stats
-						</span>
-						Record and recent form, then goals, special teams and
-						shots, side by side.
-					</span>
-				</li>
-				<li className="Matchup-feature">
-					<SwapIcon />
-					<span>
-						<span className="Matchup-feature-title">
-							Head-to-head
-						</span>
-						Every meeting between the two teams, across seasons.
-					</span>
-				</li>
-				<li className="Matchup-feature">
-					<PlayersIcon />
-					<span>
-						<span className="Matchup-feature-title">Rosters</span>
-						Each team's players and goalies, by points.
-					</span>
-				</li>
-			</ul>
-			<p className="Matchup-tip">
-				Tip: pick the same team on both sides to compare two of its
-				seasons.
-			</p>
-		</section>
-	)
-}
-
 const ICON_PROPS = {
 	viewBox: "0 0 24 24",
 	fill: "none",
@@ -447,28 +567,6 @@ const ShieldIcon = () => {
 	return (
 		<svg {...ICON_PROPS}>
 			<path d="M12 3 5 6v5c0 4.5 3 8.5 7 10 4-1.5 7-5.5 7-10V6l-7-3Z" />
-		</svg>
-	)
-}
-
-const ChartIcon = () => {
-	return (
-		<svg {...ICON_PROPS}>
-			<path d="M4 20V10" />
-			<path d="M10 20V4" />
-			<path d="M16 20v-7" />
-			<path d="M22 20H2" />
-		</svg>
-	)
-}
-
-const PlayersIcon = () => {
-	return (
-		<svg {...ICON_PROPS}>
-			<circle cx="9" cy="8" r="3.5" />
-			<path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5" />
-			<path d="M16 4.7a3.5 3.5 0 0 1 0 6.6" />
-			<path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" />
 		</svg>
 	)
 }
@@ -512,7 +610,7 @@ const TeamPicker = ({
 }
 
 export const MatchupRoute = {
-	path: "/matchup",
-	title: "Matchup",
+	path: "/compare",
+	title: "Compare",
 	content: MatchupPage,
 } as const satisfies Route

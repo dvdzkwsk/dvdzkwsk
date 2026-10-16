@@ -80,6 +80,7 @@ const RinkPage = ({params}: RouteProps) => {
 													title={LIVEBARN_TITLES.live(
 														surface.surfaceName,
 													)}
+													live={status.live !== null}
 												/>
 											))
 										) : (

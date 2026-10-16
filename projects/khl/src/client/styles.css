@@ -1089,6 +1089,17 @@ table {
 	height: 12px;
 }
 
+/* A game is on now */
+.LiveBarnBadge--live {
+	background: var(--live);
+	color: var(--live-fg);
+}
+
+.LiveBarnBadge--live:hover {
+	background: color-mix(in srgb, var(--live) 85%, black);
+	color: var(--live-fg);
+}
+
 /* Icon only, its label in a tooltip */
 .LiveBarnBadge--compact {
 	padding: calc(var(--spacing) * 1.5);

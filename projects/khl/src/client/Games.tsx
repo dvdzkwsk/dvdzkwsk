@@ -142,7 +142,10 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
 									? surface.surfaceName
 									: undefined
 							}
-							title={LIVEBARN_TITLES.open(surface.surfaceName)}
+							title={LIVEBARN_TITLES[live ? "live" : "open"](
+								surface.surfaceName,
+							)}
+							live={live}
 						/>
 					))}
 				</span>
@@ -1392,6 +1395,7 @@ export const GameTable = ({
 							compact
 							href={link.href}
 							title={link.title}
+							live={row.live}
 						/>
 					))}
 					{row.livebarn.length === 0 && <NotOnLiveBarn compact />}

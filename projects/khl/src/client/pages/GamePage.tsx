@@ -347,6 +347,7 @@ const GameLiveBarnLinks = ({game, now}: {game: GameResponse; now: Date}) => {
 								? "live"
 								: "open"
 					](link.surfaceName)}
+					live={state === "live"}
 				/>
 			))}
 		</>

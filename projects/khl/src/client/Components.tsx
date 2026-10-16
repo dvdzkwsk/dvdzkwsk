@@ -2361,6 +2361,8 @@ interface LiveBarnBadgeProps {
 	title?: string
 	/** Just the camera icon; the label moves to a tooltip */
 	compact?: boolean
+	/** A game is on now: shown in red, and "Watch Now" instead of "LiveBarn" */
+	live?: boolean
 }
 
 /**
@@ -2372,16 +2374,22 @@ const IconLink = ({
 	label,
 	icon,
 	onClick,
+	className,
 }: {
 	href: string
 	label: string
 	icon: React.ReactNode
 	onClick?: React.MouseEventHandler<HTMLAnchorElement>
+	className?: string
 }) => {
 	return (
 		<Hint label={label}>
 			<a
-				className={cx("LiveBarnBadge", "LiveBarnBadge--compact")}
+				className={cx(
+					"LiveBarnBadge",
+					"LiveBarnBadge--compact",
+					className,
+				)}
 				href={href}
 				onClick={onClick}
 				aria-label={label}
@@ -2453,6 +2461,7 @@ export const LiveBarnBadge = ({
 	surfaceName,
 	title,
 	compact,
+	live,
 }: LiveBarnBadgeProps) => {
 	const [confirming, setConfirming] = React.useState(false)
 	const onClick = isLiveBarnVodExpired(href, new Date())
@@ -2469,16 +2478,20 @@ export const LiveBarnBadge = ({
 					label={title ?? surfaceName ?? "LiveBarn"}
 					icon={<CameraIcon />}
 					onClick={onClick}
+					className={cx(live && "LiveBarnBadge--live")}
 				/>
 			) : (
 				<Hint label={title}>
 					<Link
-						className="LiveBarnBadge"
+						className={cx(
+							"LiveBarnBadge",
+							live && "LiveBarnBadge--live",
+						)}
 						href={href}
 						onClick={onClick}
 					>
 						<CameraIcon />
-						{surfaceName ?? "LiveBarn"} ↗
+						{surfaceName ?? (live ? "Watch Now" : "LiveBarn")} ↗
 					</Link>
 				</Hint>
 			)}

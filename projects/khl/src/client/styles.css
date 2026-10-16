@@ -5349,10 +5349,6 @@ a.Compare-chip:hover {
 }
 
 .BadgesPage-description,
-.BadgesPage-players {
-	font-size: var(--text-sm);
-	color: var(--muted-fg);
-}
 
 /* === HelpPage === */
 

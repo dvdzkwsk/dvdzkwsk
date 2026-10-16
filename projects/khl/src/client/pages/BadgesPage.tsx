@@ -6,8 +6,6 @@ import {Route} from "../Util.js"
 
 // --- /badges: every badge a player can have, and how to get it
 
-const LIST_FORMAT = new Intl.ListFormat("en", {type: "conjunction"})
-
 const BadgesPage = () => {
 	const earned = BADGES.filter((badge) => !badge.players)
 	const given = BADGES.filter((badge) => badge.players)
@@ -32,17 +30,6 @@ const BadgesPage = () => {
 	)
 }
 
-/** Each name once, with "(×2)" after those listed twice */
-function formatRecipients(players: string[]): string[] {
-	const counts = new Map<string, number>()
-	for (const name of players) {
-		counts.set(name, (counts.get(name) ?? 0) + 1)
-	}
-	return [...counts].map(([name, count]) =>
-		count > 1 ? `${name} (×${count})` : name,
-	)
-}
-
 const BadgeSection = ({title, badges}: {title: string; badges: Badge[]}) => {
 	if (badges.length === 0) {
 		return null
@@ -61,14 +48,6 @@ const BadgeSection = ({title, badges}: {title: string; badges: Badge[]}) => {
 							<span className="BadgesPage-description">
 								{badge.description}
 							</span>
-							{badge.players && (
-								<span className="BadgesPage-players">
-									Given to{" "}
-									{LIST_FORMAT.format(
-										formatRecipients(badge.players),
-									)}
-								</span>
-							)}
 						</div>
 					</li>
 				))}

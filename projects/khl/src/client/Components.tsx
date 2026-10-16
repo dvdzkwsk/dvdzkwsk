@@ -2661,8 +2661,8 @@ const ReplayDialog = ({
 						) : (
 							<>
 								<p>
-									The league doesn't post the wall clock time for
-									game events, only the game clock, so
+									The league doesn't post the wall clock time
+									for game events, only the game clock, so
 									this link starts at our best estimate from
 									the game's scheduled start time.
 								</p>

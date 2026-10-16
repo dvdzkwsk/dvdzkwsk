@@ -985,7 +985,10 @@ export const PageLoader = ({
 		<div className="PageLoader" role="status" aria-live="polite">
 			<ZamboniLap />
 			<div className="PageLoader-text">
-				<span className="PageLoader-label">{label}</span>
+				<span className="PageLoader-label">
+					{withoutEllipsis(label)}
+					<PuckDots />
+				</span>
 				<span className="PageLoader-note">
 					{/* Most data is fetched from the league's site and cached,
 					    so a first load is the slow one */}
@@ -1009,7 +1012,9 @@ export const InlineLoader = ({
 		<div className="InlineLoader" role="status" aria-live="polite">
 			<div className="InlineLoader-row">
 				<PuckDots />
-				<span className="InlineLoader-label">{label}</span>
+				<span className="InlineLoader-label">
+					{withoutEllipsis(label)}
+				</span>
 			</div>
 			<span className="InlineLoader-note">{slow && slowNote}</span>
 		</div>
@@ -1088,6 +1093,11 @@ const ZamboniLap = () => {
 			</g>
 		</svg>
 	)
+}
+
+/** "Loading standings…" -> "Loading standings": the pucks stand in for the "…" */
+function withoutEllipsis(label: string): string {
+	return label.replace(/(…|\.\.\.)$/, "")
 }
 
 /** Three pucks lighting up and hopping in turn, like a typing indicator */

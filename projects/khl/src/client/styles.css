@@ -292,11 +292,20 @@ table {
 }
 
 .PageLoader-label {
+	display: inline-flex;
+	align-items: baseline;
+	gap: calc(var(--spacing) * 2);
 	color: var(--site-fg);
 	font-size: var(--text-2xl);
 	font-weight: var(--weight-semibold);
 	line-height: 1.2;
 	letter-spacing: -0.02em;
+}
+
+/* Sits on the baseline, where the "…" would be */
+.PageLoader-label .PuckDots {
+	align-self: flex-end;
+	margin-bottom: 0.3em;
 }
 
 /* Reserves two lines so the loader doesn't jump when the note appears.

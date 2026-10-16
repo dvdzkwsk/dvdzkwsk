@@ -3214,6 +3214,74 @@ table {
 	color: var(--muted-fg);
 }
 
+/* === RecentComparisons (Compare page, before both teams are picked) === */
+
+.RecentComparisons {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+}
+
+.RecentComparisons-list {
+	margin: 0;
+	padding: calc(var(--spacing) * 1);
+	list-style: none;
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+}
+
+.RecentComparisons-item {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 4);
+	padding: calc(var(--spacing) * 3);
+	border-radius: var(--radius-md);
+	color: inherit;
+}
+
+.RecentComparisons-item:hover {
+	text-decoration: none;
+	background: var(--subtle-bg);
+}
+
+.RecentComparisons-teams {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2.5);
+	min-width: 0;
+}
+
+.RecentComparisons-team {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	min-width: 0;
+}
+
+.RecentComparisons-name {
+	font-weight: var(--weight-semibold);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.RecentComparisons-vs {
+	flex: none;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-bold);
+	text-transform: uppercase;
+	color: var(--subtle-fg);
+}
+
+.RecentComparisons-seasons {
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+}
+
 /* Full-width card: keep its rows a readable width, centered */
 .Compare > * {
 	width: 100%;

@@ -30,6 +30,7 @@ import {
 	IS_DEV,
 	useLocation,
 	useMediaQuery,
+	writeStorage,
 } from "./Util.js"
 import {
 	RosterPlayer,
@@ -1697,17 +1698,6 @@ const SiteNav = ({
 type Theme = "light" | "dark"
 
 const THEME_STORAGE_KEY = "khl-theme"
-function writeStorage(key: string, value: string | null) {
-	try {
-		if (value === null) {
-			localStorage.removeItem(key)
-		} else {
-			localStorage.setItem(key, value)
-		}
-	} catch {
-		// Not persisted; the choice still applies until the page reloads
-	}
-}
 
 /** Keep in sync with the inline script in index.html. */
 function applyTheme(theme: Theme) {

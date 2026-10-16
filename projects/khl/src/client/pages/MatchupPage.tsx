@@ -1,6 +1,9 @@
+import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
+import {z} from "zod"
 import {
 	GET_MATCHUP_ENDPOINT,
 	LIST_TEAM_SEASONS_ENDPOINT,
@@ -15,6 +18,7 @@ import {
 	AsyncContent,
 	ErrorState,
 	Hint,
+	Link,
 	PageShell,
 	PageTitle,
 	Picker,
@@ -26,10 +30,12 @@ import {
 	AppContext,
 	AsyncState,
 	getShortSeasonName,
+	readStorage,
 	Route,
 	RouteProps,
 	useAsync,
 	useNow,
+	writeStorage,
 } from "../Util.js"
 
 /** Any two teams' seasons compared, like the league's game previews. */
@@ -68,6 +74,14 @@ const MatchupPage = ({query}: RouteProps) => {
 	)
 	const now = useNow()
 	const data = matchup.status === "success" ? matchup.data : null
+	const recent = useRecentComparisons(
+		ready && teamsA.status === "success" && teamsB.status === "success"
+			? {
+					a: toRecentSide(teamA, teamsA.data),
+					b: toRecentSide(teamB, teamsB.data),
+				}
+			: null,
+	)
 
 	const setParams = (next: MatchupParams) => {
 		const search = new URLSearchParams()
@@ -150,7 +164,11 @@ const MatchupPage = ({query}: RouteProps) => {
 						}
 					/>
 				</header>
-				{ready && <MatchupContent state={matchup} now={now} />}
+				{ready ? (
+					<MatchupContent state={matchup} now={now} />
+				) : (
+					<RecentComparisons comparisons={recent} />
+				)}
 			</div>
 		</PageShell>
 	)
@@ -164,6 +182,143 @@ interface MatchupParams {
 }
 
 /** A season's teams, for one side's pickers. Null means the current season. */
+// --- Recent comparisons, remembered in this browser
+
+const RECENT_STORAGE_KEY = "khl-recent-comparisons"
+const RECENT_LIMIT = 5
+
+const RecentSideSchema = z.object({
+	id: z.string(),
+	seasonId: z.string(),
+	name: z.string(),
+	logoUrl: z.string().nullable(),
+	seasonName: z.string(),
+})
+type RecentSide = z.infer<typeof RecentSideSchema>
+
+const RecentComparisonSchema = z.object({
+	a: RecentSideSchema,
+	b: RecentSideSchema,
+})
+type RecentComparison = z.infer<typeof RecentComparisonSchema>
+
+const recentLogger = new Logger("RecentComparisons")
+
+function toRecentSide(team: KHLTeam, teams: TeamsResponse): RecentSide {
+	return {
+		id: team.id,
+		seasonId: team.seasonId,
+		name: team.name,
+		logoUrl: team.logoUrl,
+		seasonName: getShortSeasonName(teams.season.name),
+	}
+}
+
+/** The same two picks either way round, so a swap isn't a new entry */
+function getComparisonKey({a, b}: RecentComparison): string {
+	return [`${a.id}@${a.seasonId}`, `${b.id}@${b.seasonId}`].sort().join("|")
+}
+
+function getCompareHref({a, b}: RecentComparison): string {
+	const search = new URLSearchParams({
+		a: a.id,
+		aSeason: a.seasonId,
+		b: b.id,
+		bSeason: b.seasonId,
+	})
+	return `${MatchupRoute.path}?${search}`
+}
+
+function readRecentComparisons(): RecentComparison[] {
+	const raw = readStorage(RECENT_STORAGE_KEY)
+	if (!raw) {
+		return []
+	}
+	try {
+		return z.array(RecentComparisonSchema).parse(JSON.parse(raw))
+	} catch (cause) {
+		recentLogger.warn("read", "ignoring unreadable recent comparisons", {
+			error: toError(cause),
+		})
+		return []
+	}
+}
+
+/**
+ * The last few comparisons, newest first. `current` (once both teams have
+ * loaded) goes to the top, replacing an earlier entry for the same pair.
+ */
+function useRecentComparisons(
+	current: RecentComparison | null,
+): RecentComparison[] {
+	const [recent, setRecent] = React.useState(readRecentComparisons)
+	const key = current && getComparisonKey(current)
+	React.useEffect(() => {
+		if (!current) {
+			return
+		}
+		const next = [
+			current,
+			...readRecentComparisons().filter(
+				(c) => getComparisonKey(c) !== key,
+			),
+		].slice(0, RECENT_LIMIT)
+		writeStorage(RECENT_STORAGE_KEY, JSON.stringify(next))
+		setRecent(next)
+	}, [key])
+	return recent
+}
+
+const RecentComparisons = ({
+	comparisons,
+}: {
+	comparisons: RecentComparison[]
+}) => {
+	if (comparisons.length === 0) {
+		return null
+	}
+	return (
+		<section className="RecentComparisons">
+			<h2 className="SectionLabel">Recent comparisons</h2>
+			<ul className="RecentComparisons-list">
+				{comparisons.map((comparison) => {
+					const {a, b} = comparison
+					return (
+						<li key={getComparisonKey(comparison)}>
+							<Link
+								className="RecentComparisons-item"
+								href={getCompareHref(comparison)}
+							>
+								<span className="RecentComparisons-teams">
+									<RecentTeam side={a} />
+									<span className="RecentComparisons-vs">
+										vs
+									</span>
+									<RecentTeam side={b} />
+								</span>
+								<span className="RecentComparisons-seasons">
+									{a.seasonName === b.seasonName
+										? a.seasonName
+										: `${a.seasonName} · ${b.seasonName}`}
+								</span>
+							</Link>
+						</li>
+					)
+				})}
+			</ul>
+		</section>
+	)
+}
+
+const RecentTeam = ({side}: {side: RecentSide}) => {
+	return (
+		<span className="RecentComparisons-team">
+			<TeamAvatar name={side.name} logoUrl={side.logoUrl} size={24} />
+			<span className="RecentComparisons-name">{side.name}</span>
+		</span>
+	)
+}
+
 function useTeams(seasonId: string | null): AsyncState<TeamsResponse> {
 	return useAsync(
 		() => doRequest(LIST_TEAMS_ENDPOINT, {season: seasonId ?? undefined}),

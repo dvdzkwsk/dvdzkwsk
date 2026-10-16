@@ -324,6 +324,29 @@ function withSimulatedLoading<T>(load: () => Promise<T>): Promise<T> {
 	return load()
 }
 
+// --- Local storage: this browser's own preferences and history. Blocked
+// or full storage (e.g. a private window) just means nothing is remembered.
+
+export function readStorage(key: string): string | null {
+	try {
+		return localStorage.getItem(key)
+	} catch {
+		return null
+	}
+}
+
+export function writeStorage(key: string, value: string | null) {
+	try {
+		if (value === null) {
+			localStorage.removeItem(key)
+		} else {
+			localStorage.setItem(key, value)
+		}
+	} catch {
+		// Not persisted; it still applies until the page reloads
+	}
+}
+
 /** Whether a CSS media query matches, re-rendering whenever that changes. */
 export function useMediaQuery(query: string): boolean {
 	return React.useSyncExternalStore(

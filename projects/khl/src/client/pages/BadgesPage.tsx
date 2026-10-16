@@ -16,7 +16,8 @@ const BadgesPage = () => {
 					<h1 className="BadgesPage-title">Badges</h1>
 					<p className="BadgesPage-lede">
 						Badges show on a player's page. Most are earned from
-						career stats, and a few are awarded. Have an idea?{" "}
+						career stats, and a few are awarded by hand. Have an
+						idea?{" "}
 						<Link href={URLS.FEEDBACK_FORM}>Suggest a badge ↗</Link>
 						. Think you've earned one?{" "}
 						<Link href={URLS.FEEDBACK_FORM}>Request a badge ↗</Link>

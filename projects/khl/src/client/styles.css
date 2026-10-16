@@ -675,7 +675,6 @@ table {
 	overflow-x: auto;
 }
 
-/* Separate borders so a hovered row's end cells can round their corners */
 .StatsTable {
 	width: 100%;
 	border-collapse: separate;
@@ -750,15 +749,7 @@ table {
 		background: var(--subtle-bg);
 	}
 
-	.StatsTable tbody tr:hover td:first-child {
-		border-radius: var(--radius-sm) 0 0 var(--radius-sm);
-	}
-
-	.StatsTable tbody tr:hover td:last-child {
-		border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-	}
-
-	/* The rounded row replaces the dividers above and below it */
+	/* The highlighted row replaces the dividers above and below it */
 	.StatsTable tbody tr:hover td,
 	.StatsTable tbody tr:has(+ tr:hover) td {
 		border-bottom-color: transparent;

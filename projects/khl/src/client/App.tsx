@@ -70,10 +70,7 @@ const ROUTES: Route[] = [
 	...(IS_DEV ? [AdminRoute] : []),
 ]
 
-/**
- * An old path that moved, keeping its query, e.g. /matchup?a=1 to
- * /compare?a=1. Built sites also redirect it on the server (Server.ts).
- */
+/** An old path that moved, keeping its query, e.g. /matchup?a=1 to /compare?a=1 */
 function redirectRoute(from: string, to: string): Route {
 	const Redirect = ({query}: RouteProps) => {
 		const {history} = React.useContext(AppContext)

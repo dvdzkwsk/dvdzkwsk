@@ -1178,10 +1178,6 @@ app.use("/api", (_req, res) => {
 
 // Serve the built app when it exists (`build`); in dev, Vite serves it.
 if (fs.existsSync(DIST_DIR)) {
-	// Pages that moved; the client redirects these too (App.tsx)
-	app.get("/matchup", (req, res) => {
-		res.redirect(301, req.originalUrl.replace(/^\/matchup/, "/compare"))
-	})
 	app.use(express.static(DIST_DIR))
 	app.get("/{*path}", (_req, res) => {
 		res.sendFile(path.join(DIST_DIR, "index.html"))

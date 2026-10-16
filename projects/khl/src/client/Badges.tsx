@@ -123,6 +123,13 @@ export const BADGES: Badge[] = [
 			"Patrick Austin",
 		],
 	),
+	customBadge(
+		"concussion",
+		"🤕",
+		"Concussion",
+		"Took a concussion playing in the KHL.",
+		["Trina Sida"],
+	),
 	{
 		id: "angel",
 		icon: "😇",

@@ -72,8 +72,7 @@ const AboutPage = () => {
 			<div className="AboutPage">
 				<header className="AboutPage-hero">
 					<h1 className="AboutPage-title">
-						Your gateway to the Kraken Hockey League, reimagined by
-						players and fans.
+						The KHL website, reimagined by players and fans.
 					</h1>
 					<p className="AboutPage-lede">
 						Find your next game, watch it on LiveBarn, and see your

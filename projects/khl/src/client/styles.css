@@ -4819,7 +4819,7 @@ a.Compare-chip:hover {
 
 .AboutPage-features {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: calc(var(--spacing) * 4);
 	margin: 0;
 	padding: 0;
@@ -5028,7 +5028,9 @@ a.Compare-chip:hover {
 
 .AboutArt-score,
 .AboutArt-rank,
-.AboutArt-key {
+.AboutArt-key,
+.AboutArt-cell,
+.AboutArt-total {
 	font-family: var(--font-sans);
 	font-weight: var(--weight-bold);
 }
@@ -5047,6 +5049,27 @@ a.Compare-chip:hover {
 .AboutArt-key {
 	font-size: 10px;
 	fill: var(--muted-fg);
+}
+
+.AboutArt-cell {
+	font-size: 12px;
+	font-weight: var(--weight-medium);
+	fill: var(--muted-fg);
+}
+
+.AboutArt-total {
+	font-size: 13px;
+	fill: var(--site-fg);
+}
+
+.AboutArt-tile {
+	fill: var(--subtle-bg);
+	stroke: var(--panel-border);
+	stroke-width: 1;
+}
+
+.AboutArt-emoji {
+	font-size: 16px;
 }
 
 /* === Badges === */

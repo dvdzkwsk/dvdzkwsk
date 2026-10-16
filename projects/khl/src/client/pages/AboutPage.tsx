@@ -24,6 +24,16 @@ const FEATURES: Feature[] = [
 		art: PlayerArt,
 	},
 	{
+		title: "Box scores",
+		text: "Every game's goals and shots by period, plus each team's lineup and what every player did.",
+		art: BoxScoreArt,
+	},
+	{
+		title: "Player badges",
+		text: "Profiles earn badges for milestones like a first or 100th game, and for steering clear of (or living in) the penalty box.",
+		art: BadgesArt,
+	},
+	{
 		title: "Improved filters",
 		text: "Filter games by location, and pick several locations or divisions at once.",
 		art: FiltersArt,
@@ -529,6 +539,143 @@ function PlayerArt() {
 						height="4"
 						rx="2"
 					/>
+				</g>
+			))}
+		</Art>
+	)
+}
+
+/** Goals by period and the total, one row per team */
+function BoxScoreArt() {
+	const columns: [x: number, label: string][] = [
+		[128, "1"],
+		[152, "2"],
+		[176, "3"],
+		[206, "T"],
+	]
+	const rows: [y: number, cls: string, goals: number[]][] = [
+		[58, "AboutArt-a", [1, 0, 2, 3]],
+		[84, "AboutArt-b", [0, 1, 1, 2]],
+	]
+	return (
+		<Art>
+			<rect
+				className="AboutArt-card"
+				x="20"
+				y="14"
+				width="200"
+				height="92"
+				rx="8"
+			/>
+			{columns.map(([x, label]) => (
+				<text
+					key={label}
+					className="AboutArt-key"
+					x={x}
+					y="36"
+					textAnchor="middle"
+				>
+					{label}
+				</text>
+			))}
+			<rect
+				className="AboutArt-track"
+				x="32"
+				y="44"
+				width="176"
+				height="1"
+			/>
+			{rows.map(([y, cls, goals]) => (
+				<g key={y}>
+					<rect
+						className={cls}
+						x="34"
+						y={y}
+						width="10"
+						height="10"
+						rx="2"
+					/>
+					<rect
+						className="AboutArt-muted"
+						x="52"
+						y={y + 3}
+						width="48"
+						height="4"
+						rx="2"
+					/>
+					{goals.map((n, i) => (
+						<text
+							key={i}
+							className={
+								i === goals.length - 1
+									? "AboutArt-total"
+									: "AboutArt-cell"
+							}
+							x={columns[i]![0]}
+							y={y + 9}
+							textAnchor="middle"
+						>
+							{n}
+						</text>
+					))}
+				</g>
+			))}
+		</Art>
+	)
+}
+
+/** A player's card with a row of badges */
+function BadgesArt() {
+	const badges: [x: number, emoji: string][] = [
+		[54, "🏒"],
+		[102, "💯"],
+		[150, "😇"],
+	]
+	return (
+		<Art>
+			<rect
+				className="AboutArt-card"
+				x="36"
+				y="14"
+				width="168"
+				height="92"
+				rx="8"
+			/>
+			<circle className="AboutArt-ink" cx="62" cy="40" r="12" />
+			<rect
+				className="AboutArt-muted"
+				x="82"
+				y="33"
+				width="72"
+				height="5"
+				rx="2.5"
+			/>
+			<rect
+				className="AboutArt-track"
+				x="82"
+				y="44"
+				width="44"
+				height="4"
+				rx="2"
+			/>
+			{badges.map(([x, emoji]) => (
+				<g key={x}>
+					<rect
+						className="AboutArt-tile"
+						x={x}
+						y="64"
+						width="36"
+						height="30"
+						rx="6"
+					/>
+					<text
+						className="AboutArt-emoji"
+						x={x + 18}
+						y="85"
+						textAnchor="middle"
+					>
+						{emoji}
+					</text>
 				</g>
 			))}
 		</Art>

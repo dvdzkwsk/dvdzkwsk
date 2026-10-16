@@ -40,7 +40,7 @@ const FEATURES: Feature[] = [
 	},
 	{
 		title: "Activity feed",
-		text: "Every player and team page shows their latest goals, assists, and penalties, newest first, each a tap away from its replay.",
+		text: "Every player and team page shows their latest goals, assists, and penalties. Easily jump to the replay for each key moment.",
 		art: ActivityArt,
 	},
 	{

@@ -31,7 +31,7 @@ const FEATURES: Feature[] = [
 	},
 	{
 		title: "Activity feed",
-		text: "Every player and team page shows their latest goals, assists, and penalties, with direct links to LiveBarn.*",
+		text: "Every player and team page shows their latest goals, assists, and penalties, with direct links to LiveBarn.†",
 		art: ActivityArt,
 	},
 	{
@@ -96,7 +96,7 @@ const AboutPage = () => {
 
 				{/* See getGameEventClockTime for how the times are estimated */}
 				<p className={cx("AboutPage-note", "AboutPage-note--footer")}>
-					*Scoresheets only give the game clock, not the time of day,
+					†Scoresheets only give the game clock, not the time of day,
 					so we estimate when each goal or penalty happened from the
 					scheduled start, typical warmups and intermissions, and
 					stoppages. Replays can land a minute or two off, so you may

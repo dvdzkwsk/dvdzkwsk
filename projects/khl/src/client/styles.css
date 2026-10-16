@@ -2307,27 +2307,29 @@ table {
 .Section {
 	display: flex;
 	flex-direction: column;
-	gap: calc(var(--spacing) * 2);
+	gap: calc(var(--spacing) * 1);
 	min-width: 0;
 }
 
+/* One height whether or not it holds a control, so a title always sits the
+   same distance above its content, and side-by-side sections start level */
 .Section-header {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: calc(var(--spacing) * 2);
+	min-height: calc(var(--spacing) * 9);
+}
+
+/* Compact, to fit the header's height */
+.Section-header .Segmented-item {
+	padding-block: calc(var(--spacing) * 0.75);
 }
 
 .Section-title {
 	flex: 1;
 	min-width: 0;
-}
-
-/* Overhangs the header, so a section with a filter starts its content at
-   the same height as the one beside it */
-.Section-header > .Segmented {
-	margin-block: calc(var(--spacing) * -3);
 }
 
 /* Its own container, so a table fits the card's width, which may be half a
@@ -2821,19 +2823,21 @@ table {
 	gap: calc(var(--spacing) * 4);
 }
 
-/* The feed takes the past games card's height and scrolls: `contain: size`
-   keeps its own content from setting the row's height */
-.Activity {
-	contain: size;
-	align-self: stretch;
-	min-height: 16rem;
+/* Past games and the feed beside them: the same height, so both cards end
+   together */
+.Detail-columns:has(> .Activity) {
+	align-items: stretch;
 }
 
-/* The scroll area pads itself, so its scrollbar runs along the card's edge
-   instead of over the replay buttons */
+/* The feed matches the past games card and scrolls: `contain: size` keeps
+   its own content from setting the row's height */
 .Activity-panel {
+	contain: size;
 	display: flex;
 	flex-direction: column;
+	min-height: 22rem;
+	/* The scroll area pads itself, so its scrollbar runs along the card's
+	   edge instead of over the replay buttons */
 	padding: 0;
 }
 
@@ -2842,9 +2846,8 @@ table {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
-	.Activity {
+	.Activity-panel {
 		contain: none;
-		align-self: start;
 		min-height: 0;
 		max-height: 32rem;
 	}

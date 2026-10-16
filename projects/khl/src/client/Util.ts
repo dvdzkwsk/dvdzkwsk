@@ -223,14 +223,6 @@ export function getEndOfWeekDayKey(now: Date): string {
 	return getLeagueDayKey(new Date(now.getTime() + daysLeft * DAY_MS))
 }
 
-/** League-local day key of the last day of the month containing `now` */
-export function getEndOfMonthDayKey(now: Date): string {
-	const [year, month] = getLeagueDayKey(now).split("-").map(Number)
-	// Day 0 of next month is the last day of this one
-	const lastDay = new Date(Date.UTC(year!, month!, 0)).getUTCDate()
-	return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`
-}
-
 // --- Hooks
 
 export type AsyncState<T> = (

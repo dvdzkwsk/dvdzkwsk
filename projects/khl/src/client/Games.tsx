@@ -31,7 +31,6 @@ import {
 	isInCurrentYear,
 	formatRelative,
 	formatScore,
-	getEndOfMonthDayKey,
 	getEndOfWeekDayKey,
 	getGameHref,
 	useNow,
@@ -371,7 +370,7 @@ export const GameTableCard = ({
 
 // --- Game filters and list: upcoming games across every rink
 
-type DayPreset = "yesterday" | "today" | "week" | "month"
+type DayPreset = "yesterday" | "today" | "week"
 
 type DayKey = `${number}-${number}-${number}`
 
@@ -388,7 +387,6 @@ const DAY_FILTERS: {value: DayPreset; label: string}[] = [
 	{value: "yesterday", label: "Yesterday"},
 	{value: "today", label: "Today"},
 	{value: "week", label: "This week"},
-	{value: "month", label: "This month"},
 ]
 
 /** With no day in the URL (and for old "all" links) */
@@ -1723,8 +1721,6 @@ function describeDay(day: DayFilter): string {
 			return day
 		case "week":
 			return "this week"
-		case "month":
-			return "this month"
 	}
 	const range = getDayRange(day)
 	if (!range) {
@@ -1744,8 +1740,6 @@ function getLastDayKey(day: DayFilter, now: Date): string {
 			return getLeagueDayKey(now)
 		case "week":
 			return getEndOfWeekDayKey(now)
-		case "month":
-			return getEndOfMonthDayKey(now)
 	}
 	return getDayRange(day)?.to ?? getLeagueDayKey(now)
 }
@@ -1789,8 +1783,6 @@ function matchesDay(game: RinkGame, day: DayFilter, now: Date): boolean {
 			return key === today
 		case "week":
 			return key <= getEndOfWeekDayKey(now)
-		case "month":
-			return key <= getEndOfMonthDayKey(now)
 		default: {
 			const range = getDayRange(day)
 			return !!range && range.from <= key && key <= range.to

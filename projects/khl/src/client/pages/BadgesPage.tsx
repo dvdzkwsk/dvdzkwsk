@@ -1,6 +1,7 @@
 import * as React from "react"
+import {URLS} from "../../shared/KHLConfig.js"
 import {Badge, BadgeIcon, BADGES} from "../Badges.js"
-import {PageShell} from "../Components.js"
+import {Link, PageShell} from "../Components.js"
 import {Route} from "../Util.js"
 
 // --- /badges: every badge a player can have, and how to get it
@@ -17,11 +18,15 @@ const BadgesPage = () => {
 					<h1 className="BadgesPage-title">Badges</h1>
 					<p className="BadgesPage-lede">
 						Badges show on a player's page. Most are earned from
-						career stats, and a few are handed out.
+						career stats, and a few are awarded. Have an idea?{" "}
+						<Link href={URLS.FEEDBACK_FORM}>Suggest a badge ↗</Link>
+						. Think you've earned one?{" "}
+						<Link href={URLS.FEEDBACK_FORM}>Request a badge ↗</Link>
+						.
 					</p>
 				</header>
 				<BadgeSection title="Earned" badges={earned} />
-				<BadgeSection title="Handed out" badges={given} />
+				<BadgeSection title="Awarded" badges={given} />
 			</div>
 		</PageShell>
 	)

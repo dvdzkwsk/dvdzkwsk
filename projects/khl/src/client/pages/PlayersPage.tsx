@@ -462,7 +462,10 @@ const PlayersTable = ({
 			<StatsTable
 				columns={columns}
 				rows={rows}
-				rowKey={({player}) => player.khlPlayerId}
+				// One KHL player id can be on several teams in a season
+				rowKey={({player, team}) =>
+					`${player.khlPlayerId}-${team.team.id}`
+				}
 				rowLimit={ROW_LIMIT}
 			/>
 		</div>

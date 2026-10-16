@@ -120,7 +120,7 @@ export const FeedGameSchema = z.object({
 	livebarn: z.array(LiveBarnLinkSchema),
 }) satisfies z.ZodType<FeedGame>
 
-/** One KHL player id: the player on a single team, across seasons. */
+/** The player on one team, across seasons, under one KHL player id. */
 export interface PlayerRegistration {
 	khlPlayerId: string
 	teamId: string
@@ -470,7 +470,7 @@ export const GET_PLAYER_ENDPOINT = {
 	uri: "/api/players/:playerId",
 	name: "Get player details",
 	description:
-		"A player's profile and every game they've played, across all of their teams and seasons, plus upcoming games for their current teams. The KHL issues a new player id for every team registration; `playerId` is KHL+'s own id for the person, from search results and rosters.",
+		"A player's profile and every game they've played, across all of their teams and seasons, plus upcoming games for their current teams. The KHL usually issues a new player id for every team registration (though one id can span several teams); `playerId` is KHL+'s own id for the person, from search results and rosters.",
 	exampleRequest: {playerId: "1f4d54d9-8b87-4b49-8880-04cd9497ef92"},
 	requestSchema: GetPlayerRequestSchema,
 	responseSchema: PlayerResponseSchema,

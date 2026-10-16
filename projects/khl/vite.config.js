@@ -20,8 +20,8 @@ export default defineConfig({
 	server: {
 		port: process.env.PORT ?? 3000,
 		proxy: {
-			// Server.ts
-			"/api": `http://localhost:${process.env.KHL_API_PORT ?? 3001}`,
+			// Server.ts; not "/api" itself, the client's API docs page
+			"^/api/": `http://localhost:${process.env.KHL_API_PORT ?? 3001}`,
 		},
 	},
 })

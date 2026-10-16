@@ -1,5 +1,22 @@
 import {describe, expect, test} from "bun:test"
-import {getGameEventClockTime} from "./LeagueTime.js"
+import {
+	addDaysToKey,
+	getDaysBetween,
+	getGameEventClockTime,
+} from "./LeagueTime.js"
+
+describe("day keys", () => {
+	test("adding days crosses months and years", () => {
+		expect(addDaysToKey("2026-10-30", 3)).toBe("2026-11-02")
+		expect(addDaysToKey("2027-01-01", -1)).toBe("2026-12-31")
+	})
+
+	test("a range counts both ends, across a DST change", () => {
+		expect(getDaysBetween("2026-10-11", "2026-10-11")).toBe(1)
+		// Pacific time falls back on Nov 1; day keys aren't affected
+		expect(getDaysBetween("2026-10-25", "2026-11-07")).toBe(14)
+	})
+})
 
 // Scheduled for 11:05 PM Pacific (PDT) on Oct 13. With LEAGUE's settings,
 // the puck drops 3 minutes later, and each 18-minute period is followed by

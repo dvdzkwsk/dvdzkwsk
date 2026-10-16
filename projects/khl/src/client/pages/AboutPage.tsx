@@ -14,18 +14,13 @@ interface Feature {
 
 const FEATURES: Feature[] = [
 	{
-		title: "LiveBarn links",
-		text: "Jump straight from any game or player to the feed, past or present.",
-		art: LiveBarnArt,
-	},
-	{
-		title: "Replay any goal",
-		text: "Every goal and penalty links to that moment on LiveBarn, so you can rewatch it in one tap.",
+		title: "Jump straight to LiveBarn",
+		text: "Open any game on LiveBarn, live or after the fact, or tap a goal or penalty to replay that moment.",
 		art: ReplayArt,
 	},
 	{
 		title: "Improved player profiles",
-		text: "Career stats across every team a player has been on, not one team at a time.",
+		text: "The league site splits you into a separate profile for every team you join. We merge them into one, with career stats across all your teams.",
 		art: PlayerArt,
 	},
 	{
@@ -223,112 +218,6 @@ function FiltersArt() {
 						width={w}
 						height="4"
 						rx="2"
-					/>
-				</g>
-			))}
-		</Art>
-	)
-}
-
-/** A player, a past game, and a live game, each a tap from its feed */
-function LiveBarnArt() {
-	const rows: [y: number, kind: "player" | "final" | "live"][] = [
-		[8, "player"],
-		[46, "final"],
-		[84, "live"],
-	]
-	return (
-		<Art>
-			{rows.map(([y, kind]) => (
-				<g key={y}>
-					<rect
-						className="AboutArt-surface"
-						x="8"
-						y={y}
-						width="224"
-						height="28"
-						rx="6"
-					/>
-					{kind === "player" ? (
-						<>
-							<circle
-								className="AboutArt-ink"
-								cx="26"
-								cy={y + 14}
-								r="7"
-							/>
-							<rect
-								className="AboutArt-muted"
-								x="40"
-								y={y + 12}
-								width="64"
-								height="4"
-								rx="2"
-							/>
-						</>
-					) : (
-						<>
-							<circle
-								className="AboutArt-a"
-								cx="24"
-								cy={y + 14}
-								r="5"
-							/>
-							<rect
-								className="AboutArt-muted"
-								x="34"
-								y={y + 12}
-								width="40"
-								height="4"
-								rx="2"
-							/>
-							<circle
-								className="AboutArt-b"
-								cx="92"
-								cy={y + 14}
-								r="5"
-							/>
-							<rect
-								className="AboutArt-muted"
-								x="102"
-								y={y + 12}
-								width="36"
-								height="4"
-								rx="2"
-							/>
-						</>
-					)}
-					{kind === "live" && (
-						<>
-							<rect
-								className="AboutArt-live"
-								x="164"
-								y={y + 8}
-								width="28"
-								height="12"
-								rx="3"
-							/>
-							<text
-								className="AboutArt-badge-text"
-								x="178"
-								y={y + 17}
-								textAnchor="middle"
-							>
-								LIVE
-							</text>
-						</>
-					)}
-					<circle
-						className={
-							kind === "live" ? "AboutArt-live" : "AboutArt-ink"
-						}
-						cx="214"
-						cy={y + 14}
-						r="9"
-					/>
-					<path
-						className="AboutArt-on-ink"
-						d={`M211 ${y + 9} L219 ${y + 14} L211 ${y + 19} Z`}
 					/>
 				</g>
 			))}

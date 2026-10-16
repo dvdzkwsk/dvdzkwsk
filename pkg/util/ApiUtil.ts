@@ -13,6 +13,13 @@ export interface ApiEndpoint<TRequest extends ApiRequest, TResponse> {
 	method: HttpMethod
 	/** e.g. "/api/player/:playerId" */
 	uri: string
+	/** A short title for API docs, e.g. "Get a player" */
+	name: string
+	/** What the endpoint returns and when to use it, for API docs */
+	description: string
+	/** A request that works against the live site, for API docs examples */
+	/** NoInfer: TRequest comes from requestSchema, not this one literal */
+	exampleRequest: NoInfer<TRequest>
 	requestSchema: z.ZodType<TRequest>
 	responseSchema: z.ZodType<TResponse>
 }
@@ -36,31 +43,45 @@ export function doRequest<TRequest extends ApiRequest, TResponse>(
 			`${endpoint.method} ${endpoint.uri}: invalid request\n${z.prettifyError(parsed.error)}`,
 		)
 	}
-	const {path, rest} = fillPathParams(endpoint.uri, parsed.data)
-
+	const {url, body} = toHttpRequest(endpoint, parsed.data)
 	if (endpoint.method === "GET" || endpoint.method === "DELETE") {
-		const query = new URLSearchParams()
-		for (const [key, value] of Object.entries(rest)) {
-			if (value !== undefined && value !== null) {
-				query.set(key, String(value))
-			}
-		}
-		const search = query.size > 0 ? `?${query}` : ""
 		return doFetch({
 			method: endpoint.method,
-			url: path + search,
+			url,
 			responseSchema: endpoint.responseSchema,
 			keepalive: options.keepalive,
 		})
 	}
 	return doFetch({
 		method: endpoint.method,
-		url: path,
-		requestBody: rest,
+		url,
+		requestBody: body ?? {},
 		requestSchema: z.record(z.string(), z.unknown()),
 		responseSchema: endpoint.responseSchema,
 		keepalive: options.keepalive,
 	})
+}
+
+/**
+ * Where an already-validated `request` goes: the path with its query string,
+ * and the JSON body for POST/PUT/PATCH (null for GET/DELETE).
+ */
+export function toHttpRequest<TRequest extends ApiRequest, TResponse>(
+	endpoint: ApiEndpoint<TRequest, TResponse>,
+	request: TRequest,
+): {url: string; body: Record<string, unknown> | null} {
+	const {path, rest} = fillPathParams(endpoint.uri, request)
+	if (endpoint.method !== "GET" && endpoint.method !== "DELETE") {
+		return {url: path, body: rest}
+	}
+	const query = new URLSearchParams()
+	for (const [key, value] of Object.entries(rest)) {
+		if (value !== undefined && value !== null) {
+			query.set(key, String(value))
+		}
+	}
+	const search = query.size > 0 ? `?${query}` : ""
+	return {url: path + search, body: null}
 }
 
 function fillPathParams(

@@ -53,7 +53,6 @@ import {
 	HeadToHeadGame,
 	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
-	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
 	GET_TEAM_ACTIVITY_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	GET_RINK_ENDPOINT,
@@ -77,7 +76,6 @@ import {
 	PlayerResponse,
 	PlayersResponse,
 	PlayerSearchGroup,
-	RecentPenalties,
 	SEARCH_ENDPOINT,
 	UnavailableSchedule,
 	SearchResponse,
@@ -109,7 +107,9 @@ import {
 	normalizePlayerName,
 } from "../shared/KHLJson.js"
 import {
+	addDaysToKey,
 	DAY_MS as DAY,
+	getDaysBetween,
 	getLeagueDayKey,
 	getLeagueLocalTime,
 	HOUR_MS as HOUR,
@@ -280,32 +280,15 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 	return response
 })
 
-// Separate from the player, since it reads a page per recent game
-registerEndpoint(
-	app,
-	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
-	async ({playerId}): Promise<RecentPenalties> => {
-		const games = await getActivity(
-			{kind: "player", playerId},
-			{
-				kinds: ["penalty", "played"],
-				lookbackDays: LIMITS.BADGE_TREND_LOOKBACK_DAYS,
-				maxEvents: Infinity,
-			},
-		)
-		return {
-			games: games.length,
-			penalties: games.reduce((total, g) => total + g.events.length, 0),
-		}
-	},
-)
-
 registerEndpoint(
 	app,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
-	async ({playerId, kinds}) => {
+	async ({playerId, kinds, days, limit}) => {
 		return toActivityResponse(
-			await getActivity({kind: "player", playerId}, {kinds}),
+			await getActivity(
+				{kind: "player", playerId},
+				{kinds, lookbackDays: days, maxEvents: limit},
+			),
 		)
 	},
 )
@@ -413,7 +396,7 @@ async function getActivity(
 	subject: ActivitySubject,
 	{
 		kinds = DEFAULT_ACTIVITY_KINDS,
-		lookbackDays = LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS,
+		lookbackDays = LIMITS.ACTIVITY_LOOKBACK_DAYS,
 		maxEvents = LIMITS.ACTIVITY_EVENTS,
 	}: {kinds?: ActivityKind[]; lookbackDays?: number; maxEvents?: number} = {},
 ): Promise<ActivityRow[]> {
@@ -662,9 +645,12 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 registerEndpoint(
 	app,
 	GET_TEAM_ACTIVITY_ENDPOINT,
-	async ({teamId, season, kinds}) => {
+	async ({teamId, season, kinds, days, limit}) => {
 		return toActivityResponse(
-			await getActivity({kind: "team", teamId, season}, {kinds}),
+			await getActivity(
+				{kind: "team", teamId, season},
+				{kinds, lookbackDays: days, maxEvents: limit},
+			),
 		)
 	},
 )
@@ -1038,11 +1024,19 @@ registerEndpoint(app, LIST_RINKS_ENDPOINT, async () => {
 	return {season: teamsPage.season, rinks}
 })
 
-registerEndpoint(app, LIST_GAMES_ENDPOINT, async ({date}) => {
+registerEndpoint(app, LIST_GAMES_ENDPOINT, async ({from, to = from}) => {
 	const teamsPage = await getTeamsPage()
+	// One scoreboard per day; fetchKHLPage limits how many run at once
+	const days = Array.from({length: getDaysBetween(from, to)}, (_, i) => {
+		return addDaysToKey(from, i)
+	})
+	const games = await Promise.all(
+		days.map((day) => getDayGames(day, teamsPage)),
+	)
 	const response: GamesResponse = {
 		season: teamsPage.season,
-		games: await getDayGames(date, teamsPage),
+		// Each day is already in order, and the days are too
+		games: games.flat(),
 	}
 	return response
 })
@@ -1172,7 +1166,12 @@ registerEndpoint(app, GET_RINK_ENDPOINT, async ({arenaId}) => {
 	return response
 })
 
-app.use("/api", (_req, res) => {
+app.use("/api", (req, res, next) => {
+	// "/api" itself is the client's API docs page
+	if (req.path === "/") {
+		next()
+		return
+	}
 	res.status(404).json({error: "not found"})
 })
 

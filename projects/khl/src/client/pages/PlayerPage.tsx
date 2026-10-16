@@ -5,13 +5,18 @@ import * as React from "react"
 import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
-	GET_PLAYER_RECENT_PENALTIES_ENDPOINT,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
 import {ActivityFeed} from "../Activity.js"
-import {BadgeHint, BadgeIcon, getBadges} from "../Badges.js"
+import {
+	BadgeHint,
+	BadgeIcon,
+	getBadges,
+	RECENT_PENALTIES_ACTIVITY,
+	toRecentPenalties,
+} from "../Badges.js"
 import {
 	AsyncContent,
 	Hint,
@@ -384,10 +389,12 @@ const PlayerHeader = ({
  * they arrive (or if they fail), the Angel and Devil badges are left out.
  */
 const PlayerBadges = ({player}: {player: PlayerResponse}) => {
-	const recent = useAsync(() => {
-		return doRequest(GET_PLAYER_RECENT_PENALTIES_ENDPOINT, {
+	const recent = useAsync(async () => {
+		const activity = await doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {
 			playerId: player.playerId,
+			...RECENT_PENALTIES_ACTIVITY,
 		})
+		return toRecentPenalties(activity)
 	}, [player.playerId])
 	const badges = getBadges({
 		name: player.name,

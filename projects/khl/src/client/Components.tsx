@@ -1647,6 +1647,7 @@ const FOOTER_LINKS = [
 	{href: "/about", label: "About"},
 	{href: "/help", label: "Help / Feedback"},
 	{href: "/status", label: "Status"},
+	{href: "/api", label: "API"},
 	{href: URLS.GITHUB, label: "GitHub ↗"},
 ]
 

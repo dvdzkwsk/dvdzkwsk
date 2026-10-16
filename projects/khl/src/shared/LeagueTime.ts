@@ -26,6 +26,22 @@ export function getLeagueDayKey(date: Date): string {
 	return dayKeyFormat.format(date)
 }
 
+/** "2026-10-22", 3 -> "2026-10-25" */
+export function addDaysToKey(day: string, count: number): string {
+	const date = new Date(`${day}T00:00:00Z`)
+	date.setUTCDate(date.getUTCDate() + count)
+	return date.toISOString().slice(0, 10)
+}
+
+/** How many days "yyyy-MM-dd" `from` through `to` cover, both included */
+export function getDaysBetween(from: string, to: string): number {
+	return (
+		(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
+			DAY_MS +
+		1
+	)
+}
+
 /** "yyyy-MM-dd" and "HH:mm" in league time, as KHL pages give them */
 export function getLeagueLocalTime(startsAt: string): {
 	localDate: string

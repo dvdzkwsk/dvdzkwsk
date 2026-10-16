@@ -15,6 +15,7 @@ import {
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {AboutRoute} from "./pages/AboutPage.js"
 import {AdminRoute} from "./pages/AdminPage.js"
+import {ApiRoute} from "./pages/ApiPage.js"
 import {BadgesRoute} from "./pages/BadgesPage.js"
 import {GameRoute} from "./pages/GamePage.js"
 import {HelpRoute} from "./pages/HelpPage.js"
@@ -66,6 +67,7 @@ const ROUTES: Route[] = [
 	SearchRoute,
 	AboutRoute,
 	HelpRoute,
+	ApiRoute,
 	StatusRoute,
 	...(IS_DEV ? [AdminRoute] : []),
 ]

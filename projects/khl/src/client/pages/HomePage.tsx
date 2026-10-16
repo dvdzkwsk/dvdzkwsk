@@ -28,13 +28,19 @@ const HomePage = ({query}: RouteProps) => {
 	const now = useNow()
 	const filters = readGameFilters(query)
 	const pastDays = getPastDays(filters.day, now)
-	const pastState = useAsync(
-		() =>
-			Promise.all(
-				pastDays.map((date) => doRequest(LIST_GAMES_ENDPOINT, {date})),
-			).then((days) => days.flatMap((day) => day.games)),
-		[pastDays.join(",")],
-	)
+	// The past days are consecutive, so one range request covers them
+	const pastFrom = pastDays[0]
+	const pastTo = pastDays[pastDays.length - 1]
+	const pastState = useAsync(async () => {
+		if (!pastFrom || !pastTo) {
+			return []
+		}
+		const response = await doRequest(LIST_GAMES_ENDPOINT, {
+			from: pastFrom,
+			to: pastTo,
+		})
+		return response.games
+	}, [pastFrom, pastTo])
 	const hasPast = pastDays.length > 0
 	const setFilters = (changes: Partial<GameFilterValues>) => {
 		// Replace rather than push: filter tweaks shouldn't fill up history

@@ -1,5 +1,6 @@
-import {ApiEndpoint} from "@dvdzkwsk/util/ApiUtil"
+import {ApiEndpoint, ApiRequest} from "@dvdzkwsk/util/ApiUtil"
 import {z} from "zod"
+import {LIMITS} from "./KHLConfig.js"
 import {
 	KHLArenaRef,
 	KHLArenaRefSchema,
@@ -30,6 +31,7 @@ import {
 	KHLTeamSchema,
 	getGoalsByTeam,
 } from "./KHLJson.js"
+import {getDaysBetween} from "./LeagueTime.js"
 
 /**
  * KHL has no person-level id: every team registration gets its own player id.
@@ -269,18 +271,6 @@ export const TeamRosterSchema = z.object({
 	goalies: z.array(RosterPlayerSchema),
 }) satisfies z.ZodType<TeamRoster>
 
-/** Penalties a player took in their latest games, for the badges */
-export interface RecentPenalties {
-	/** Games the player dressed for in LIMITS.BADGE_TREND_LOOKBACK_DAYS */
-	games: number
-	penalties: number
-}
-
-export const RecentPenaltiesSchema = z.object({
-	games: z.number().int().nonnegative(),
-	penalties: z.number().int().nonnegative(),
-}) satisfies z.ZodType<RecentPenalties>
-
 /** One side of a game in an activity feed */
 export interface ActivityTeam {
 	id: string
@@ -381,9 +371,9 @@ export const ActivityGameSchema = z.object({
 }) satisfies z.ZodType<ActivityGame>
 
 /**
- * A player's or team's games with the requested kinds, from the
- * LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS before their latest game, and at most
- * LIMITS.ACTIVITY_EVENTS events
+ * A player's or team's games with the requested kinds, from the requested
+ * days before their latest game, and at most the requested number of events
+ * (see ActivityOptions)
  */
 export interface ActivityResponse {
 	/** Newest first */
@@ -451,92 +441,139 @@ export interface SearchRequest {
 }
 
 export const SearchRequestSchema = z.object({
-	q: z.string(),
+	q: z.string().describe("At least 2 characters"),
 }) satisfies z.ZodType<SearchRequest>
 
-/** Players and teams in the current season matching `q` (min. 2 chars). */
 export const SEARCH_ENDPOINT = {
 	method: "GET",
 	uri: "/api/search",
+	name: "Search",
+	description:
+		"Players, teams, and rinks in the current season whose names contain `q`, ignoring case. Rinks also match by city. A `q` shorter than 2 characters returns empty lists.",
+	exampleRequest: {q: "flamingos"},
 	requestSchema: SearchRequestSchema,
 	responseSchema: SearchResponseSchema,
 } satisfies ApiEndpoint<SearchRequest, SearchResponse>
 
 export interface GetPlayerRequest {
-	/** Our player UUID */
 	playerId: string
 }
 
 export const GetPlayerRequestSchema = z.object({
-	playerId: z.uuid(),
+	playerId: z
+		.uuid()
+		.describe("KHL+'s player id (not the KHL's), from search or a roster"),
 }) satisfies z.ZodType<GetPlayerRequest>
 
 export const GET_PLAYER_ENDPOINT = {
 	method: "GET",
 	uri: "/api/players/:playerId",
+	name: "Get player details",
+	description:
+		"A player's profile and every game they've played, across all of their teams and seasons, plus upcoming games for their current teams. The KHL issues a new player id for every team registration; `playerId` is KHL+'s own id for the person, from search results and rosters.",
+	exampleRequest: {playerId: "1f4d54d9-8b87-4b49-8880-04cd9497ef92"},
 	requestSchema: GetPlayerRequestSchema,
 	responseSchema: PlayerResponseSchema,
 } satisfies ApiEndpoint<GetPlayerRequest, PlayerResponse>
 
-/** Penalties in the player's latest games; slow on a cold cache. */
-export const GET_PLAYER_RECENT_PENALTIES_ENDPOINT = {
-	method: "GET",
-	uri: "/api/players/:playerId/recent-penalties",
-	requestSchema: GetPlayerRequestSchema,
-	responseSchema: RecentPenaltiesSchema,
-} satisfies ApiEndpoint<GetPlayerRequest, RecentPenalties>
-
-export interface GetPlayerActivityRequest extends GetPlayerRequest {
+/** What a player's or team's activity request asks for */
+export interface ActivityOptions {
 	/** Defaults to DEFAULT_ACTIVITY_KINDS */
 	kinds?: ActivityKind[]
+	/** Defaults to LIMITS.ACTIVITY_LOOKBACK_DAYS */
+	days?: number
+	/** Defaults to LIMITS.ACTIVITY_EVENTS */
+	limit?: number
 }
 
-export const GetPlayerActivityRequestSchema = GetPlayerRequestSchema.extend({
-	kinds: ActivityKindsSchema.optional(),
-}) satisfies z.ZodType<GetPlayerActivityRequest>
+/** Numbers come in the query string as text, hence `coerce` */
+const ActivityOptionsShape = {
+	kinds: ActivityKindsSchema.optional().describe(
+		'Comma-separated in the query string, e.g. "goal,penalty". A game is included if it has a requested event, or the requested attendance ("played" or "skipped"). Defaults to goals, assists, and penalties.',
+	),
+	days: z.coerce
+		.number()
+		.int()
+		.min(1)
+		.max(LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS)
+		.optional()
+		.describe(
+			`How many days of games to read, back from the latest one. Defaults to ${LIMITS.ACTIVITY_LOOKBACK_DAYS}, at most ${LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS}.`,
+		),
+	limit: z.coerce
+		.number()
+		.int()
+		.min(1)
+		.max(LIMITS.ACTIVITY_MAX_EVENTS)
+		.optional()
+		.describe(
+			`The most events to return. Defaults to ${LIMITS.ACTIVITY_EVENTS}, at most ${LIMITS.ACTIVITY_MAX_EVENTS}. Games wanted for their attendance are returned even past it, with no events.`,
+		),
+}
 
-/**
- * The player's latest goals, assists, and penalties, or the games they played
- * or skipped; slow on a cold cache.
- */
+export interface GetPlayerActivityRequest
+	extends GetPlayerRequest, ActivityOptions {}
+
+export const GetPlayerActivityRequestSchema = GetPlayerRequestSchema.extend(
+	ActivityOptionsShape,
+) satisfies z.ZodType<GetPlayerActivityRequest>
+
 export const GET_PLAYER_ACTIVITY_ENDPOINT = {
 	method: "GET",
 	uri: "/api/players/:playerId/activity",
+	name: "Get player activity",
+	description:
+		"A player's latest goals, assists, and penalties, or the games they played or skipped, newest first. Slow on a cold cache, since it reads each game's scoresheet.",
+	exampleRequest: {
+		playerId: "1f4d54d9-8b87-4b49-8880-04cd9497ef92",
+		kinds: ["goal", "assist"],
+	},
 	requestSchema: GetPlayerActivityRequestSchema,
 	responseSchema: ActivityResponseSchema,
 } satisfies ApiEndpoint<GetPlayerActivityRequest, ActivityResponse>
 
 export interface GetTeamRequest {
 	teamId: string
-	/** Defaults to the current season */
 	season?: string
 }
 
+/** A KHL season id, for endpoints that default to the current season */
+const SeasonParamSchema = z
+	.string()
+	.min(1)
+	.optional()
+	.describe("KHL season id; defaults to the current season")
+
 export const GetTeamRequestSchema = z.object({
-	teamId: z.string().min(1),
-	season: z.string().min(1).optional(),
+	teamId: z.string().min(1).describe("KHL team id"),
+	season: SeasonParamSchema,
 }) satisfies z.ZodType<GetTeamRequest>
 
 export const GET_TEAM_ENDPOINT = {
 	method: "GET",
 	uri: "/api/teams/:teamId",
+	name: "Get team details",
+	description:
+		"A team's season: its games with LiveBarn links, upcoming games, and roster with season stats.",
+	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: GetTeamRequestSchema,
 	responseSchema: TeamResponseSchema,
 } satisfies ApiEndpoint<GetTeamRequest, TeamResponse>
 
-export interface GetTeamActivityRequest extends GetTeamRequest {
-	/** Defaults to DEFAULT_ACTIVITY_KINDS */
-	kinds?: ActivityKind[]
-}
+export interface GetTeamActivityRequest
+	extends GetTeamRequest, ActivityOptions {}
 
-export const GetTeamActivityRequestSchema = GetTeamRequestSchema.extend({
-	kinds: ActivityKindsSchema.optional(),
-}) satisfies z.ZodType<GetTeamActivityRequest>
+export const GetTeamActivityRequestSchema = GetTeamRequestSchema.extend(
+	ActivityOptionsShape,
+) satisfies z.ZodType<GetTeamActivityRequest>
 
-/** The team's latest goals and penalties in the season; slow on a cold cache. */
 export const GET_TEAM_ACTIVITY_ENDPOINT = {
 	method: "GET",
 	uri: "/api/teams/:teamId/activity",
+	name: "Get team activity",
+	description:
+		"A team's latest goals and penalties in a season, newest first. Slow on a cold cache, since it reads each game's scoresheet.",
+	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: GetTeamActivityRequestSchema,
 	responseSchema: ActivityResponseSchema,
 } satisfies ApiEndpoint<GetTeamActivityRequest, ActivityResponse>
@@ -612,18 +649,20 @@ export const GameResponseSchema = z.object({
 }) satisfies z.ZodType<GameResponse>
 
 export interface GetGameRequest {
-	/** KHL game id */
 	gameId: string
 }
 
 export const GetGameRequestSchema = z.object({
-	gameId: z.string().regex(/^\d+$/),
+	gameId: z.string().regex(/^\d+$/).describe("KHL game id"),
 }) satisfies z.ZodType<GetGameRequest>
 
-/** A game's box score: goals and shots by period, scoring, and penalties. */
 export const GET_GAME_ENDPOINT = {
 	method: "GET",
 	uri: "/api/games/:gameId",
+	name: "Get game details",
+	description:
+		"A game's box score (goals and shots by period, scoring, and penalties), with lineups, rosters, each team's form going in, earlier meetings between the teams, and LiveBarn links.",
+	exampleRequest: {gameId: "57050"},
 	requestSchema: GetGameRequestSchema,
 	responseSchema: GameResponseSchema,
 } satisfies ApiEndpoint<GetGameRequest, GameResponse>
@@ -655,18 +694,19 @@ export const TeamsResponseSchema = z.object({
 }) satisfies z.ZodType<TeamsResponse>
 
 export interface ListTeamsRequest {
-	/** Defaults to the current season */
 	season?: string
 }
 
 export const ListTeamsRequestSchema = z.object({
-	season: z.string().min(1).optional(),
+	season: SeasonParamSchema,
 }) satisfies z.ZodType<ListTeamsRequest>
 
-/** Every team in a season, by division, for team pickers. */
 export const LIST_TEAMS_ENDPOINT = {
 	method: "GET",
 	uri: "/api/teams",
+	name: "List teams",
+	description: "Every team in a season, grouped by division.",
+	exampleRequest: {},
 	requestSchema: ListTeamsRequestSchema,
 	responseSchema: TeamsResponseSchema,
 } satisfies ApiEndpoint<ListTeamsRequest, TeamsResponse>
@@ -682,19 +722,25 @@ export const TeamSeasonsResponseSchema = z.object({
 
 export interface ListTeamSeasonsRequest {
 	teamId: string
-	/** Any season the team played; the team's page is looked up there */
 	season: string
 }
 
 export const ListTeamSeasonsRequestSchema = z.object({
-	teamId: z.string().min(1),
-	season: z.string().min(1),
+	teamId: z.string().min(1).describe("KHL team id"),
+	season: z
+		.string()
+		.min(1)
+		.describe(
+			"Any KHL season id the team played; the team's page is looked up there",
+		),
 }) satisfies z.ZodType<ListTeamSeasonsRequest>
 
-/** The seasons a team played, for season pickers. */
 export const LIST_TEAM_SEASONS_ENDPOINT = {
 	method: "GET",
 	uri: "/api/teams/:teamId/seasons",
+	name: "List team seasons",
+	description: "Every season a team has played, newest first.",
+	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: ListTeamSeasonsRequestSchema,
 	responseSchema: TeamSeasonsResponseSchema,
 } satisfies ApiEndpoint<ListTeamSeasonsRequest, TeamSeasonsResponse>
@@ -715,18 +761,19 @@ export const StandingsResponseSchema = z.object({
 }) satisfies z.ZodType<StandingsResponse>
 
 export interface GetStandingsRequest {
-	/** Defaults to the current season */
 	season?: string
 }
 
 export const GetStandingsRequestSchema = z.object({
-	season: z.string().min(1).optional(),
+	season: SeasonParamSchema,
 }) satisfies z.ZodType<GetStandingsRequest>
 
-/** Every division's standings for a season. */
 export const GET_STANDINGS_ENDPOINT = {
 	method: "GET",
 	uri: "/api/standings",
+	name: "Get standings",
+	description: "Every division's standings for a season.",
+	exampleRequest: {},
 	requestSchema: GetStandingsRequestSchema,
 	responseSchema: StandingsResponseSchema,
 } satisfies ApiEndpoint<GetStandingsRequest, StandingsResponse>
@@ -777,18 +824,20 @@ export const PlayersResponseSchema = z.object({
 }) satisfies z.ZodType<PlayersResponse>
 
 export interface ListPlayersRequest {
-	/** Defaults to the current season */
 	season?: string
 }
 
 export const ListPlayersRequestSchema = z.object({
-	season: z.string().min(1).optional(),
+	season: SeasonParamSchema,
 }) satisfies z.ZodType<ListPlayersRequest>
 
-/** Every player in a season with their stats, from each team's roster. */
 export const LIST_PLAYERS_ENDPOINT = {
 	method: "GET",
 	uri: "/api/players",
+	name: "List players",
+	description:
+		"Every player in a season with their stats, from each team's roster. One row per team registration, so a player on two teams is listed twice. Large: about 700 KB of JSON for a full season.",
+	exampleRequest: {},
 	requestSchema: ListPlayersRequestSchema,
 	responseSchema: PlayersResponseSchema,
 } satisfies ApiEndpoint<ListPlayersRequest, PlayersResponse>
@@ -909,25 +958,29 @@ export const MatchupResponseSchema = z.object({
 }) satisfies z.ZodType<MatchupResponse>
 
 export interface GetMatchupRequest {
-	/** Team ids; the same id twice compares a team's seasons */
 	a: string
 	b: string
-	/** Each team's season; defaults to the current season */
 	aSeason?: string
 	bSeason?: string
 }
 
 export const GetMatchupRequestSchema = z.object({
-	a: z.string().min(1),
-	b: z.string().min(1),
-	aSeason: z.string().min(1).optional(),
-	bSeason: z.string().min(1).optional(),
+	a: z.string().min(1).describe("KHL team id"),
+	b: z
+		.string()
+		.min(1)
+		.describe("KHL team id; the same as `a` compares the team's seasons"),
+	aSeason: SeasonParamSchema,
+	bSeason: SeasonParamSchema,
 }) satisfies z.ZodType<GetMatchupRequest>
 
-/** Two teams' seasons compared, like the league's game previews. */
 export const GET_MATCHUP_ENDPOINT = {
 	method: "GET",
 	uri: "/api/matchup",
+	name: "Compare two teams",
+	description:
+		"Two teams' seasons side by side, like the league's game previews: records, recent form, rosters, special teams, and the games between them. Pass the same team twice with different seasons to compare a team with itself.",
+	exampleRequest: {a: "303", b: "684"},
 	requestSchema: GetMatchupRequestSchema,
 	responseSchema: MatchupResponseSchema,
 } satisfies ApiEndpoint<GetMatchupRequest, MatchupResponse>
@@ -948,17 +1001,20 @@ export const ListRinksRequestSchema = z.object(
 	{},
 ) satisfies z.ZodType<ListRinksRequest>
 
-/** Every KHL rink with its upcoming games, for the home page. */
 export const LIST_RINKS_ENDPOINT = {
 	method: "GET",
 	uri: "/api/rinks",
+	name: "List rinks",
+	description:
+		"Every KHL rink with its LiveBarn surfaces and today's and upcoming games.",
+	exampleRequest: {},
 	requestSchema: ListRinksRequestSchema,
 	responseSchema: RinksResponseSchema,
 } satisfies ApiEndpoint<ListRinksRequest, RinksResponse>
 
 export interface GamesResponse {
 	season: KHLSeason
-	/** The day's games, earliest first */
+	/** The days' games, earliest first */
 	games: UpcomingGame[]
 }
 
@@ -968,18 +1024,50 @@ export const GamesResponseSchema = z.object({
 }) satisfies z.ZodType<GamesResponse>
 
 export interface ListGamesRequest {
-	/** League-local day, "yyyy-MM-dd" */
-	date: string
+	from: string
+	/** Defaults to `from` */
+	to?: string
 }
 
-export const ListGamesRequestSchema = z.object({
-	date: z.iso.date(),
-}) satisfies z.ZodType<ListGamesRequest>
+export const ListGamesRequestSchema = z
+	.object({
+		from: z.iso
+			.date()
+			.describe('The first league-local (Seattle) day, "yyyy-MM-dd"'),
+		to: z.iso
+			.date()
+			.optional()
+			.describe(
+				`The last day, included; defaults to \`from\`. At most ${LIMITS.GAMES_MAX_RANGE_DAYS} days after it, counting both.`,
+			),
+	})
+	// These run even when a date is malformed; leave that to its own error
+	.refine(({from, to = from}) => !areDays(from, to) || from <= to, {
+		path: ["to"],
+		message: "must be on or after `from`",
+	})
+	.refine(
+		({from, to = from}) =>
+			!areDays(from, to) ||
+			getDaysBetween(from, to) <= LIMITS.GAMES_MAX_RANGE_DAYS,
+		{
+			path: ["to"],
+			message: `the range can cover at most ${LIMITS.GAMES_MAX_RANGE_DAYS} days`,
+		},
+	) satisfies z.ZodType<ListGamesRequest>
 
-/** Every game on one day, with final scores: the home page's past days. */
+/** Whether every value is a "yyyy-MM-dd" day */
+function areDays(...values: string[]): boolean {
+	return values.every((value) => z.iso.date().safeParse(value).success)
+}
+
 export const LIST_GAMES_ENDPOINT = {
 	method: "GET",
 	uri: "/api/games",
+	name: "List games",
+	description:
+		"Every game on the league-local days `from` through `to`, earliest first, with final scores once posted. Leave out `to` for a single day.",
+	exampleRequest: {from: "2026-10-05", to: "2026-10-11"},
 	requestSchema: ListGamesRequestSchema,
 	responseSchema: GamesResponseSchema,
 } satisfies ApiEndpoint<ListGamesRequest, GamesResponse>
@@ -1012,17 +1100,20 @@ export const RinkResponseSchema = z.object({
 }) satisfies z.ZodType<RinkResponse>
 
 export interface GetRinkRequest {
-	/** KHL arena id */
 	arenaId: string
 }
 
 export const GetRinkRequestSchema = z.object({
-	arenaId: z.string().min(1),
+	arenaId: z.string().min(1).describe("KHL arena id, from List rinks"),
 }) satisfies z.ZodType<GetRinkRequest>
 
 export const GET_RINK_ENDPOINT = {
 	method: "GET",
 	uri: "/api/rinks/:arenaId",
+	name: "Get rink details",
+	description:
+		"A rink's address, LiveBarn surfaces, upcoming games, and latest finished games with replay links.",
+	exampleRequest: {arenaId: "13"},
 	requestSchema: GetRinkRequestSchema,
 	responseSchema: RinkResponseSchema,
 } satisfies ApiEndpoint<GetRinkRequest, RinkResponse>
@@ -1129,10 +1220,13 @@ export const GetStatusRequestSchema = z.object(
 	{},
 ) satisfies z.ZodType<GetStatusRequest>
 
-/** The site's health: each component's latest check and daily history. */
 export const GET_STATUS_ENDPOINT = {
 	method: "GET",
 	uri: "/api/status",
+	name: "Get site status",
+	description:
+		"The site's health: each component's latest check and daily history, and which build is running.",
+	exampleRequest: {},
 	requestSchema: GetStatusRequestSchema,
 	responseSchema: StatusResponseSchema,
 } satisfies ApiEndpoint<GetStatusRequest, StatusResponse>
@@ -1164,16 +1258,18 @@ export const ClientLogSchema = z.object({
 }) satisfies z.ZodType<ClientLog>
 
 export interface LogRequest {
-	/** Random per page load, to group one visit's logs */
 	sessionId: string
 	userAgent: string
 	logs: ClientLog[]
 }
 
 export const LogRequestSchema = z.object({
-	sessionId: z.string().max(100),
-	userAgent: z.string().max(500),
-	logs: z.array(ClientLogSchema).min(1).max(100),
+	sessionId: z
+		.string()
+		.max(100)
+		.describe("Random per page load, to group one visit's logs"),
+	userAgent: z.string().max(500).describe("The browser's user agent"),
+	logs: z.array(ClientLogSchema).min(1).max(100).describe("1 to 100 logs"),
 }) satisfies z.ZodType<LogRequest>
 
 export interface LogResponse {
@@ -1184,10 +1280,27 @@ export const LogResponseSchema = z.object({
 	ok: z.literal(true),
 }) satisfies z.ZodType<LogResponse>
 
-/** Batches of browser logs, written to the server's log output. */
 export const LOG_ENDPOINT = {
 	method: "POST",
 	uri: "/api/logs",
+	name: "Send logs",
+	description:
+		"Batches of browser logs from KHL+'s own pages, written to the server's log output.",
+	exampleRequest: {
+		sessionId: "c0ffee",
+		userAgent: "curl",
+		logs: [
+			{
+				timestamp: "2026-10-15T12:00:00.000Z",
+				level: "info",
+				context: "Example",
+				subcontext: "docs",
+				message: "hello",
+				aux: null,
+				url: "https://khl.dvdzkwsk.com/",
+			},
+		],
+	},
 	requestSchema: LogRequestSchema,
 	responseSchema: LogResponseSchema,
 } satisfies ApiEndpoint<LogRequest, LogResponse>
@@ -1255,12 +1368,15 @@ export const BenchmarkSummarySchema = z.object({
 }) satisfies z.ZodType<BenchmarkSummary>
 
 export interface RunBenchmarkRequest {
-	/** Player names to search for, each on both sites */
 	names: string[]
 }
 
 export const RunBenchmarkRequestSchema = z.object({
-	names: z.array(z.string().trim().min(2).max(100)).min(1).max(10),
+	names: z
+		.array(z.string().trim().min(2).max(100))
+		.min(1)
+		.max(10)
+		.describe("Player names to search for, each on both sites"),
 }) satisfies z.ZodType<RunBenchmarkRequest>
 
 export interface BenchmarkResponse {
@@ -1273,13 +1389,55 @@ export const BenchmarkResponseSchema = z.object({
 	summaries: z.array(BenchmarkSummarySchema),
 }) satisfies z.ZodType<BenchmarkResponse>
 
-/**
- * Dev only: times KHL+ against the league's site in headless Chrome (see
- * tools/Benchmark.ts). Takes several seconds per name.
- */
 export const RUN_BENCHMARK_ENDPOINT = {
 	method: "POST",
 	uri: "/api/admin/benchmark",
+	name: "Run the benchmark",
+	description:
+		"Dev only: times KHL+ against the league's site in headless Chrome (see tools/Benchmark.ts). Takes several seconds per name.",
+	exampleRequest: {names: DEFAULT_BENCHMARK_NAMES.slice(0, 1)},
 	requestSchema: RunBenchmarkRequestSchema,
 	responseSchema: BenchmarkResponseSchema,
 } satisfies ApiEndpoint<RunBenchmarkRequest, BenchmarkResponse>
+
+export interface ApiDocsSection {
+	title: string
+	endpoints: ApiEndpoint<ApiRequest, unknown>[]
+}
+
+/**
+ * The /api page, in order. Every endpoint is listed except the ones only this
+ * site's own pages use (LOG_ENDPOINT and RUN_BENCHMARK_ENDPOINT);
+ * ApiJson.test.ts checks that none is forgotten.
+ */
+export const API_DOCS_SECTIONS: ApiDocsSection[] = [
+	{title: "Search", endpoints: [SEARCH_ENDPOINT]},
+	{
+		title: "Games",
+		endpoints: [
+			LIST_GAMES_ENDPOINT,
+			GET_GAME_ENDPOINT,
+			GET_MATCHUP_ENDPOINT,
+		],
+	},
+	{
+		title: "Teams",
+		endpoints: [
+			LIST_TEAMS_ENDPOINT,
+			GET_TEAM_ENDPOINT,
+			LIST_TEAM_SEASONS_ENDPOINT,
+			GET_TEAM_ACTIVITY_ENDPOINT,
+			GET_STANDINGS_ENDPOINT,
+		],
+	},
+	{
+		title: "Players",
+		endpoints: [
+			LIST_PLAYERS_ENDPOINT,
+			GET_PLAYER_ENDPOINT,
+			GET_PLAYER_ACTIVITY_ENDPOINT,
+		],
+	},
+	{title: "Rinks", endpoints: [LIST_RINKS_ENDPOINT, GET_RINK_ENDPOINT]},
+	{title: "Site", endpoints: [GET_STATUS_ENDPOINT]},
+]

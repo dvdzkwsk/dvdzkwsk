@@ -107,6 +107,25 @@
 	--font-sans:
 		"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
 		sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	/* Code panels (the API page) are dark in both themes */
+	--code-bg: #0f151c;
+	--code-header-bg: #151c25;
+	--code-raised: #253040;
+	--code-border: #1f2833;
+	--code-fg: #e6edf3;
+	--code-muted: #8d99a8;
+	--code-keyword: #ff7b72;
+	--code-builtin: #79c0ff;
+	--code-type: #ffa657;
+	--code-property: #7ee787;
+	--code-function: #d2a8ff;
+	--code-string: #a5d6ff;
+	--code-comment: #7d8590;
+	--code-punctuation: #b1bac4;
+	--code-ok: #3fb950;
+	--code-error: #f85149;
 
 	color-scheme: light;
 }
@@ -145,6 +164,13 @@
 	--brand: #3987e5;
 	--team-b: #d95926;
 	--ice-shine: #1b3550;
+
+	/* A shade darker than the page's panels, so code panels still stand out;
+	   the syntax colors are already dark-theme colors */
+	--code-bg: #0a0e13;
+	--code-header-bg: #10161d;
+	--code-raised: #1f2833;
+	--code-border: #222c38;
 
 	--header-bg: rgb(11 15 20 / 0.85);
 	--chip-bg: rgb(255 255 255 / 0.08);
@@ -5552,6 +5578,848 @@ a.Compare-chip:hover {
 	}
 }
 
+/* === ApiPage === */
+
+/* A sidebar of endpoints beside the docs; above them on narrow screens */
+.ApiPage {
+	display: grid;
+	grid-template-columns: 200px minmax(0, 1fr);
+	gap: calc(var(--spacing) * 10);
+	align-items: start;
+}
+
+.ApiPage-main {
+	min-width: 0;
+}
+
+/* Inline code in prose: a chip */
+.ApiPage :is(p, dd) > code {
+	padding: 0 calc(var(--spacing) * 1);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-xs);
+	background: var(--subtle-bg);
+	color: var(--site-fg);
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	overflow-wrap: anywhere;
+}
+
+.ApiPage :is(p, dd) a {
+	color: var(--prose-link);
+}
+
+/* --- Sidebar */
+
+.ApiNav {
+	position: sticky;
+	/* Below the sticky site header */
+	top: calc(var(--spacing) * 20);
+}
+
+.ApiNav-inner {
+	max-height: calc(100vh - var(--spacing) * 26);
+	overflow-y: auto;
+	/* Keep a scrollbar, when there is one, clear of the method tags */
+	scrollbar-gutter: stable;
+	scrollbar-width: thin;
+	/* Room for the focus ring on the scroll edges */
+	padding: 2px calc(var(--spacing) * 2) 2px 2px;
+	margin: -2px 0 -2px -2px;
+}
+
+/* The sidebar's heading: back to the top of the page */
+.ApiNav-home {
+	display: block;
+	padding: calc(var(--spacing) * 1) calc(var(--spacing) * 2.5);
+	font-size: var(--text-md);
+	font-weight: var(--weight-bold);
+	letter-spacing: -0.01em;
+	color: var(--site-fg);
+}
+
+.ApiNav-home:hover {
+	color: var(--site-fg);
+	text-decoration: none;
+	opacity: 0.75;
+}
+
+/* Monospace runs wide, so a step smaller to match the endpoint names */
+.ApiNav-link--mono {
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+}
+
+.ApiNav-types-toggle {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	list-style: none;
+	cursor: pointer;
+	user-select: none;
+}
+
+.ApiNav-types-toggle::-webkit-details-marker {
+	display: none;
+}
+
+.ApiNav-types-toggle:hover {
+	color: var(--muted-fg);
+}
+
+.ApiNav-types-toggle:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+	border-radius: var(--radius-xs);
+}
+
+/* A chevron that turns down when open */
+.ApiNav-types-toggle::after {
+	content: "";
+	width: 5px;
+	height: 5px;
+	margin-left: auto;
+	margin-right: calc(var(--spacing) * 1);
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: rotate(-45deg);
+	transition: transform 120ms;
+}
+
+.ApiNav-types[open] > .ApiNav-types-toggle::after {
+	transform: rotate(45deg);
+}
+
+.ApiNav-count {
+	padding: 0 calc(var(--spacing) * 1.5);
+	border-radius: var(--radius-pill);
+	background: var(--chip-bg);
+	font-size: var(--text-3xs);
+	letter-spacing: 0;
+}
+
+.ApiNav-group {
+	margin-top: calc(var(--spacing) * 5);
+}
+
+.ApiNav-group-title {
+	margin: 0 0 calc(var(--spacing) * 1.5);
+	padding: 0 calc(var(--spacing) * 2.5);
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--subtle-fg);
+}
+
+.ApiNav-list {
+	display: grid;
+	gap: 1px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ApiNav-link {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 2);
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
+	border-radius: var(--radius-sm);
+	font-size: var(--text-sm);
+	line-height: 1.35;
+	color: var(--muted-fg);
+	text-decoration: none;
+}
+
+.ApiNav-link:hover {
+	background: var(--chip-bg);
+	color: var(--site-fg);
+	text-decoration: none;
+}
+
+.ApiNav-link:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: -2px;
+}
+
+.ApiNav-link--active {
+	background: var(--panel-bg);
+	color: var(--site-fg);
+	font-weight: var(--weight-semibold);
+	box-shadow: var(--shadow-sm);
+}
+
+.ApiNav-link--active:hover {
+	background: var(--panel-bg);
+}
+
+.ApiNav-method {
+	flex-shrink: 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-3xs);
+	font-weight: var(--weight-semibold);
+	color: var(--subtle-fg);
+}
+
+/* --- Overview */
+
+/* Mostly prose; the code beside it is a couple of short panels */
+.ApiOverview {
+	display: grid;
+	grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+	gap: calc(var(--spacing) * 10);
+	align-items: start;
+	padding-bottom: calc(var(--spacing) * 6);
+	scroll-margin-top: calc(var(--spacing) * 24);
+}
+
+.ApiOverview-title {
+	margin: 0;
+	font-size: clamp(2rem, 4.5vw, 2.75rem);
+	font-weight: var(--weight-heavy);
+	line-height: 1.05;
+	letter-spacing: -0.025em;
+}
+
+.ApiOverview-lede {
+	margin: calc(var(--spacing) * 4) 0 0;
+	font-size: var(--text-lg);
+	line-height: 1.55;
+	color: var(--prose-fg);
+}
+
+.ApiOverview-facts {
+	display: grid;
+	gap: calc(var(--spacing) * 4);
+	margin: calc(var(--spacing) * 6) 0 0;
+}
+
+.ApiOverview-facts dt {
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
+}
+
+.ApiOverview-facts dd {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-size: var(--text-base);
+	line-height: 1.6;
+	color: var(--prose-fg);
+}
+
+.ApiOverview-code {
+	display: grid;
+	gap: calc(var(--spacing) * 4);
+}
+
+/* --- Groups and endpoints */
+
+.ApiPage-group {
+	margin-top: calc(var(--spacing) * 16);
+	scroll-margin-top: calc(var(--spacing) * 24);
+}
+
+/* Well above an endpoint's name, so the groups read as chapters */
+.ApiPage-group-title {
+	margin: 0;
+	font-size: var(--text-5xl);
+	font-weight: var(--weight-heavy);
+	line-height: 1.1;
+	letter-spacing: -0.025em;
+}
+
+.ApiPage-group-lede {
+	margin: calc(var(--spacing) * 2) 0 0;
+	font-size: var(--text-md);
+	line-height: 1.55;
+	color: var(--prose-fg);
+}
+
+/* A card per endpoint: its prose, then its code panels beside it */
+.ApiEndpoint {
+	display: grid;
+	grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+	gap: calc(var(--spacing) * 8);
+	align-items: start;
+	margin-top: calc(var(--spacing) * 5);
+	padding: calc(var(--spacing) * 6);
+	background: var(--panel-bg);
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	/* Clear of the sticky header when a link scrolls here */
+	scroll-margin-top: calc(var(--spacing) * 20);
+}
+
+.ApiPage-group-title + .ApiEndpoint {
+	margin-top: calc(var(--spacing) * 6);
+}
+
+.ApiEndpoint-name {
+	margin: 0;
+	font-size: var(--text-xl);
+	font-weight: var(--weight-bold);
+	line-height: 1.3;
+	letter-spacing: -0.01em;
+}
+
+/* A type's name, linked to its declaration in the Types section */
+.ApiPage .TypeLink {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+	font-weight: var(--weight-medium);
+	color: var(--link);
+	text-decoration: none;
+}
+
+.ApiPage .TypeLink:hover {
+	text-decoration: underline;
+}
+
+/* Linked type names in code: a faint underline, full strength on hover */
+.CodeBlock-link {
+	text-decoration-line: underline;
+	text-decoration-thickness: 1px;
+	text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+	text-underline-offset: 3px;
+}
+
+.CodeBlock-link:hover {
+	text-decoration-color: currentColor;
+}
+
+.CodeBlock-definition {
+	color: var(--code-type);
+	font-weight: var(--weight-semibold);
+}
+
+/* --- Types */
+
+.ApiTypes {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: calc(var(--spacing) * 8);
+	align-items: start;
+	margin-top: calc(var(--spacing) * 6);
+}
+
+.ApiType {
+	display: grid;
+	gap: calc(var(--spacing) * 2.5);
+	scroll-margin-top: calc(var(--spacing) * 20);
+}
+
+.ApiType-name {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-md);
+	font-weight: var(--weight-semibold);
+}
+
+.ApiType-name a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.ApiType-name a:hover {
+	text-decoration: underline;
+}
+
+.ApiType-used-by {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-size: var(--text-xs);
+	line-height: 1.5;
+	color: var(--muted-fg);
+}
+
+.ApiType-used-by a {
+	color: var(--prose-link);
+}
+
+/* Outlined while a link points at it, so it's easy to find */
+.ApiType:target .CodePanel,
+.ApiEndpoint:target {
+	outline: 2px solid var(--link);
+	outline-offset: 2px;
+}
+
+.ApiEndpoint-name a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.ApiEndpoint-name a:hover {
+	text-decoration: underline;
+	text-decoration-color: var(--subtle-fg);
+	text-underline-offset: 0.2em;
+}
+
+.ApiEndpoint-route {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	margin: calc(var(--spacing) * 3) 0 0;
+}
+
+.ApiEndpoint-method {
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 1.5);
+	border-radius: var(--radius-xs);
+	background: var(--kind-rink-bg);
+	color: var(--kind-rink-fg);
+	font-family: var(--font-mono);
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-bold);
+	letter-spacing: 0.03em;
+}
+
+.ApiEndpoint-path {
+	font-family: var(--font-mono);
+	font-size: var(--text-base);
+	font-weight: var(--weight-medium);
+	overflow-wrap: anywhere;
+}
+
+.ApiEndpoint-path-param {
+	color: var(--link);
+}
+
+.ApiEndpoint-description {
+	margin: calc(var(--spacing) * 4) 0 0;
+	font-size: var(--text-md);
+	line-height: 1.6;
+	color: var(--prose-fg);
+}
+
+.ApiEndpoint-no-params,
+.ApiEndpoint-returns {
+	margin: calc(var(--spacing) * 6) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+}
+
+.ApiEndpoint-no-params + .ApiEndpoint-returns {
+	margin-top: calc(var(--spacing) * 2);
+}
+
+.ApiEndpoint-code {
+	display: grid;
+	gap: calc(var(--spacing) * 4);
+}
+
+/* --- Parameters */
+
+.ApiParams {
+	margin-top: calc(var(--spacing) * 6);
+}
+
+.ApiParams-title {
+	margin: 0;
+	padding-bottom: calc(var(--spacing) * 2);
+	border-bottom: 1px solid var(--panel-border);
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
+}
+
+.ApiParams-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ApiParams-item {
+	padding: calc(var(--spacing) * 3) 0;
+	border-bottom: 1px solid var(--panel-border);
+}
+
+.ApiParams-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 2);
+}
+
+.ApiParams-name {
+	font-family: var(--font-mono);
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
+}
+
+.ApiParams-type {
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	color: var(--muted-fg);
+	overflow-wrap: anywhere;
+}
+
+.ApiParams-required,
+.ApiParams-optional {
+	font-size: var(--text-xs);
+	font-weight: var(--weight-medium);
+}
+
+.ApiParams-required {
+	color: var(--warn-fg);
+}
+
+.ApiParams-optional {
+	color: var(--subtle-fg);
+}
+
+.ApiParams-description {
+	margin: calc(var(--spacing) * 1.5) 0 0;
+	font-size: var(--text-sm);
+	line-height: 1.55;
+	color: var(--prose-fg);
+}
+
+/* --- Code panels: dark in both themes */
+
+.CodePanel {
+	overflow: hidden;
+	border: 1px solid var(--code-border);
+	border-radius: var(--radius-md);
+	background: var(--code-bg);
+	color: var(--code-fg);
+	box-shadow: var(--shadow-sm);
+}
+
+.CodePanel-header {
+	/* Re-theme the shared controls in the header (SegmentedControl) dark */
+	--subtle-bg: var(--code-bg);
+	--panel-border: var(--code-border);
+	--panel-bg: var(--code-raised);
+	--site-fg: var(--code-fg);
+	--muted-fg: var(--code-muted);
+	--shadow-sm: none;
+
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	min-height: calc(var(--spacing) * 11);
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2)
+		calc(var(--spacing) * 1.5) calc(var(--spacing) * 4);
+	border-bottom: 1px solid var(--code-border);
+	background: var(--code-header-bg);
+}
+
+.CodePanel-title {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+	min-width: 0;
+	font-size: var(--text-2xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--code-muted);
+}
+
+/* The tabs say what the panel is; the title stays for screen readers */
+.CodePanel-title--with-tabs {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.CodePanel-actions {
+	display: flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1);
+	margin-left: auto;
+}
+
+.CodePanel-copy,
+.CodePanel-send,
+.CodePanel-secondary {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 2.5);
+	border: none;
+	border-radius: var(--radius-sm);
+	font: inherit;
+	font-size: var(--text-xs);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.CodePanel-copy {
+	background: none;
+	color: var(--code-muted);
+}
+
+.CodePanel-copy:hover {
+	background: var(--code-raised);
+	color: var(--code-fg);
+}
+
+.CodePanel-send {
+	background: var(--code-fg);
+	color: var(--code-bg);
+	font-weight: var(--weight-semibold);
+}
+
+.CodePanel-send:hover {
+	filter: brightness(0.9);
+}
+
+/* Beside a CodePanel-send button: outlined rather than filled */
+.CodePanel-secondary {
+	box-shadow: inset 0 0 0 1px var(--code-raised);
+	background: none;
+	color: var(--code-fg);
+}
+
+.CodePanel-secondary:hover {
+	background: var(--code-raised);
+}
+
+.CodePanel-copy:focus-visible,
+.CodePanel-send:focus-visible,
+.CodePanel-secondary:focus-visible {
+	outline: 2px solid var(--code-builtin);
+	outline-offset: 1px;
+}
+
+.CodePanel-copy svg,
+.CodePanel-send svg,
+.CodePanel-secondary svg {
+	width: 14px;
+	height: 14px;
+}
+
+.CodePanel-send svg {
+	width: 12px;
+	height: 12px;
+}
+
+/* Controls under the code, e.g. the Generate token button */
+.CodePanel-footer {
+	display: flex;
+	gap: calc(var(--spacing) * 2);
+	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 3.5);
+}
+
+.CodePanel-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+}
+
+.CodePanel-empty p {
+	margin: 0;
+	font-size: var(--text-sm);
+	line-height: 1.5;
+	color: var(--code-muted);
+}
+
+.CodePanel-status {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: calc(var(--spacing) * 3);
+	margin: 0;
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4) 0;
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	color: var(--code-muted);
+}
+
+.CodePanel-status:only-child {
+	padding-bottom: calc(var(--spacing) * 3);
+}
+
+.CodePanel-spinner {
+	width: 12px;
+	height: 12px;
+	border: 2px solid var(--code-raised);
+	border-top-color: var(--code-fg);
+	border-radius: 50%;
+	animation: CodePanel-spin 700ms linear infinite;
+}
+
+@keyframes CodePanel-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.CodePanel-failed {
+	font-weight: var(--weight-semibold);
+	color: var(--code-error);
+}
+
+.CodePanel-footnote {
+	margin: 0;
+	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 3);
+	font-size: var(--text-xs);
+	color: var(--code-muted);
+}
+
+.StatusBadge {
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+.StatusBadge--ok {
+	color: var(--code-ok);
+}
+
+.StatusBadge--error {
+	color: var(--code-error);
+}
+
+/* --- Highlighted code */
+
+.CodeBlock {
+	margin: 0;
+	padding: calc(var(--spacing) * 3.5) calc(var(--spacing) * 4);
+	overflow: auto;
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	line-height: 1.7;
+	color: var(--code-fg);
+	tab-size: 2;
+}
+
+.CodeBlock--wrap {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.CodeBlock--scroll {
+	max-height: 440px;
+}
+
+.CodeBlock-keyword {
+	color: var(--code-keyword);
+}
+
+.CodeBlock-builtin,
+.CodeBlock-number {
+	color: var(--code-builtin);
+}
+
+.CodeBlock-type {
+	color: var(--code-type);
+}
+
+.CodeBlock-property {
+	color: var(--code-property);
+}
+
+.CodeBlock-function {
+	color: var(--code-function);
+}
+
+.CodeBlock-string {
+	color: var(--code-string);
+}
+
+.CodeBlock-comment {
+	color: var(--code-comment);
+	font-style: italic;
+}
+
+.CodeBlock-punctuation {
+	color: var(--code-punctuation);
+}
+
+/* --- Narrower screens: code below the prose, then no sidebar */
+
+@media (max-width: 1180px) {
+	.ApiOverview,
+	.ApiEndpoint {
+		grid-template-columns: minmax(0, 1fr);
+		gap: calc(var(--spacing) * 6);
+	}
+}
+
+@media (max-width: 860px) {
+	.ApiPage {
+		grid-template-columns: minmax(0, 1fr);
+		gap: calc(var(--spacing) * 8);
+	}
+
+	/* The nav goes after the overview, as a table of contents */
+	.ApiNav {
+		position: static;
+		order: 1;
+		padding: calc(var(--spacing) * 4);
+		border: 1px solid var(--panel-border);
+		border-radius: var(--radius);
+		background: var(--panel-bg);
+		box-shadow: var(--shadow-sm);
+	}
+
+	.ApiPage-main {
+		display: contents;
+	}
+
+	.ApiOverview {
+		order: 0;
+	}
+
+	.ApiPage-group {
+		order: 2;
+		margin-top: 0;
+	}
+
+	.ApiNav-inner {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+		gap: 0 calc(var(--spacing) * 4);
+		max-height: none;
+		overflow: visible;
+	}
+
+	/* The overview is right above; skip the link back to it */
+	.ApiNav-home {
+		display: none;
+	}
+
+	.ApiNav-types {
+		grid-column: 1 / -1;
+	}
+
+	.ApiNav-group {
+		margin-top: 0;
+		margin-bottom: calc(var(--spacing) * 3);
+	}
+
+	.ApiNav-link--active {
+		background: none;
+		font-weight: var(--weight-regular);
+		box-shadow: none;
+	}
+}
+
+@media (max-width: 600px) {
+	.ApiEndpoint {
+		padding: calc(var(--spacing) * 4);
+	}
+
+	.ApiPage-group-title {
+		font-size: var(--text-4xl);
+	}
+
+	/* The header's copy button goes icon-only; "Copy token" keeps its label */
+	.CodePanel-copy .CodePanel-copy-label {
+		display: none;
+	}
+}
+
 /* === StatusPage === */
 
 .StatusPage {
@@ -5803,7 +6671,7 @@ a.Compare-chip:hover {
 }
 
 .StatusDeploy-commit {
-	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-family: var(--font-mono);
 	color: var(--prose-link);
 }
 

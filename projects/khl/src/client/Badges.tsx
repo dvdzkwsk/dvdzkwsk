@@ -1,7 +1,33 @@
 import * as React from "react"
-import {RecentPenalties} from "../shared/ApiJson.js"
+import {ActivityOptions, ActivityResponse} from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {normalizePlayerName} from "../shared/KHLJson.js"
+
+/** Penalties a player took in their latest games, for the trend badges */
+export interface RecentPenalties {
+	/** Games the player dressed for in LIMITS.BADGE_TREND_LOOKBACK_DAYS */
+	games: number
+	penalties: number
+}
+
+/**
+ * The activity to request for the trend badges: every game the player dressed
+ * for in the window, with its penalties
+ */
+export const RECENT_PENALTIES_ACTIVITY: ActivityOptions = {
+	kinds: ["penalty", "played"],
+	days: LIMITS.BADGE_TREND_LOOKBACK_DAYS,
+	limit: LIMITS.ACTIVITY_MAX_EVENTS,
+}
+
+/** Counts a RECENT_PENALTIES_ACTIVITY response */
+export function toRecentPenalties(activity: ActivityResponse): RecentPenalties {
+	const played = activity.games.filter((g) => g.attendance === "played")
+	return {
+		games: played.length,
+		penalties: played.reduce((total, g) => total + g.events.length, 0),
+	}
+}
 
 /** What a player's badges are judged on */
 export interface BadgeStats {

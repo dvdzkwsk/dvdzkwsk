@@ -79,11 +79,19 @@ export const LIMITS = {
 	BADGE_TREND_LOOKBACK_DAYS: 365,
 	/** The fewest games in that window for the Angel or Devil badge */
 	BADGE_TREND_MIN_GAMES: 10,
-	/** How many goals, assists, and penalties an activity feed shows */
+	/**
+	 * How many goals, assists, and penalties an activity request returns by
+	 * default (what the feed shows), and the most it can ask for
+	 */
 	ACTIVITY_EVENTS: 10,
+	ACTIVITY_MAX_EVENTS: 500,
 	/**
 	 * How many days of a player's or team's games, back from their latest, an
-	 * activity feed reads; a quiet player may have fewer events than that.
+	 * activity request reads by default (a quiet player may have fewer events
+	 * than that), and the most it can ask for. Each game is a page fetch.
 	 */
-	ACTIVITY_MAX_LOOKBACK_DAYS: 180,
+	ACTIVITY_LOOKBACK_DAYS: 180,
+	ACTIVITY_MAX_LOOKBACK_DAYS: 365,
+	/** The most days one games request can cover; each is a page fetch */
+	GAMES_MAX_RANGE_DAYS: 31,
 }

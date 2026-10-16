@@ -51,7 +51,9 @@ import {
 import {LIMITS} from "../shared/KHLConfig.js"
 import {getGoalsByTeam} from "../shared/KHLJson.js"
 import {
+	addDaysToKey,
 	DAY_MS,
+	getDaysBetween,
 	getGameEndsAt,
 	getGameEventClockTime,
 	getLeagueDayKey,
@@ -376,8 +378,8 @@ type DayKey = `${number}-${number}-${number}`
  */
 export type DayFilter = DayPreset | DayKey | `${DayKey}..${DayKey}`
 
-/** The longest range the date picker allows; past days are fetched one by one */
-const MAX_RANGE_DAYS = 31
+/** The longest range the date picker allows, the same as the games API's */
+const MAX_RANGE_DAYS = LIMITS.GAMES_MAX_RANGE_DAYS
 
 const DAY_FILTERS: {value: DayPreset; label: string}[] = [
 	{value: "yesterday", label: "Yesterday"},
@@ -795,21 +797,6 @@ function toDayFilter({from, to}: DayRange): DayFilter {
 }
 
 /** Days from `from` to `to`, counting both */
-function getDaysBetween(from: string, to: string): number {
-	return (
-		(Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) /
-			DAY_MS +
-		1
-	)
-}
-
-/** "2026-10-22", 3 -> "2026-10-25" */
-function addDaysToKey(day: string, count: number): DayKey {
-	const date = new Date(`${day}T00:00:00Z`)
-	date.setUTCDate(date.getUTCDate() + count)
-	return date.toISOString().slice(0, 10) as DayKey
-}
-
 /** How far back the date picker goes */
 const PAST_MONTHS = 24
 

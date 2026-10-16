@@ -1222,29 +1222,36 @@ table {
 	font-weight: var(--weight-medium);
 }
 
-.RinkCard-team-name {
+/* Name, and its division under it */
+.RinkCard-team-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.RinkCard-team-name,
+.RinkCard-team-division {
 	min-width: 0;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
+}
+
+.RinkCard-team-division {
+	font-size: var(--text-sm);
+	font-weight: var(--weight-regular);
+	color: var(--muted-fg);
 }
 
 .RinkCard-footer {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
+	justify-content: flex-end;
 	gap: calc(var(--spacing) * 2);
 	padding-top: calc(var(--spacing) * 3);
 	border-top: 1px solid var(--panel-border);
 	font-size: var(--text-sm);
 	color: var(--muted-fg);
-}
-
-.RinkCard-division {
-	min-width: 0;
-	overflow: hidden;
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .RinkCard-empty {

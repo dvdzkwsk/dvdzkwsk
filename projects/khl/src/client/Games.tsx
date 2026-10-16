@@ -160,8 +160,8 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
 }
 
 /**
- * A game's time (or LIVE, linking to the rink's feed), teams, division, and
- * when it starts or started. The body of a RinkCard; also used on its own.
+ * A game's time (or LIVE, linking to the rink's feed), teams and their
+ * divisions, and when it starts or started. The body of a RinkCard; also used on its own.
  */
 export const GameSummary = ({
 	game,
@@ -214,9 +214,6 @@ export const GameSummary = ({
 				</ul>
 			</div>
 			<footer className="RinkCard-footer">
-				<span className="RinkCard-division">
-					{getDivisionLabel(game)}
-				</span>
 				{/* The card's link to the game; its hit area covers the card */}
 				<Link
 					className={cx("StretchedLink", live && "RinkCard-started")}
@@ -245,18 +242,20 @@ const RinkCardTeam = ({
 		<li className="RinkCard-team">
 			<HomeAwayBadge homeAway={homeAway} truncated />
 			<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={26} />
-			<TeamLink
-				className="RinkCard-team-name"
-				team={team}
-				seasonId={seasonId}
-			/>
+			<span className="RinkCard-team-text">
+				<TeamLink
+					className="RinkCard-team-name"
+					team={team}
+					seasonId={seasonId}
+				/>
+				{team.divisionName && (
+					<span className="RinkCard-team-division">
+						{team.divisionName}
+					</span>
+				)}
+			</span>
 		</li>
 	)
-}
-
-/** Usually both teams share a division; show both when they don't. */
-function getDivisionLabel(game: RinkGame): string {
-	return getDivisions(game).join(" vs ")
 }
 
 // --- Past games

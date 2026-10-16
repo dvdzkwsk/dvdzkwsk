@@ -9,7 +9,6 @@ import {
 	CityDot,
 	Hint,
 	HomeAwayBadge,
-	InlineLoader,
 	Link,
 	LIVEBARN_TITLES,
 	LiveBarnBadge,
@@ -306,11 +305,11 @@ export const GameSummary = ({
 
 /** What a live game's footer says it's probably on */
 const GAME_PHASE_LABELS: Record<GamePhase, string> = {
-	warmup: "Warming up",
+	warmup: "~Warming up",
 	"1st": "~1st period",
 	"2nd": "~2nd period",
 	"3rd": "~3rd period",
-	late: "Wrapping up",
+	late: "~Wrapping up",
 }
 
 /** "10:15 PM" later today, "Tomorrow", or "Oct 22": short, so the teams fit */
@@ -446,10 +445,8 @@ export const GameTableCard = ({
 	loading?: boolean
 }) => {
 	return (
-		<Card title={title} actions={actions}>
-			{loading ? (
-				<InlineLoader label={`Loading ${title.toLowerCase()}…`} />
-			) : tableProps.rows.length === 0 ? (
+		<Card title={title} actions={actions} loading={loading}>
+			{tableProps.rows.length === 0 ? (
 				<p className="GameTableCard-empty">{emptyText}</p>
 			) : (
 				<GameTable {...tableProps} />
@@ -1466,7 +1463,10 @@ export const GameTable = ({
 				<span className="GameTable-links">
 					{/* The league posts a scoresheet once the game is final */}
 					{row.gameId && row.score && (
-						<ScoresheetLink gameId={row.gameId} />
+						<ScoresheetLink
+							gameId={row.gameId}
+							className="GameTable-scoresheet"
+						/>
 					)}
 					{row.livebarn.map((link) => (
 						<LiveBarnBadge
@@ -1534,8 +1534,9 @@ function getTeamColumnChars(rows: GameTableRow[]): number {
 }
 
 /**
- * "2 – 9", away first: the winner's goals bold (in its color, when the table
- * colors its teams) and the loser's muted. A tie is plain.
+ * "2 – 9", away first: the winner's goals bold and the loser's muted. A tie
+ * is plain. Only a table that colors its teams shades the winner's goals, in
+ * its color; elsewhere a gray wash would read as the list's own team.
  */
 const GameTableScore = ({row}: {row: GameTableRow}) => {
 	const {away, home} = row.score!
@@ -1547,7 +1548,8 @@ const GameTableScore = ({row}: {row: GameTableRow}) => {
 					mine > other && "GameTable-goals--won",
 					mine < other && "GameTable-goals--lost",
 					mine > other &&
-						`GameTable-tint--${team.accent ?? "neutral"}`,
+						team.accent &&
+						`GameTable-tint--${team.accent}`,
 				)}
 			>
 				{mine}

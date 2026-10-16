@@ -10,7 +10,13 @@ import {
 	TeamLink,
 } from "./Components.js"
 import {toEventReplayLinks} from "./Games.js"
-import {AsyncState, formatGameDate, getGameHref, GOAL_TYPES} from "./Util.js"
+import {
+	AsyncState,
+	formatGameDate,
+	formatShortGameDate,
+	getGameHref,
+	GOAL_TYPES,
+} from "./Util.js"
 import {
 	ActivityEvent,
 	ActivityGame,
@@ -46,14 +52,14 @@ export const ActivityFeed = ({
 			title="Recent activity"
 			className="Activity"
 			panelClassName="Activity-panel"
+			loading={state.status === "loading"}
+			slowNote="Still working. This is the first time we're loading these scoresheets, so it will take a little bit longer."
 		>
 			{/* Scrolls once it's taller than the past games beside it */}
 			<div className="Activity-scroll">
 				<AsyncContent
 					state={state}
 					size="inline"
-					loadingLabel="Loading recent activity…"
-					slowNote="Still working. This is the first time we're loading these scoresheets, so it will take a little bit longer."
 					errorTitle="Couldn't load recent activity"
 				>
 					{(activity) =>
@@ -137,7 +143,19 @@ const ActivityEventItem = ({
 	const at = event.kind === "penalty" ? event.penalty : event.goal
 	return (
 		<li className={cx("Activity-event", `Activity-event--${event.kind}`)}>
-			<span className="Activity-kind">{EVENT_LABELS[event.kind]}</span>
+			<div className="Activity-when">
+				<span className="Activity-kind">
+					{EVENT_LABELS[event.kind]}
+				</span>
+				<Hint label={formatGameDate(game.startsAt, now)}>
+					<Link
+						className="Activity-date"
+						href={getGameHref(game.gameId)}
+					>
+						{formatShortGameDate(game.startsAt, now)}
+					</Link>
+				</Hint>
+			</div>
 			<div className="Activity-body">
 				<div className="Activity-summary">
 					<ActivityEventBody
@@ -146,12 +164,7 @@ const ActivityEventItem = ({
 						playerIds={playerIds}
 					/>
 				</div>
-				{/* The date first, so long team names are what get cut off */}
 				<div className="Activity-game">
-					<Link href={getGameHref(game.gameId)}>
-						{formatGameDate(game.startsAt, now)}
-					</Link>
-					{" · "}
 					{/* A player may have been on any of their teams */}
 					{subject === "player" && (
 						<>

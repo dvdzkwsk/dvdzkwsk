@@ -1371,15 +1371,27 @@ table {
 
 	.Card-panel
 		.GameTable--scoreboard
-		:is(.GameTable-col--away, .GameTable-col--home),
-	.Card-panel
-		.GameTable--scoreboard:not(:has(.GameTable-col--rink))
-		.GameTable-col--links {
+		:is(.GameTable-col--away, .GameTable-col--home) {
 		width: auto;
 	}
 
-	.Card-panel .GameTable .GameTable-col--links {
-		width: calc(var(--icon-links-width) + var(--spacing) * 6);
+	/* Just its icons, so the teams get the rest */
+	.Card-panel
+		.GameTable--scoreboard:not(:has(.GameTable-col--rink))
+		.GameTable-col--links {
+		width: calc(var(--icon-links-width) + var(--spacing) * 3);
+	}
+}
+
+/* Narrower: the scoresheet link goes, leaving the teams more room; the game
+   page the row links to has it */
+@container (max-width: 650px) {
+	.Card-panel .GameTable {
+		--icon-links-width: 28px;
+	}
+
+	.Card-panel .GameTable .GameTable-scoresheet {
+		display: none;
 	}
 }
 
@@ -1389,10 +1401,6 @@ table {
 	.Card-panel .GameTable .GameTable-col--links,
 	.Card-panel .GameTable .TeamAvatar {
 		display: none;
-	}
-
-	.Card-panel .GameTable .GameTable-col--score {
-		width: calc(5.5rem + var(--spacing) * 2);
 	}
 }
 
@@ -2377,7 +2385,8 @@ table {
 	min-width: 0;
 	min-height: 0;
 	container-type: inline-size;
-	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+	--Card-panel-gutter: calc(var(--spacing) * 5);
+	padding: calc(var(--spacing) * 4) var(--Card-panel-gutter);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
 	border-radius: var(--radius);
@@ -2386,8 +2395,23 @@ table {
 
 /* Lists whose rows run to the edges pad themselves */
 .Card-panel--flush {
+	--Card-panel-gutter: 0px;
 	overflow: hidden;
 	padding: 0;
+}
+
+/* Loading: the loader centered in whatever height the card has */
+.Card-panel--loading {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+}
+
+/* A scrolling table runs out to the card's sides and pads itself back in,
+   so its scrollbar sits on the card's edge */
+.Card-panel > .StatsTable-wrapper--scroll {
+	margin-inline: calc(var(--Card-panel-gutter) * -1);
+	padding-inline: var(--Card-panel-gutter);
 }
 
 .Detail-subtitle {
@@ -2934,19 +2958,14 @@ table {
 	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
 }
 
-/* Loading, centered in the space the feed will fill */
-.Activity-scroll > .InlineLoader {
-	margin-block: auto;
-}
-
 .Activity-events {
 	list-style: none;
 	margin: 0;
 	padding: 0;
 }
 
-/* [kind] what happened         period time  [replay]
-          team vs opponent · date */
+/* [kind]  what happened         period time  [replay]
+   date    team vs opponent */
 .Activity-event {
 	display: flex;
 	align-items: flex-start;
@@ -2960,10 +2979,26 @@ table {
 	border-top: 1px solid var(--panel-border);
 }
 
+/* The kind, with the game's date under it; wide enough for "Oct 11, 2025" */
+.Activity-when {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: calc(var(--spacing) * 1);
+	width: calc(var(--spacing) * 20);
+}
+
+.Activity-date {
+	color: var(--muted-fg);
+	font-size: var(--text-xs);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
 /* Goals green, assists blue, penalties amber */
 .Activity-kind {
-	flex: none;
-	width: calc(var(--spacing) * 16);
+	align-self: stretch;
 	margin-top: 1px;
 	padding: 1px 0;
 	border-radius: var(--radius-sm);
@@ -4530,13 +4565,22 @@ a.Compare-chip:hover {
 	text-align: right;
 }
 
+/* The teams hug the score: less padding on the side that faces it */
+.GameTable--scoreboard .GameTable-col--away {
+	padding-right: calc(var(--spacing) * 1.5);
+}
+
+.GameTable--scoreboard .GameTable-col--home {
+	padding-left: calc(var(--spacing) * 1.5);
+}
+
 /* A scoreboard's team columns fit its longest name (set by GameTable): the
    logo, its gap, the name, and the cell's padding. The rink, or else the
    links, takes the rest. */
 .GameTable--scoreboard .GameTable-col--away,
 .GameTable--scoreboard .GameTable-col--home {
 	width: calc(
-		28px + var(--spacing) * 8.5 + var(--GameTable-team-chars) * 1ch
+		28px + var(--spacing) * 7 + var(--GameTable-team-chars) * 1ch
 	);
 }
 
@@ -4580,9 +4624,10 @@ a.Compare-chip:hover {
 	padding-right: calc(var(--spacing) * 1);
 }
 
-/* The score, between the teams */
+/* The score, between the teams: just fits "10 – 10" */
 .GameTable .GameTable-col--score {
-	width: calc(6rem + var(--spacing) * 6);
+	width: calc(5.5rem + var(--spacing) * 2);
+	padding-inline: calc(var(--spacing) * 1);
 	text-align: center;
 }
 
@@ -4613,8 +4658,8 @@ a.Compare-chip:hover {
 	color: var(--muted-fg);
 }
 
-/* A light wash behind the winner's goals and the list's own team: its series
-   color in a head-to-head */
+/* A light wash behind the list's own team, and in a head-to-head behind each
+   side's name and winning goals, in its series color */
 .GameTable-tint--a {
 	--tint: var(--team-a);
 }
@@ -4623,7 +4668,7 @@ a.Compare-chip:hover {
 	--tint: var(--team-b);
 }
 
-/* Elsewhere, a neutral wash: it marks the winner without implying a side */
+/* Elsewhere, a neutral wash for the list's own team */
 .GameTable-tint--neutral {
 	--tint: var(--muted-fg);
 }
@@ -4644,14 +4689,16 @@ a.Compare-chip:hover {
 	width: 12rem;
 }
 
-/* Fits "Aug 28, 2024", the longest date */
+/* Fits "Aug 28, 2024", the longest date. The teams' own padding spaces
+   them from it. */
 .GameTable .GameTable-col--date {
-	width: 7rem;
+	width: 6.5rem;
+	padding-right: 0;
 }
 
 /* Fits "Sep 30", when no date here needs a year */
 .GameTable .GameTable-col--date-short {
-	width: 5rem;
+	width: 4.5rem;
 }
 
 /* Fits "10:45 PM" */
@@ -4663,8 +4710,10 @@ a.Compare-chip:hover {
 	width: 24%;
 }
 
+/* The team beside it already pads the gap */
 .GameTable .GameTable-col--links {
-	width: calc(var(--icon-links-width) + var(--spacing) * 6);
+	width: calc(var(--icon-links-width) + var(--spacing) * 3);
+	padding-left: 0;
 }
 
 /* Long team and rink names end in an ellipsis instead of widening a column */
@@ -4689,6 +4738,12 @@ a.Compare-chip:hover {
 .GameTable .GameTable-team-name,
 .GameTable-team-division {
 	max-width: 100%;
+}
+
+/* A tinted name bleeds into the logo's gap by its padding, so it may be that
+   much wider than its box; otherwise it's cut off with room to spare */
+.GameTable [class*="GameTable-tint--"] .GameTable-team-name {
+	max-width: calc(100% + var(--spacing) * 1.5);
 }
 
 .GameTable-row {
@@ -6744,6 +6799,7 @@ a.Compare-chip:hover {
 
 	.Card-panel:not(.Card-panel--flush, .Activity-panel),
 	.Activity-scroll {
+		--Card-panel-gutter: calc(var(--spacing) * 3);
 		padding: calc(var(--spacing) * 3);
 	}
 

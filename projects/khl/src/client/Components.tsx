@@ -2025,7 +2025,7 @@ const SiteSearch = () => {
 			<div
 				className={cx("SiteSearch", expanded && "SiteSearch--expanded")}
 			>
-				{/* Phones only; see styles.css */}
+				{/* Phones only; see Styles.css */}
 				<button
 					type="button"
 					className="SiteSearch-open"
@@ -2061,12 +2061,12 @@ const SiteSearch = () => {
 							}
 						}}
 					/>
-					{/* Hidden while focused or typed in; see styles.css */}
+					{/* Hidden while focused or typed in; see Styles.css */}
 					<kbd className="SiteSearch-key" aria-hidden>
 						/
 					</kbd>
 				</form>
-				{/* Phones only; see styles.css */}
+				{/* Phones only; see Styles.css */}
 				<button
 					type="button"
 					className="SiteSearch-cancel"
@@ -2385,17 +2385,26 @@ export const Section = ({
 
 /**
  * A Section whose content sits in a panel. Every card in the app is one, so
- * their titles, spacing, and padding match.
+ * their titles, spacing, padding, and loading states match.
  */
 export const Card = ({
 	panelClassName,
 	flush,
+	loading,
+	loadingLabel,
+	slowNote,
 	children,
 	...section
 }: SectionProps & {
 	panelClassName?: string
 	/** No padding, for lists whose rows run to the panel's edges */
 	flush?: boolean
+	/** A loader centered in the panel in place of `children` */
+	loading?: boolean
+	/** What's loading; "Loading <title>…" by default */
+	loadingLabel?: string
+	/** Shown if loading takes a while; see InlineLoader */
+	slowNote?: string
 }) => {
 	return (
 		<Section {...section}>
@@ -2403,10 +2412,23 @@ export const Card = ({
 				className={cx(
 					"Card-panel",
 					flush && "Card-panel--flush",
+					loading && "Card-panel--loading",
 					panelClassName,
 				)}
 			>
-				{children}
+				{loading ? (
+					<InlineLoader
+						label={
+							loadingLabel ??
+							(typeof section.title === "string"
+								? `Loading ${section.title.toLowerCase()}…`
+								: undefined)
+						}
+						slowNote={slowNote}
+					/>
+				) : (
+					children
+				)}
 			</div>
 		</Section>
 	)
@@ -2490,12 +2512,19 @@ export const Hint = ({
 }
 
 /** The league's printable scoresheet for a finished game, as an icon. */
-export const ScoresheetLink = ({gameId}: {gameId: string}) => {
+export const ScoresheetLink = ({
+	gameId,
+	className,
+}: {
+	gameId: string
+	className?: string
+}) => {
 	return (
 		<IconLink
 			href={getScoresheetUrl(gameId)}
 			label={`Open the official scoresheet on ${new URL(URLS.KHL).host}`}
 			icon={<DocumentIcon />}
+			className={className}
 		/>
 	)
 }

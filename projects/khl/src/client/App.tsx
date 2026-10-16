@@ -106,38 +106,47 @@ export const CurrentRoute = () => {
 	return renderRoute(match.route, match.params, location)
 }
 
-/** Stop restoring a position after this long, e.g. if the page never grows */
-const SCROLL_RESTORE_TIMEOUT_MS = 5000
+/** Stop moving to a position after this long, e.g. if the page never grows */
+const SCROLL_SETTLE_TIMEOUT_MS = 5000
+
+/** The key history gives entries it didn't create, e.g. a plain #anchor click */
+const UNKEYED_ENTRY = "default"
+
+type PendingScroll = {kind: "open"} | {kind: "restore"; y: number}
 
 /**
- * A link to another page starts at its top, not wherever the last page was
- * scrolled to. Query changes (e.g. picking a season) stay put. Back and
- * forward return to where that page was scrolled, once it has loaded enough
- * to get there: the browser's own restoration runs while the page is still
+ * Opening a page, by a link or by loading the site, scrolls to its #hash
+ * element if there is one and to its top otherwise. Query changes (e.g.
+ * picking a season) stay put. Back and forward return to where that page was
+ * scrolled: the browser's own restoration runs while the page is still
  * loading and too short, so it lands near the top.
  */
 function useScrollRestoration(history: History) {
-	const pending = React.useRef<
-		{kind: "top"} | {kind: "restore"; y: number} | null
-	>(null)
+	// The first render opens the page the site loaded on
+	const pending = React.useRef<PendingScroll | null>({kind: "open"})
 
 	React.useEffect(() => {
 		window.history.scrollRestoration = "manual"
+		// The entry the site loaded on is unkeyed too, like every #anchor
+		// click; give it a key so its position can't be confused with theirs
+		if (history.location.key === UNKEYED_ENTRY) {
+			const {pathname, search, hash, state} = history.location
+			history.replace({pathname, search, hash}, state)
+		}
 		// Where each history entry was last scrolled, by location.key
 		const positions = new Map<string, number>()
 		let current = history.location
 		const unlisten = history.listen(({action, location}) => {
 			// Not rendered yet, so this is still the previous page's position
-			positions.set(current.key, window.scrollY)
-			if (action === Action.Pop) {
-				const y = positions.get(location.key)
-				pending.current = y === undefined ? null : {kind: "restore", y}
-			} else if (
-				action === Action.Push &&
-				location.pathname !== current.pathname
-			) {
-				pending.current = {kind: "top"}
+			if (current.key !== UNKEYED_ENTRY) {
+				positions.set(current.key, window.scrollY)
 			}
+			pending.current = toPendingScroll(
+				action,
+				current,
+				location,
+				positions,
+			)
 			current = location
 		})
 		return () => {
@@ -151,27 +160,58 @@ function useScrollRestoration(history: History) {
 	React.useLayoutEffect(() => {
 		const scroll = pending.current
 		pending.current = null
-		if (scroll?.kind === "top") {
+		if (scroll?.kind === "open") {
+			const id = safeDecodeURIComponent(window.location.hash.slice(1))
+			if (id) {
+				return settleScroll(() => {
+					document.getElementById(id)?.scrollIntoView()
+					return false
+				})
+			}
 			window.scrollTo(0, 0)
 		} else if (scroll?.kind === "restore") {
-			return restoreScroll(scroll.y)
+			const {y} = scroll
+			return settleScroll(() => {
+				window.scrollTo(0, y)
+				return Math.abs(window.scrollY - y) < 1
+			})
 		}
 	}, [key])
 }
 
+function toPendingScroll(
+	action: Action,
+	from: Location,
+	to: Location,
+	positions: Map<string, number>,
+): PendingScroll | null {
+	if (action === Action.Pop) {
+		const y = positions.get(to.key)
+		return y === undefined ? {kind: "open"} : {kind: "restore", y}
+	}
+	if (action === Action.Push) {
+		const opensPage =
+			to.pathname !== from.pathname ||
+			(to.hash !== "" && to.hash !== from.hash)
+		return opensPage ? {kind: "open"} : null
+	}
+	return null
+}
+
 /**
- * Scrolls to `y`, retrying as the page grows until it's tall enough. Gives up
- * when the person scrolls or after a timeout. Returns a cancel function.
+ * Runs `scroll` now and again each time the page resizes, since content
+ * still loading can be above the target or make room for it. Stops once it
+ * returns true, the person scrolls, or after a timeout. Returns a cancel
+ * function.
  */
-function restoreScroll(y: number): () => void {
+function settleScroll(scroll: () => boolean): () => void {
 	const tryScroll = () => {
-		window.scrollTo(0, y)
-		if (Math.abs(window.scrollY - y) < 1) {
+		if (scroll()) {
 			stop()
 		}
 	}
 	const observer = new ResizeObserver(tryScroll)
-	const timer = setTimeout(() => stop(), SCROLL_RESTORE_TIMEOUT_MS)
+	const timer = setTimeout(() => stop(), SCROLL_SETTLE_TIMEOUT_MS)
 	const userEvents = ["wheel", "touchstart", "keydown", "mousedown"] as const
 	function stop() {
 		observer.disconnect()

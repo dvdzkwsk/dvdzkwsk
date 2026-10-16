@@ -97,13 +97,6 @@ const ApiPage = () => {
 		[sections, types],
 	)
 	const activeId = useActiveAnchor(anchorIds)
-	// The browser looks for a link's #anchor before the page has rendered it
-	React.useEffect(() => {
-		const id = decodeURIComponent(window.location.hash.slice(1))
-		if (id) {
-			document.getElementById(id)?.scrollIntoView()
-		}
-	}, [])
 	// One choice for the whole page, so every example matches
 	const [exampleKind, setExampleKind] = React.useState<ExampleKind>("curl")
 

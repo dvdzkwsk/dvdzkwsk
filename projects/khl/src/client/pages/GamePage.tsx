@@ -195,9 +195,6 @@ const ResultView = ({game}: {game: GameResponse}) => {
 const PreviewView = ({game, now}: {game: GameResponse; now: Date}) => {
 	return (
 		<>
-			{!game.score && getGameState(game, now) !== "upcoming" && (
-				<Notice title={STRINGS.SCORESHEET_NOT_POSTED} />
-			)}
 			{/* How the teams compare this season, then their previous meetings */}
 			{game.form.away && game.form.home && (
 				<Comparison

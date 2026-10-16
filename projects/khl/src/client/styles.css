@@ -4866,18 +4866,21 @@ a.Compare-chip:hover {
 	font-size: var(--text-xs);
 }
 
-.AboutPage-note {
-	margin: calc(var(--spacing) * 3) 0 0;
-	font-size: 0.8125rem;
-	font-style: italic;
-	color: var(--muted-fg);
-}
-
-/* Below the cards, for the "†" on one of them */
-.AboutPage-note--footer {
+/* Footnotes for the "*" in the intro and the "†" on a card */
+.AboutPage-notes {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
 	max-width: 720px;
 	margin-top: calc(var(--spacing) * 6);
+}
+
+.AboutPage-note {
+	margin: 0;
+	font-size: 0.8125rem;
+	font-style: italic;
 	line-height: 1.5;
+	color: var(--muted-fg);
 }
 
 /* The diagrams: shapes only, colored by the theme */

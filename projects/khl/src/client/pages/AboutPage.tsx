@@ -1,4 +1,3 @@
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
@@ -78,13 +77,9 @@ const AboutPage = () => {
 					<p className="AboutPage-lede">
 						Find your next game, watch it on LiveBarn, and see your
 						stats from every team you've played on. Same data as{" "}
-						<Link href={URLS.KHL}>{leagueHost} ↗</Link>, but with
+						<Link href={URLS.KHL}>{leagueHost} ↗</Link>*, but with
 						faster load times, smarter player profiles, direct links
 						to LiveBarn feeds, and so much more.
-					</p>
-					<p className="AboutPage-note">
-						*Unofficial and not run by the league. {leagueHost} is
-						the official record.
 					</p>
 				</header>
 
@@ -94,14 +89,20 @@ const AboutPage = () => {
 					))}
 				</ul>
 
-				{/* See getGameEventClockTime for how the times are estimated */}
-				<p className={cx("AboutPage-note", "AboutPage-note--footer")}>
-					†Scoresheets only give the game clock, not the time of day,
-					so we estimate when each goal or penalty happened from the
-					scheduled start, typical warmups and intermissions, and
-					stoppages. Replays can land a minute or two off, so you may
-					need to scrub a little.
-				</p>
+				<footer className="AboutPage-notes">
+					<p className="AboutPage-note">
+						*Unofficial and not run by the league. {leagueHost} is
+						the official record.
+					</p>
+					{/* See getGameEventClockTime for how the times are estimated */}
+					<p className="AboutPage-note">
+						†Scoresheets only give the game clock, not the time of
+						day, so we estimate when each game event happened from
+						the scheduled start, typical warmups and intermissions,
+						and stoppages. Replays can land a minute or two off, so
+						you may need to scrub a little.
+					</p>
+				</footer>
 			</div>
 		</PageShell>
 	)

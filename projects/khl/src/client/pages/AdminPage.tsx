@@ -1,6 +1,7 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
+import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	BENCHMARK_SITE_LABELS,
@@ -73,7 +74,9 @@ const StatesDemo = () => {
 	const [loading, setLoading] = React.useState<"timed" | "hang" | null>(null)
 	const [runs, setRuns] = React.useState(0)
 	React.useEffect(() => {
-		if (loading !== "timed") {
+		const isTimed =
+			loading !== null && matchValue(loading, {timed: true, hang: false})
+		if (!isTimed) {
 			return
 		}
 		const timer = setTimeout(
@@ -100,11 +103,57 @@ const StatesDemo = () => {
 		}),
 		[],
 	)
-	const isLoader = demo === "page-loader" || demo === "inline-loader"
+	const isLoader = matchValue(demo, {
+		"page-loader": true,
+		"inline-loader": true,
+		"not-found": false,
+		"page-error": false,
+		"inline-error": false,
+		offline: false,
+	})
 	const start = (mode: "timed" | "hang") => {
 		setLoading(mode)
 		setRuns((n) => n + 1)
 	}
+	const renderLoader = (loader: React.ReactNode) =>
+		loading ? (
+			loader
+		) : (
+			<p className="Admin-note">
+				{runs ? "Loaded." : "Pick a button to show the loader."}
+			</p>
+		)
+	const preview = matchFn(demo, {
+		// Keyed so each run replays the loader's fade-in
+		"page-loader": () => renderLoader(<PageLoader key={runs} />),
+		"inline-loader": () => renderLoader(<InlineLoader key={runs} />),
+		"not-found": () => <NotFoundState size="inline" />,
+		"page-error": () => (
+			<ErrorState
+				key="page-error"
+				title="Couldn't load this page"
+				error={errors.server}
+				onRetry={() => {}}
+			/>
+		),
+		"inline-error": () => (
+			<ErrorState
+				key="inline-error"
+				title="Couldn't load upcoming games"
+				error={errors.server}
+				onRetry={() => {}}
+				size="inline"
+			/>
+		),
+		offline: () => (
+			<ErrorState
+				key="offline"
+				title="Couldn't load this page"
+				error={errors.offline}
+				onRetry={() => {}}
+			/>
+		),
+	})
 	return (
 		<Card title="Loading and error states">
 			<p className="Admin-note">
@@ -143,46 +192,7 @@ const StatesDemo = () => {
 					</button>
 				</div>
 			)}
-			<div className="Admin-preview">
-				{isLoader &&
-					(loading ? (
-						// Keyed so each run replays the loader's fade-in
-						demo === "page-loader" ? (
-							<PageLoader key={runs} />
-						) : (
-							<InlineLoader key={runs} />
-						)
-					) : (
-						<p className="Admin-note">
-							{runs
-								? "Loaded."
-								: "Pick a button to show the loader."}
-						</p>
-					))}
-				{demo === "not-found" && <NotFoundState size="inline" />}
-				{demo === "page-error" && (
-					<ErrorState
-						title="Couldn't load this page"
-						error={errors.server}
-						onRetry={() => {}}
-					/>
-				)}
-				{demo === "inline-error" && (
-					<ErrorState
-						title="Couldn't load upcoming games"
-						error={errors.server}
-						onRetry={() => {}}
-						size="inline"
-					/>
-				)}
-				{demo === "offline" && (
-					<ErrorState
-						title="Couldn't load this page"
-						error={errors.offline}
-						onRetry={() => {}}
-					/>
-				)}
-			</div>
+			<div className="Admin-preview">{preview}</div>
 		</Card>
 	)
 }
@@ -293,6 +303,36 @@ const BenchmarkRunner = () => {
 			(error) => setState({kind: "error", error: toError(error)}),
 		)
 	}
+	const outcome = matchObj(state, "kind", {
+		idle: () => null,
+		running: () => (
+			<div className="Admin-preview">
+				<InlineLoader />
+			</div>
+		),
+		error: ({error}) => (
+			<ErrorState
+				title="Couldn't run the benchmark"
+				error={error}
+				onRetry={run}
+				size="inline"
+			/>
+		),
+		done: ({result}) => (
+			<div className="Admin-results">
+				<StatsTable
+					rows={result.summaries}
+					rowKey={(summary) => summary.site}
+					columns={SUMMARY_COLUMNS}
+				/>
+				<StatsTable
+					rows={result.runs}
+					rowKey={(run) => `${run.name}:${run.site}`}
+					columns={RUN_COLUMNS}
+				/>
+			</div>
+		),
+	})
 	return (
 		<Card title="Speed benchmark">
 			<p className="Admin-note">
@@ -313,39 +353,20 @@ const BenchmarkRunner = () => {
 				<button
 					type="button"
 					className="FilterPill"
-					disabled={state.kind === "running" || !nameList.length}
+					disabled={
+						matchValue(state.kind, {
+							idle: false,
+							running: true,
+							done: false,
+							error: false,
+						}) || !nameList.length
+					}
 					onClick={run}
 				>
 					Run benchmark
 				</button>
 			</div>
-			{state.kind === "running" && (
-				<div className="Admin-preview">
-					<InlineLoader />
-				</div>
-			)}
-			{state.kind === "error" && (
-				<ErrorState
-					title="Couldn't run the benchmark"
-					error={state.error}
-					onRetry={run}
-					size="inline"
-				/>
-			)}
-			{state.kind === "done" && (
-				<div className="Admin-results">
-					<StatsTable
-						rows={state.result.summaries}
-						rowKey={(summary) => summary.site}
-						columns={SUMMARY_COLUMNS}
-					/>
-					<StatsTable
-						rows={state.result.runs}
-						rowKey={(run) => `${run.name}:${run.site}`}
-						columns={RUN_COLUMNS}
-					/>
-				</div>
-			)}
+			{outcome}
 		</Card>
 	)
 }

@@ -1,6 +1,7 @@
 import {Logger} from "@dvdzkwsk/logger"
 import {createCliTool} from "@dvdzkwsk/util/CliUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {matchFn} from "@dvdzkwsk/util/MatchUtil"
 import puppeteer, {type Browser, type Page} from "puppeteer-core"
 import {
 	BENCHMARK_SITE_LABELS,
@@ -72,10 +73,10 @@ async function runOne(
 		const page = await context.newPage()
 		await page.setUserAgent({userAgent: USER_AGENT})
 		page.setDefaultTimeout(STEP_TIMEOUT_MS)
-		const timing =
-			site === "khl-plus"
-				? await timeKHLPlus(page, name)
-				: await timeKHL(page, name)
+		const timing = await matchFn(site, {
+			"khl-plus": () => timeKHLPlus(page, name),
+			khl: () => timeKHL(page, name),
+		})
 		logger.info("runOne", "finished", {site, name, timing})
 		return {site, name, timing, error: null}
 	} catch (value) {

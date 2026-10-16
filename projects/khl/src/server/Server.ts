@@ -3,6 +3,7 @@ import * as path from "path"
 import {ConsoleTransport, Logger, setLoggerTransports} from "@dvdzkwsk/logger"
 import {ApiError, registerEndpoint} from "@dvdzkwsk/util/ApiServerUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
+import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import compression from "compression"
 import express from "express"
 import {
@@ -403,7 +404,13 @@ async function getActivity(
 	const {games, getEvents, getAttendance} = await getActivitySubject(subject)
 	const wanted = new Set(kinds)
 	const wantsEvents = kinds.some((kind) => {
-		return kind !== "played" && kind !== "skipped"
+		return matchValue(kind, {
+			goal: true,
+			assist: true,
+			penalty: true,
+			played: false,
+			skipped: false,
+		})
 	})
 	// Once there are enough events, older games can only add more, unless
 	// games are wanted for their attendance alone
@@ -424,10 +431,10 @@ async function getActivity(
 
 	const readRow = async (game: KHLGame): Promise<ActivityRow | null> => {
 		const attendance = await getAttendance(game)
-		const isWanted =
-			attendance === "skipped"
-				? wanted.has("skipped")
-				: wantsEvents || wanted.has("played")
+		const isWanted = matchValue(attendance, {
+			played: wantsEvents || wanted.has("played"),
+			skipped: wanted.has("skipped"),
+		})
 		if (!isWanted) {
 			return null
 		}
@@ -444,14 +451,15 @@ async function getActivity(
 		if (!boxScore || !team) {
 			return null
 		}
-		const events =
-			attendance === "skipped"
-				? []
-				: getEvents(boxScore)
-						.filter((event) => wanted.has(event.kind))
-						.sort((a, b) =>
-							compareGameEvents(getEventAt(b), getEventAt(a)),
-						)
+		const events = matchFn(attendance, {
+			played: () =>
+				getEvents(boxScore)
+					.filter((event) => wanted.has(event.kind))
+					.sort((a, b) =>
+						compareGameEvents(getEventAt(b), getEventAt(a)),
+					),
+			skipped: (): ActivityEvent[] => [],
+		})
 		return {game, boxScore, team, attendance, events}
 	}
 
@@ -485,34 +493,45 @@ async function getActivity(
  * A subject's games, its events in a box score (in any order), and whether it
  * dressed for a game. A player can have a KHL player id per team they were on.
  */
-async function getActivitySubject(subject: ActivitySubject): Promise<{
+function getActivitySubject(subject: ActivitySubject): Promise<ActivitySource> {
+	return matchObj(subject, "kind", {
+		team: (s) => getTeamActivitySource(s.teamId, s.season),
+		player: (s) => getPlayerActivitySource(s.playerId),
+	})
+}
+
+interface ActivitySource {
 	games: KHLGame[]
 	getEvents: (boxScore: KHLBoxScore) => ActivityEvent[]
 	getAttendance: (game: KHLGame) => Promise<ActivityAttendance>
-}> {
-	if (subject.kind === "team") {
-		const {team, isCurrentSeason} = await getListedTeam(
-			subject.teamId,
-			subject.season,
-		)
-		return {
-			games: await getSchedule(team.id, team.seasonId, isCurrentSeason),
-			getEvents: (boxScore) => [
-				...boxScore.goals
-					.filter((goal) => goal.teamId === team.id)
-					.map((goal): ActivityEvent => ({kind: "goal", goal})),
-				...boxScore.penalties
-					.filter((penalty) => penalty.teamId === team.id)
-					.map((penalty): ActivityEvent => ({
-						kind: "penalty",
-						penalty,
-					})),
-			],
-			getAttendance: async () => "played",
-		}
-	}
+}
 
-	const {registrations} = await getPlayerRegistrations(subject.playerId)
+async function getTeamActivitySource(
+	teamId: string,
+	season: string | undefined,
+): Promise<ActivitySource> {
+	const {team, isCurrentSeason} = await getListedTeam(teamId, season)
+	return {
+		games: await getSchedule(team.id, team.seasonId, isCurrentSeason),
+		getEvents: (boxScore) => [
+			...boxScore.goals
+				.filter((goal) => goal.teamId === team.id)
+				.map((goal): ActivityEvent => ({kind: "goal", goal})),
+			...boxScore.penalties
+				.filter((penalty) => penalty.teamId === team.id)
+				.map((penalty): ActivityEvent => ({
+					kind: "penalty",
+					penalty,
+				})),
+		],
+		getAttendance: async () => "played",
+	}
+}
+
+async function getPlayerActivitySource(
+	playerId: string,
+): Promise<ActivitySource> {
+	const {registrations} = await getPlayerRegistrations(playerId)
 	const {games} = await getPlayerSchedules(
 		registrations,
 		await getTeamsPage(),
@@ -599,7 +618,11 @@ async function toActivityResponse(
 
 /** When an activity event happened on the scoresheet */
 function getEventAt(event: ActivityEvent) {
-	return event.kind === "penalty" ? event.penalty : event.goal
+	return matchObj(event, "kind", {
+		goal: (e) => e.goal,
+		assist: (e) => e.goal,
+		penalty: (e) => e.penalty,
+	})
 }
 
 /** A team as listed in `season` (default: the current one), or a 404 */
@@ -1327,7 +1350,10 @@ function toHeadToHeadGame(
 		seasonId: game.seasonId,
 		startsAt: game.startsAt,
 		arena: toDisplayArena(game.arena),
-		homeTeamId: game.homeAway === "home" ? game.team.id : game.opponent.id,
+		homeTeamId: matchValue(game.homeAway, {
+			home: game.team.id,
+			away: game.opponent.id,
+		}),
 		goals: getGoalsByTeam(game),
 		livebarn,
 	}

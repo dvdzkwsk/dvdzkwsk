@@ -1,4 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {matchFn} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	GET_TEAM_ACTIVITY_ENDPOINT,
@@ -228,30 +229,33 @@ const TeamLeaders = ({roster}: {roster: TeamResponse["roster"]}) => {
 			}
 		>
 			<div className="Leaders-grid">
-				{kind === "skaters" ? (
-					<>
-						{SKATER_LEADERS.map((category) => (
-							<LeaderCard
-								key={category.column}
-								category={category}
-								players={roster.skaters}
-							/>
-						))}
-					</>
-				) : (
-					<>
-						{GOALIE_LEADERS.map((category) => (
-							<LeaderCard
-								key={category.column}
-								category={category}
-								// Rates only mean something for goalies who've played
-								players={roster.goalies.filter(
-									(g) => Number(g.stats["GP"]) > 0,
-								)}
-							/>
-						))}
-					</>
-				)}
+				{matchFn(kind, {
+					skaters: () => (
+						<>
+							{SKATER_LEADERS.map((category) => (
+								<LeaderCard
+									key={category.column}
+									category={category}
+									players={roster.skaters}
+								/>
+							))}
+						</>
+					),
+					goalies: () => (
+						<>
+							{GOALIE_LEADERS.map((category) => (
+								<LeaderCard
+									key={category.column}
+									category={category}
+									// Rates only mean something for goalies who've played
+									players={roster.goalies.filter(
+										(g) => Number(g.stats["GP"]) > 0,
+									)}
+								/>
+							))}
+						</>
+					),
+				})}
 			</div>
 		</Section>
 	)

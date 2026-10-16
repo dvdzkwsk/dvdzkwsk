@@ -1,6 +1,7 @@
 import {Combobox} from "@base-ui/react/combobox"
 import {Popover} from "@base-ui/react/popover"
 import {PreviewCard} from "@base-ui/react/preview-card"
+import {matchFn, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
@@ -407,7 +408,12 @@ export const PastGames = ({
 			// Long histories scroll inside the card, under a fixed header
 			maxHeight="24rem"
 			rows={past
-				.filter((g) => filter === "all" || !isSkipped(g))
+				.filter((g) =>
+					matchFn(filter, {
+						all: () => true,
+						played: () => !isSkipped(g),
+					}),
+				)
 				.slice(0, limit)
 				.map((g) => ({
 					...feedGameToRow(g, getTeamLogoUrl(g.game.team.id)),
@@ -476,6 +482,10 @@ const DAY_FILTERS: {value: DayPreset; label: string}[] = [
 	{value: "week", label: "This week"},
 ]
 
+function isDayPreset(day: string | null): day is DayPreset {
+	return DAY_FILTERS.some((d) => d.value === day)
+}
+
 /** With no day in the URL (and for old "all" links) */
 const DEFAULT_DAY: DayFilter = "week"
 
@@ -492,7 +502,7 @@ export function readGameFilters(query: URLSearchParams): GameFilterValues {
 	const day = query.get("day")
 	return {
 		day:
-			DAY_FILTERS.some((d) => d.value === day) || getDayRange(day)
+			isDayPreset(day) || getDayRange(day)
 				? (day as DayFilter)
 				: DEFAULT_DAY,
 		rinks: query.get("rinks")?.split(",").filter(Boolean) ?? [],
@@ -584,11 +594,7 @@ export const GameFilters = ({
 			<SegmentedControl<DayPreset>
 				label="Days"
 				options={DAY_FILTERS}
-				value={
-					DAY_FILTERS.some((d) => d.value === filters.day)
-						? (filters.day as DayPreset)
-						: null
-				}
+				value={isDayPreset(filters.day) ? filters.day : null}
 				onChange={(day) => onChange({day})}
 			>
 				{/* The switch's last option: a picked day or range shows here,
@@ -1423,7 +1429,10 @@ export const GameTable = ({
 				<GameTableTeam
 					team={row.away}
 					seasonId={row.seasonId}
-					highlighted={row.highlight === "away"}
+					highlighted={
+						!!row.highlight &&
+						matchValue(row.highlight, {away: true, home: false})
+					}
 					mirrored={scoreboard}
 				/>
 			),
@@ -1447,7 +1456,10 @@ export const GameTable = ({
 				<GameTableTeam
 					team={row.home}
 					seasonId={row.seasonId}
-					highlighted={row.highlight === "home"}
+					highlighted={
+						!!row.highlight &&
+						matchValue(row.highlight, {away: false, home: true})
+					}
 				/>
 			),
 		},
@@ -1609,8 +1621,10 @@ function feedGameToRow(
 	const goals = getGoalsByTeam(game)
 	const team = {...game.team, logoUrl: teamLogoUrl}
 	const opponent = {...game.opponent, logoUrl: opponentLogoUrl}
-	const [away, home] =
-		game.homeAway === "home" ? [opponent, team] : [team, opponent]
+	const [away, home] = matchValue(game.homeAway, {
+		home: [opponent, team] as const,
+		away: [team, opponent] as const,
+	})
 	return {
 		gameId: game.id,
 		seasonId: game.seasonId,
@@ -1843,12 +1857,12 @@ export const NoGames = ({
 
 /** "today", "this week", "on Thu, Oct 22", "Oct 13 – Oct 17" */
 function describeDay(day: DayFilter): string {
-	switch (day) {
-		case "yesterday":
-		case "today":
-			return day
-		case "week":
-			return "this week"
+	if (isDayPreset(day)) {
+		return matchValue(day, {
+			yesterday: "yesterday",
+			today: "today",
+			week: "this week",
+		})
 	}
 	const range = getDayRange(day)
 	if (!range) {
@@ -1861,13 +1875,12 @@ function describeDay(day: DayFilter): string {
 
 /** The last day a day filter covers, as "yyyy-MM-dd" */
 function getLastDayKey(day: DayFilter, now: Date): string {
-	switch (day) {
-		case "yesterday":
-			return getLeagueDayKey(addDays(now, -1))
-		case "today":
-			return getLeagueDayKey(now)
-		case "week":
-			return getEndOfWeekDayKey(now)
+	if (isDayPreset(day)) {
+		return matchFn(day, {
+			yesterday: () => getLeagueDayKey(addDays(now, -1)),
+			today: () => getLeagueDayKey(now),
+			week: () => getEndOfWeekDayKey(now),
+		})
 	}
 	return getDayRange(day)?.to ?? getLeagueDayKey(now)
 }
@@ -1881,10 +1894,14 @@ function addDays(date: Date, days: number): Date {
  * from the league's scoreboard rather than the upcoming schedule.
  */
 export function getPastDays(day: DayFilter, now: Date): string[] {
-	const today = getLeagueDayKey(now)
-	if (day === "yesterday") {
-		return [getLeagueDayKey(addDays(now, -1))]
+	if (isDayPreset(day)) {
+		return matchFn(day, {
+			yesterday: () => [getLeagueDayKey(addDays(now, -1))],
+			today: () => [],
+			week: () => [],
+		})
 	}
+	const today = getLeagueDayKey(now)
 	const range = getDayRange(day)
 	if (!range || range.from >= today) {
 		return []
@@ -1897,35 +1914,35 @@ export function getPastDays(day: DayFilter, now: Date): string[] {
 
 /** Whether the filter picks today, whose finished games need the scoreboard */
 export function includesToday(day: DayFilter, now: Date): boolean {
-	const today = getLeagueDayKey(now)
-	if (day === "today" || day === "week") {
-		return true
+	if (isDayPreset(day)) {
+		return matchValue(day, {yesterday: false, today: true, week: true})
 	}
+	const today = getLeagueDayKey(now)
 	const range = getDayRange(day)
 	return !!range && range.from <= today && today <= range.to
 }
 
 /** Whether the filter picks today or later, which the upcoming schedule has */
 export function includesUpcomingDays(day: DayFilter, now: Date): boolean {
+	if (isDayPreset(day)) {
+		return matchValue(day, {yesterday: false, today: true, week: true})
+	}
 	const range = getDayRange(day)
-	return day !== "yesterday" && (!range || range.to >= getLeagueDayKey(now))
+	return !range || range.to >= getLeagueDayKey(now)
 }
 
 function matchesDay(game: RinkGame, day: DayFilter, now: Date): boolean {
 	const key = getLeagueDayKey(new Date(game.startsAt))
 	const today = getLeagueDayKey(now)
-	switch (day) {
-		case "yesterday":
-			return key === getLeagueDayKey(addDays(now, -1))
-		case "today":
-			return key === today
-		case "week":
-			return key <= getEndOfWeekDayKey(now)
-		default: {
-			const range = getDayRange(day)
-			return !!range && range.from <= key && key <= range.to
-		}
+	if (isDayPreset(day)) {
+		return matchFn(day, {
+			yesterday: () => key === getLeagueDayKey(addDays(now, -1)),
+			today: () => key === today,
+			week: () => key <= getEndOfWeekDayKey(now),
+		})
 	}
+	const range = getDayRange(day)
+	return !!range && range.from <= key && key <= range.to
 }
 
 /** The game's divisions: usually one, two when the teams' differ */
@@ -2048,11 +2065,21 @@ const SeriesRecord = ({
 	const ties = scored.length - leftWins - rightWins
 	const leader =
 		leftWins > rightWins ? left : rightWins > leftWins ? right : null
-	const segments = [
+	const segments: {
+		key: "left" | "tie" | "right"
+		count: number
+		label: string
+	}[] = [
 		{key: "left", count: leftWins, label: `${left.name} wins`},
 		{key: "tie", count: ties, label: "Ties"},
 		{key: "right", count: rightWins, label: `${right.name} wins`},
 	]
+	const renderLegendTeam = (team: HeadToHeadTeam) => (
+		<>
+			<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={18} />
+			{team.name}
+		</>
+	)
 	return (
 		<div className="SeriesRecord">
 			<p className="SeriesRecord-headline">
@@ -2097,26 +2124,11 @@ const SeriesRecord = ({
 							)}
 							aria-hidden
 						/>
-						{s.key === "tie" ? (
-							"Ties"
-						) : (
-							<>
-								<TeamAvatar
-									name={
-										s.key === "left"
-											? left.name
-											: right.name
-									}
-									logoUrl={
-										s.key === "left"
-											? left.logoUrl
-											: right.logoUrl
-									}
-									size={18}
-								/>
-								{s.key === "left" ? left.name : right.name}
-							</>
-						)}
+						{matchFn(s.key, {
+							left: () => renderLegendTeam(left),
+							tie: () => "Ties",
+							right: () => renderLegendTeam(right),
+						})}
 						<strong className="SeriesRecord-count">
 							{s.count}
 						</strong>
@@ -2299,7 +2311,8 @@ const ResultChip = ({game}: {game: RecentGame}) => {
 		"Compare-chip",
 	)
 	const score = formatScore(game.goalsFor, game.goalsAgainst)
-	const label = `${RESULT_WORDS[game.result] ?? game.result} ${score} ${game.homeAway === "home" ? "vs" : "at"} ${game.opponent.name}`
+	const vsAt = matchValue(game.homeAway, {home: "vs", away: "at"})
+	const label = `${RESULT_WORDS[game.result] ?? game.result} ${score} ${vsAt} ${game.opponent.name}`
 	return (
 		<PreviewCard.Root>
 			<PreviewCard.Trigger
@@ -2334,8 +2347,7 @@ const ResultChip = ({game}: {game: RecentGame}) => {
 							<strong>{score}</strong>
 						</div>
 						<div className="GamePreview-opponent">
-							{game.homeAway === "home" ? "vs" : "at"}{" "}
-							{game.opponent.name}
+							{vsAt} {game.opponent.name}
 						</div>
 						<div className="GamePreview-meta">
 							{formatGameDate(game.startsAt, now)} ·{" "}

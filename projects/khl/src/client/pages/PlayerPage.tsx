@@ -1,5 +1,6 @@
 import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {matchFn, matchObj} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
@@ -73,14 +74,11 @@ const PlayerPage = ({params, query}: RouteProps) => {
 			kinds: ["skipped"],
 		})
 	}, [playerId])
-	const skipped: SkippedGames =
-		skippedState.status === "loading"
-			? "loading"
-			: new Set(
-					skippedState.status === "success"
-						? skippedState.data.games.map((g) => g.gameId)
-						: [],
-				)
+	const skipped: SkippedGames = matchObj(skippedState, "status", {
+		loading: () => "loading" as const,
+		error: () => new Set<string>(),
+		success: (s) => new Set(s.data.games.map((g) => g.gameId)),
+	})
 	const now = useNow()
 
 	// ?team=<registration key> narrows the page to one of the player's teams.
@@ -247,22 +245,28 @@ function getStat(
 	label: string,
 	scope: StatScope,
 ): string {
-	if (scope === "season") {
-		const section = registration.profile?.statSections[0]
-		return section?.stats.find((s) => s.label === label)?.value ?? ""
-	}
-	const rows = getTeamHistory(registration)
-	const sum = (column: string) => {
-		return rows.reduce((total, row) => {
-			return total + (Number(row.stats[column]) || 0)
-		}, 0)
-	}
-	if (label === "Average Points Per Game") {
-		const gamesPlayed = sum("GP")
-		return gamesPlayed ? (sum("PTS") / gamesPlayed).toFixed(2) : "0.00"
-	}
-	const column = STAT_COLUMNS.find(([l]) => l === label)?.[2]
-	return column ? String(sum(column)) : ""
+	return matchFn(scope, {
+		season: () => {
+			const section = registration.profile?.statSections[0]
+			return section?.stats.find((s) => s.label === label)?.value ?? ""
+		},
+		career: () => {
+			const rows = getTeamHistory(registration)
+			const sum = (column: string) => {
+				return rows.reduce((total, row) => {
+					return total + (Number(row.stats[column]) || 0)
+				}, 0)
+			}
+			if (label === "Average Points Per Game") {
+				const gamesPlayed = sum("GP")
+				return gamesPlayed
+					? (sum("PTS") / gamesPlayed).toFixed(2)
+					: "0.00"
+			}
+			const column = STAT_COLUMNS.find(([l]) => l === label)?.[2]
+			return column ? String(sum(column)) : ""
+		},
+	})
 }
 
 function sumStat(
@@ -423,7 +427,11 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 	const badges = getBadges({
 		name: player.name,
 		gamesPlayed: sumStat(player.registrations, "Games Played", "career"),
-		recentPenalties: recent.status === "success" ? recent.data : null,
+		recentPenalties: matchObj(recent, "status", {
+			loading: () => null,
+			error: () => null,
+			success: (s) => s.data,
+		}),
 	})
 	if (badges.length === 0) {
 		return null
@@ -619,49 +627,58 @@ const StatsByTeam = ({
 			header: "Team",
 			isLabel: true,
 			render: (row) =>
-				row.kind === "total" ? (
-					"Total"
-				) : (
-					<span className="StatsTable-team">
-						<TeamAvatar
-							name={row.registration.teamName}
-							logoUrl={row.registration.teamLogoUrl}
-							size={24}
-						/>
-						<TeamLink
-							team={{
-								id: row.registration.teamId,
-								name: row.registration.teamName,
-							}}
-							seasonId={row.registration.seasonIds.at(-1)!}
-						/>
-					</span>
-				),
+				matchObj(row, "kind", {
+					total: () => "Total",
+					registration: ({registration}) => (
+						<span className="StatsTable-team">
+							<TeamAvatar
+								name={registration.teamName}
+								logoUrl={registration.teamLogoUrl}
+								size={24}
+							/>
+							<TeamLink
+								team={{
+									id: registration.teamId,
+									name: registration.teamName,
+								}}
+								seasonId={registration.seasonIds.at(-1)!}
+							/>
+						</span>
+					),
+				}),
 		},
 		{
 			header: "Division",
 			isLabel: true,
 			render: (row) =>
-				row.kind === "total" ? "" : getDivision(row.registration),
+				matchObj(row, "kind", {
+					total: () => "",
+					registration: (r) => getDivision(r.registration),
+				}),
 		},
 		...STAT_COLUMNS.map(([label, header]) => ({
 			header,
 			render: (row: StatsRow) =>
-				row.kind === "total"
-					? getTotal(label)
-					: getStat(row.registration, label, scope),
+				matchObj(row, "kind", {
+					total: () => getTotal(label),
+					registration: (r) => getStat(r.registration, label, scope),
+				}),
 		})),
 	]
 	return (
 		<StatsTable
 			rows={rows}
 			rowKey={(row) =>
-				row.kind === "total"
-					? "total"
-					: getRegistrationKey(row.registration)
+				matchObj(row, "kind", {
+					total: () => "total",
+					registration: (r) => getRegistrationKey(r.registration),
+				})
 			}
 			rowClassName={(row) =>
-				row.kind === "total" ? "StatsTable-total" : undefined
+				matchObj(row, "kind", {
+					total: () => "StatsTable-total",
+					registration: () => undefined,
+				})
 			}
 			columns={columns}
 		/>

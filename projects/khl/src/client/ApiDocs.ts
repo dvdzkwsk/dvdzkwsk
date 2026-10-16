@@ -1,4 +1,10 @@
-import {ApiEndpoint, ApiRequest, toHttpRequest} from "@dvdzkwsk/util/ApiUtil"
+import {
+	ApiEndpoint,
+	ApiRequest,
+	isMethodWithoutBody,
+	toHttpRequest,
+} from "@dvdzkwsk/util/ApiUtil"
+import {matchFn, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {z} from "zod"
 import * as ApiJson from "../shared/ApiJson.js"
 import * as KHLJson from "../shared/KHLJson.js"
@@ -82,7 +88,7 @@ export function getEndpointDocs(
 ): ApiEndpointDocs {
 	const request = toTypeDocs(endpoint.requestSchema)
 	const response = toTypeDocs(endpoint.responseSchema)
-	const hasBody = endpoint.method !== "GET" && endpoint.method !== "DELETE"
+	const hasBody = !isMethodWithoutBody(endpoint.method)
 	return {
 		endpoint,
 		id: toAnchor(endpoint.name),
@@ -541,12 +547,26 @@ export function highlightCode(
 	const tokens: CodeToken[] = []
 	const push = (kind: CodeTokenKind, text: string) => {
 		const last = tokens[tokens.length - 1]
-		if (last && last.kind === kind && kind !== "comment") {
+		const mergeable = matchValue(kind, {
+			plain: true,
+			keyword: true,
+			builtin: true,
+			type: true,
+			definition: true,
+			property: true,
+			function: true,
+			string: true,
+			number: true,
+			comment: false,
+			punctuation: true,
+		})
+		if (last && last.kind === kind && mergeable) {
 			last.text += text
 		} else {
 			tokens.push({kind, text})
 		}
 	}
+	const isShell = matchValue(language, {shell: true, ts: false, json: false})
 	let isFirstWord = true
 	/** The last word if it was `interface` or `type` as a keyword */
 	let declaringKeyword = ""
@@ -555,12 +575,21 @@ export function highlightCode(
 		const rest = code.slice(match.index + text.length)
 		if (comment) {
 			// Only TypeScript has comments; in a shell, "//" is part of a URL
-			push(language === "ts" ? "comment" : "plain", text)
+			push(
+				matchValue(language, {
+					ts: "comment",
+					json: "plain",
+					shell: "plain",
+				} as const),
+				text,
+			)
 		} else if (string) {
-			const isKey = language === "json" && /^\s*:/.test(rest)
+			const isKey =
+				matchValue(language, {json: true, ts: false, shell: false}) &&
+				/^\s*:/.test(rest)
 			push(isKey ? "property" : "string", text)
 		} else if (flag) {
-			if (language === "shell") {
+			if (isShell) {
 				push("keyword", text)
 			} else {
 				// Not a flag outside a shell: a minus, then a word
@@ -572,7 +601,7 @@ export function highlightCode(
 			push("number", text)
 		} else if (word) {
 			const kind =
-				language === "shell" && isFirstWord
+				isShell && isFirstWord
 					? "function"
 					: declaringKeyword
 						? "definition"
@@ -580,7 +609,20 @@ export function highlightCode(
 			push(kind, text)
 			isFirstWord = false
 			declaringKeyword =
-				kind === "keyword" && (word === "interface" || word === "type")
+				matchValue(kind, {
+					plain: false,
+					keyword: true,
+					builtin: false,
+					type: false,
+					definition: false,
+					property: false,
+					function: false,
+					string: false,
+					number: false,
+					comment: false,
+					punctuation: false,
+				}) &&
+				(word === "interface" || word === "type")
 					? word
 					: ""
 		} else if (space) {
@@ -597,24 +639,25 @@ function classifyWord(
 	rest: string,
 	language: CodeLanguage,
 ): CodeTokenKind {
-	if (language === "json") {
-		return JSON_KEYWORDS.has(word) ? "keyword" : "plain"
-	}
-	if (language === "shell") {
-		return "plain"
-	}
-	// Before keywords: a property can be named "type"
-	if (/^\??:/.test(rest)) {
-		return "property"
-	}
-	if (TS_KEYWORDS.has(word)) {
-		return "keyword"
-	}
-	if (TS_BUILTINS.has(word)) {
-		return "builtin"
-	}
-	if (/^\s*\(/.test(rest)) {
-		return "function"
-	}
-	return /^[A-Z]/.test(word) ? "type" : "plain"
+	return matchFn(language, {
+		json: (): CodeTokenKind =>
+			JSON_KEYWORDS.has(word) ? "keyword" : "plain",
+		shell: (): CodeTokenKind => "plain",
+		ts: (): CodeTokenKind => {
+			// Before keywords: a property can be named "type"
+			if (/^\??:/.test(rest)) {
+				return "property"
+			}
+			if (TS_KEYWORDS.has(word)) {
+				return "keyword"
+			}
+			if (TS_BUILTINS.has(word)) {
+				return "builtin"
+			}
+			if (/^\s*\(/.test(rest)) {
+				return "function"
+			}
+			return /^[A-Z]/.test(word) ? "type" : "plain"
+		},
+	})
 }

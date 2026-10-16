@@ -8,6 +8,7 @@ import {
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
+import {matchFn} from "@dvdzkwsk/util/MatchUtil"
 import {History, Location} from "history"
 import * as React from "react"
 import {ClientLog, LOG_ENDPOINT} from "../shared/ApiJson.js"
@@ -293,27 +294,25 @@ export function readSimulatedLoading(): SimulatedLoading {
 
 export function writeSimulatedLoading(value: SimulatedLoading) {
 	try {
-		if (value === "off") {
-			sessionStorage.removeItem(SIMULATED_LOADING_KEY)
-		} else {
-			sessionStorage.setItem(SIMULATED_LOADING_KEY, value)
-		}
+		matchFn(value, {
+			off: () => sessionStorage.removeItem(SIMULATED_LOADING_KEY),
+			slow: (v) => sessionStorage.setItem(SIMULATED_LOADING_KEY, v),
+			hang: (v) => sessionStorage.setItem(SIMULATED_LOADING_KEY, v),
+		})
 	} catch {
 		// Not persisted; nothing to simulate
 	}
 }
 
 function withSimulatedLoading<T>(load: () => Promise<T>): Promise<T> {
-	const mode = readSimulatedLoading()
-	if (mode === "hang") {
-		return new Promise(() => {})
-	}
-	if (mode === "slow") {
-		return new Promise((resolve) =>
-			setTimeout(resolve, SIMULATED_LOADING_DELAY_MS),
-		).then(load)
-	}
-	return load()
+	return matchFn(readSimulatedLoading(), {
+		off: () => load(),
+		slow: () =>
+			new Promise((resolve) =>
+				setTimeout(resolve, SIMULATED_LOADING_DELAY_MS),
+			).then(load),
+		hang: () => new Promise<T>(() => {}),
+	})
 }
 
 // --- Local storage: this browser's own preferences and history. Blocked

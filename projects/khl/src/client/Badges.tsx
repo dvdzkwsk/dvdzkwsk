@@ -1,3 +1,4 @@
+import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {ActivityOptions, ActivityResponse} from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
@@ -22,7 +23,9 @@ export const RECENT_PENALTIES_ACTIVITY: ActivityOptions = {
 
 /** Counts a RECENT_PENALTIES_ACTIVITY response */
 export function toRecentPenalties(activity: ActivityResponse): RecentPenalties {
-	const played = activity.games.filter((g) => g.attendance === "played")
+	const played = activity.games.filter((g) =>
+		matchValue(g.attendance, {played: true, skipped: false}),
+	)
 	return {
 		games: played.length,
 		penalties: played.reduce((total, g) => total + g.events.length, 0),

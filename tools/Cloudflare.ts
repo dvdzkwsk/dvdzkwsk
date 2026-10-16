@@ -1,5 +1,6 @@
 import {z} from "zod"
 import {Logger} from "../pkg/logger/Logger.js"
+import {isMethodWithoutBody} from "../pkg/util/ApiUtil.js"
 import {doFetch, FetchError} from "../pkg/util/FetchUtil.js"
 
 const logger = new Logger("Cloudflare")
@@ -166,17 +167,16 @@ export class Cloudflare {
 		const url = `${API_URL}${pathname}`
 		const headers = {Authorization: `Bearer ${this.token}`}
 		const responseSchema = z.object({result: resultSchema})
-		const response =
-			method === "GET" || method === "DELETE"
-				? await doFetch({method, url, headers, responseSchema})
-				: await doFetch({
-						method,
-						url,
-						headers,
-						requestBody: body,
-						requestSchema: z.unknown(),
-						responseSchema,
-					})
+		const response = isMethodWithoutBody(method)
+			? await doFetch({method, url, headers, responseSchema})
+			: await doFetch({
+					method,
+					url,
+					headers,
+					requestBody: body,
+					requestSchema: z.unknown(),
+					responseSchema,
+				})
 		return response.result
 	}
 }

@@ -1,5 +1,6 @@
 import {z} from "zod"
-import {doFetch, HttpMethod} from "./FetchUtil.js"
+import {doFetch, HttpMethod, HttpMethodWithoutBody} from "./FetchUtil.js"
+import {matchValue} from "./MatchUtil.js"
 
 /**
  * Describes an API endpoint once, so the client (doRequest) and the server
@@ -44,7 +45,7 @@ export function doRequest<TRequest extends ApiRequest, TResponse>(
 		)
 	}
 	const {url, body} = toHttpRequest(endpoint, parsed.data)
-	if (endpoint.method === "GET" || endpoint.method === "DELETE") {
+	if (isMethodWithoutBody(endpoint.method)) {
 		return doFetch({
 			method: endpoint.method,
 			url,
@@ -71,7 +72,7 @@ export function toHttpRequest<TRequest extends ApiRequest, TResponse>(
 	request: TRequest,
 ): {url: string; body: Record<string, unknown> | null} {
 	const {path, rest} = fillPathParams(endpoint.uri, request)
-	if (endpoint.method !== "GET" && endpoint.method !== "DELETE") {
+	if (!isMethodWithoutBody(endpoint.method)) {
 		return {url: path, body: rest}
 	}
 	const query = new URLSearchParams()
@@ -82,6 +83,19 @@ export function toHttpRequest<TRequest extends ApiRequest, TResponse>(
 	}
 	const search = query.size > 0 ? `?${query}` : ""
 	return {url: path + search, body: null}
+}
+
+/** GET and DELETE send their fields in the query string rather than a JSON body. */
+export function isMethodWithoutBody(
+	method: HttpMethod,
+): method is HttpMethodWithoutBody {
+	return matchValue(method, {
+		GET: true,
+		DELETE: true,
+		POST: false,
+		PUT: false,
+		PATCH: false,
+	})
 }
 
 function fillPathParams(

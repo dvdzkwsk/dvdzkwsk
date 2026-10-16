@@ -6,6 +6,7 @@ import {input} from "@inquirer/prompts"
 import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool} from "../pkg/util/CliUtil.js"
 import {toError} from "../pkg/util/ErrorUtil.js"
+import {matchFn, matchValue} from "../pkg/util/MatchUtil.js"
 
 const logger = new Logger("SetupMac")
 const PROJECT_ROOT = path.resolve(
@@ -93,7 +94,12 @@ function osxSetting(opts: {
 			}
 		},
 		apply() {
-			const val = opts.flag === "-string" ? `"${opts.value}"` : opts.value
+			const val = matchValue(opts.flag, {
+				"-bool": opts.value,
+				"-int": opts.value,
+				"-float": opts.value,
+				"-string": `"${opts.value}"`,
+			})
 			execSync(
 				`defaults write ${opts.domain} ${opts.key} ${opts.flag} ${val}`,
 			)
@@ -572,14 +578,7 @@ async function ensureConfigFilesLinked(
 	]
 	for (const config of configs) {
 		const result = await ensureSymlink(config, options)
-		if (result === "already-linked") {
-			logger.debug(
-				"ensureConfigFilesLinked",
-				`already linked: ${config.name}`,
-			)
-		} else {
-			logger.info("ensureConfigFilesLinked", `linked: ${config.name}`)
-		}
+		logSymlinkResult("ensureConfigFilesLinked", result, config.name)
 	}
 }
 
@@ -601,11 +600,7 @@ async function ensureITermSettings(
 		},
 		options,
 	)
-	if (result === "already-linked") {
-		logger.debug("ensureITermSettings", `already linked: ${name}`)
-	} else {
-		logger.info("ensureITermSettings", `linked: ${name}`)
-	}
+	logSymlinkResult("ensureITermSettings", result, name)
 }
 
 async function ensureSshSetup(_ctx: SetupContext) {
@@ -664,14 +659,7 @@ async function ensureClaudeSetup(options: ProgramOptions, _ctx: SetupContext) {
 			},
 			options,
 		)
-		if (result === "already-linked") {
-			logger.debug(
-				"ensureClaudeSetup",
-				`already linked: ~/.claude/${name}`,
-			)
-		} else {
-			logger.info("ensureClaudeSetup", `linked: ~/.claude/${name}`)
-		}
+		logSymlinkResult("ensureClaudeSetup", result, `~/.claude/${name}`)
 	}
 }
 
@@ -841,10 +829,12 @@ async function ensureChromeApps(ctx: SetupContext) {
 	}
 }
 
+type SymlinkResult = "created" | "already-linked"
+
 async function ensureSymlink(
 	link: {path: string; target: string},
 	options: {force: boolean},
-): Promise<"created" | "already-linked"> {
+): Promise<SymlinkResult> {
 	let stat: fs.Stats | null = null
 	try {
 		stat = fs.lstatSync(link.path)
@@ -893,6 +883,18 @@ async function ensureSymlink(
 		})
 	}
 	return "created"
+}
+
+function logSymlinkResult(
+	subcontext: string,
+	result: SymlinkResult,
+	name: string,
+) {
+	matchFn(result, {
+		created: () => logger.info(subcontext, `linked: ${name}`),
+		"already-linked": () =>
+			logger.debug(subcontext, `already linked: ${name}`),
+	})
 }
 
 function commandExists(command: string): boolean {

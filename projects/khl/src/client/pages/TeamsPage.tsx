@@ -1,4 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {matchFn, matchObj} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	GET_STANDINGS_ENDPOINT,
@@ -44,7 +45,11 @@ const TeamsPage = ({query}: RouteProps) => {
 	const groupBy: GroupBy = query.get("group") === "none" ? "none" : "division"
 	const setGroupBy = (next: GroupBy) => {
 		// Division is the default, so it needs no param
-		replaceQueryParam(history, "group", next === "division" ? null : next)
+		replaceQueryParam(
+			history,
+			"group",
+			matchFn(next, {division: () => null, none: (v) => v}),
+		)
 	}
 	const state = useAsync(
 		() =>
@@ -57,9 +62,11 @@ const TeamsPage = ({query}: RouteProps) => {
 	const [toolbarData, setToolbarData] =
 		React.useState<StandingsResponse | null>(null)
 	React.useEffect(() => {
-		if (state.status === "success") {
-			setToolbarData(state.data)
-		}
+		matchObj(state, "status", {
+			loading: () => {},
+			error: () => {},
+			success: (s) => setToolbarData(s.data),
+		})
 	}, [state])
 
 	return (
@@ -126,41 +133,49 @@ const TeamsPage = ({query}: RouteProps) => {
 												{standings.season.name}.
 											</div>
 										)}
-										{groupBy === "none" ? (
-											<AllStandings
-												divisions={standings.divisions.filter(
-													(d) => visible.has(d.name),
-												)}
-												seasonId={standings.season.id}
-											/>
-										) : (
-											sortByDivision(
-												standings.divisions,
-												(d) => d.name,
-											)
-												.filter((d) =>
-													visible.has(d.name),
+										{matchFn(groupBy, {
+											none: () => (
+												<AllStandings
+													divisions={standings.divisions.filter(
+														(d) =>
+															visible.has(d.name),
+													)}
+													seasonId={
+														standings.season.id
+													}
+												/>
+											),
+											division: () =>
+												sortByDivision(
+													standings.divisions,
+													(d) => d.name,
 												)
-												.map((division) => (
-													<StandingsTable
-														key={division.name}
-														title={division.name}
-														columns={
-															division.columns
-														}
-														// Listed by rank
-														rows={division.rows.map(
-															(row, i) => ({
-																rank: i + 1,
-																row,
-															}),
-														)}
-														seasonId={
-															standings.season.id
-														}
-													/>
-												))
-										)}
+													.filter((d) =>
+														visible.has(d.name),
+													)
+													.map((division) => (
+														<StandingsTable
+															key={division.name}
+															title={
+																division.name
+															}
+															columns={
+																division.columns
+															}
+															// Listed by rank
+															rows={division.rows.map(
+																(row, i) => ({
+																	rank: i + 1,
+																	row,
+																}),
+															)}
+															seasonId={
+																standings.season
+																	.id
+															}
+														/>
+													)),
+										})}
 									</>
 								)
 							}}

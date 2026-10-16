@@ -1,6 +1,7 @@
 import "./Styles.css"
 import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {matchObj} from "@dvdzkwsk/util/MatchUtil"
 import {Action, createBrowserHistory, History, Location} from "history"
 import * as React from "react"
 import {createRoot} from "react-dom/client"
@@ -160,22 +161,27 @@ function useScrollRestoration(history: History) {
 	React.useLayoutEffect(() => {
 		const scroll = pending.current
 		pending.current = null
-		if (scroll?.kind === "open") {
-			const id = safeDecodeURIComponent(window.location.hash.slice(1))
-			if (id) {
-				return settleScroll(() => {
-					document.getElementById(id)?.scrollIntoView()
-					return false
-				})
-			}
-			window.scrollTo(0, 0)
-		} else if (scroll?.kind === "restore") {
-			const {y} = scroll
-			return settleScroll(() => {
-				window.scrollTo(0, y)
-				return Math.abs(window.scrollY - y) < 1
-			})
+		if (!scroll) {
+			return
 		}
+		return matchObj(scroll, "kind", {
+			open: () => {
+				const id = safeDecodeURIComponent(window.location.hash.slice(1))
+				if (id) {
+					return settleScroll(() => {
+						document.getElementById(id)?.scrollIntoView()
+						return false
+					})
+				}
+				window.scrollTo(0, 0)
+				return undefined
+			},
+			restore: ({y}) =>
+				settleScroll(() => {
+					window.scrollTo(0, y)
+					return Math.abs(window.scrollY - y) < 1
+				}),
+		})
 	}, [key])
 }
 

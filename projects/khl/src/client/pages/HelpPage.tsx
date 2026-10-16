@@ -1,7 +1,7 @@
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
-import {Route} from "../Util.js"
+import {getBadgesHref, Route} from "../Util.js"
 
 // --- /help: a table of contents, then every FAQ answer
 
@@ -21,37 +21,6 @@ const QuestionLink = ({id, children}: {id: string; children: string}) => {
 
 const FAQ: Question[] = [
 	{
-		id: "livebarn-in-khl-plus",
-		question: `Why can't I see the LiveBarn feed directly in ${STRINGS.PRODUCT_NAME}?`,
-		answer: (
-			<>
-				<p>
-					LiveBarn doesn't allow its video player to be embedded on
-					other sites, so {STRINGS.PRODUCT_NAME} can't play the feed
-					itself.
-				</p>
-				<p>
-					Instead, every LiveBarn link opens watch.livebarn.com on the
-					right rink, and for finished games, at the game's start
-					time. You'll need to be signed in to a LiveBarn subscription
-					to watch.
-				</p>
-			</>
-		),
-	},
-	{
-		id: "missing-livebarn-link",
-		question: "Why doesn't my location have a LiveBarn link?",
-		answer: (
-			<p>
-				Not every location is on LiveBarn. For those that are,{" "}
-				{STRINGS.PRODUCT_NAME} only links a feed when it can match it to
-				the right location and sheet of ice, so a link never opens the
-				wrong game.
-			</p>
-		),
-	},
-	{
 		id: "official",
 		question: `Is ${STRINGS.PRODUCT_NAME} official?`,
 		answer: (
@@ -60,30 +29,6 @@ const FAQ: Question[] = [
 				schedule, score, and stat comes from{" "}
 				<Link href={URLS.KHL}>{LEAGUE_HOST} ↗</Link>, which is the
 				official record.
-			</p>
-		),
-	},
-	{
-		id: "stats-dont-match",
-		question: "Why doesn't a score or stat match the league's site?",
-		answer: (
-			<p>
-				{STRINGS.PRODUCT_NAME} rechecks the league's site every few
-				minutes: today's scores about every 5 minutes, most other pages
-				every 10. If something still looks wrong after that,{" "}
-				<Link href={URLS.FEEDBACK_FORM}>let us know ↗</Link>.
-			</p>
-		),
-	},
-	{
-		id: "missing-scoresheet",
-		question: "Why is a finished game missing its goals and stats?",
-		answer: (
-			<p>
-				The league posts scoresheets after the game, sometimes hours
-				later. {STRINGS.PRODUCT_NAME} shows the final score as soon as
-				the league's scoreboard has it, then fills in goals, penalties
-				and stats once the scoresheet is up.
 			</p>
 		),
 	},
@@ -117,6 +62,73 @@ const FAQ: Question[] = [
 					links to the player pages and we'll merge or split them.
 				</p>
 			</>
+		),
+	},
+	{
+		id: "badges",
+		question: "What are badges, and how do I get one?",
+		answer: (
+			<p>
+				Badges show on player pages. Most are earned automatically from
+				career stats, like playing your first game, and a few are
+				awarded by hand. See them all, or suggest or request one, on the{" "}
+				<Link href={getBadgesHref()}>Badges page</Link>.
+			</p>
+		),
+	},
+	{
+		id: "livebarn-in-khl-plus",
+		question: `Why can't I see the LiveBarn feed directly in ${STRINGS.PRODUCT_NAME}?`,
+		answer: (
+			<>
+				<p>
+					LiveBarn doesn't allow its video player to be embedded on
+					other sites, so {STRINGS.PRODUCT_NAME} can't play the feed
+					itself.
+				</p>
+				<p>
+					Instead, every LiveBarn link opens watch.livebarn.com on the
+					right rink, and for finished games, at the game's start
+					time. You'll need to be signed in to a LiveBarn subscription
+					to watch.
+				</p>
+			</>
+		),
+	},
+	{
+		id: "missing-livebarn-link",
+		question: "Why doesn't my location have a LiveBarn link?",
+		answer: (
+			<p>
+				Not every location is on LiveBarn. For those that are,{" "}
+				{STRINGS.PRODUCT_NAME} only links a feed when it can match it to
+				the right location and sheet of ice, so a link never opens the
+				wrong game.
+			</p>
+		),
+	},
+	{
+		id: "missing-scoresheet",
+		question: "Why is a finished game missing its goals and stats?",
+		answer: (
+			<p>
+				The league posts scoresheets after the game, sometimes hours
+				later. {STRINGS.PRODUCT_NAME} shows the final score as soon as
+				the league's scoreboard has it, then fills in goals, penalties
+				and stats once the scoresheet is up.
+			</p>
+		),
+	},
+	{
+		id: "stats-dont-match",
+		question: "Why doesn't a score or stat match the league's site?",
+		answer: (
+			<p>
+				{STRINGS.PRODUCT_NAME} rechecks the league's site every few
+				minutes: today's scores about every 5 minutes, most other pages
+				every 10. If something still looks wrong after that,{" "}
+				<Link href={URLS.FEEDBACK_FORM}>let us know ↗</Link>.
+			</p>
 		),
 	},
 	{

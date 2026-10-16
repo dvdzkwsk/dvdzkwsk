@@ -1,7 +1,7 @@
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
-import {Route} from "../Util.js"
+import {getBadgesHref, Route} from "../Util.js"
 
 // --- /about: what the site adds on top of the league's
 
@@ -25,7 +25,13 @@ const FEATURES: Feature[] = [
 	},
 	{
 		title: "Player badges",
-		text: "Badges on your profile celebrate your time in the KHL. The more you play, the more you collect.",
+		text: (
+			<>
+				Badges on your profile celebrate your time in the KHL. The more
+				you play, the more you collect.{" "}
+				<Link href={getBadgesHref()}>See every badge</Link>.
+			</>
+		),
 		art: BadgesArt,
 	},
 	{

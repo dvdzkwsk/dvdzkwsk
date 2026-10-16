@@ -632,22 +632,19 @@ export const RosterPanels = ({
 	return (
 		<div className="GamePage-rosters">
 			{teams.map(({team, roster, note, title}) => (
-				<section
+				<Card
 					key={`${team.id}:${team.seasonId}`}
-					className="Detail-panel"
-				>
-					<h2
-						className={cx(
-							"Detail-panel-title",
-							"GamePage-roster-title",
-						)}
-					>
-						<TeamAvatar
-							name={team.name}
-							logoUrl={team.logoUrl}
-							size={24}
-						/>
-						<TeamLink team={team} seasonId={team.seasonId} />
+					title={
+						<span className="GamePage-roster-title">
+							<TeamAvatar
+								name={team.name}
+								logoUrl={team.logoUrl}
+								size={20}
+							/>
+							<TeamLink team={team} seasonId={team.seasonId} />
+						</span>
+					}
+					actions={
 						<Hint label={title}>
 							<span className="SectionLabel">
 								{note && `${note} · `}
@@ -655,9 +652,10 @@ export const RosterPanels = ({
 								{roster.skaters.length + roster.goalies.length}
 							</span>
 						</Hint>
-					</h2>
+					}
+				>
 					<RosterTables roster={roster} kind={kind} />
-				</section>
+				</Card>
 			))}
 		</div>
 	)
@@ -2204,45 +2202,40 @@ const SearchResultsGroup = ({
 		? 0
 		: Math.max(0, items.length - SEARCH_RESULTS_LIMIT)
 	return (
-		<section className="SearchResults-group">
-			<h2 className="SectionLabel">
-				{SUGGESTION_KIND_HEADINGS[kind]} · {items.length}
-			</h2>
-			<div className="SearchResults-card">
-				<ul className="SearchResults-list">
-					{items.slice(0, items.length - hidden).map((item) => (
-						<li key={item.key}>
-							<Link
-								className="SearchResults-item"
-								href={item.href}
-							>
-								<SuggestionIcon suggestion={item} />
-								<span className="SearchResults-item-text">
-									<span className="SearchResults-item-label">
-										{item.label}
-									</span>
-									{item.detail && (
-										<span className="SearchResults-item-detail">
-											{item.detail}
-										</span>
-									)}
+		<Card
+			title={`${SUGGESTION_KIND_HEADINGS[kind]} · ${items.length}`}
+			flush
+		>
+			<ul className="SearchResults-list">
+				{items.slice(0, items.length - hidden).map((item) => (
+					<li key={item.key}>
+						<Link className="SearchResults-item" href={item.href}>
+							<SuggestionIcon suggestion={item} />
+							<span className="SearchResults-item-text">
+								<span className="SearchResults-item-label">
+									{item.label}
 								</span>
-								<SearchKind kind={item.kind} />
-							</Link>
-						</li>
-					))}
-				</ul>
-				{hidden > 0 && (
-					<button
-						type="button"
-						className="SearchResults-more"
-						onClick={() => setExpanded(true)}
-					>
-						Show {hidden} more
-					</button>
-				)}
-			</div>
-		</section>
+								{item.detail && (
+									<span className="SearchResults-item-detail">
+										{item.detail}
+									</span>
+								)}
+							</span>
+							<SearchKind kind={item.kind} />
+						</Link>
+					</li>
+				))}
+			</ul>
+			{hidden > 0 && (
+				<button
+					type="button"
+					className="SearchResults-more"
+					onClick={() => setExpanded(true)}
+				>
+					Show {hidden} more
+				</button>
+			)}
+		</Card>
 	)
 }
 
@@ -2352,6 +2345,73 @@ export const HomeAwayBadge = ({homeAway, truncated}: HomeAwayBadgeProps) => {
 	)
 }
 
+// --- Sections and cards
+
+interface SectionProps {
+	/** Above the content; omit for an untitled block */
+	title?: React.ReactNode
+	/** Controls at the other end of the title, e.g. a filter */
+	actions?: React.ReactNode
+	className?: string
+	children: React.ReactNode
+}
+
+/**
+ * A titled block of a page: the title, and any controls beside it, above
+ * the content. Use Card when the content goes in a panel.
+ */
+export const Section = ({
+	title,
+	actions,
+	className,
+	children,
+}: SectionProps) => {
+	return (
+		<section className={cx("Section", className)}>
+			{(title || actions) && (
+				<div className="Section-header">
+					{title && (
+						<h2 className={cx("SectionLabel", "Section-title")}>
+							{title}
+						</h2>
+					)}
+					{actions}
+				</div>
+			)}
+			{children}
+		</section>
+	)
+}
+
+/**
+ * A Section whose content sits in a panel. Every card in the app is one, so
+ * their titles, spacing, and padding match.
+ */
+export const Card = ({
+	panelClassName,
+	flush,
+	children,
+	...section
+}: SectionProps & {
+	panelClassName?: string
+	/** No padding, for lists whose rows run to the panel's edges */
+	flush?: boolean
+}) => {
+	return (
+		<Section {...section}>
+			<div
+				className={cx(
+					"Card-panel",
+					flush && "Card-panel--flush",
+					panelClassName,
+				)}
+			>
+				{children}
+			</div>
+		</Section>
+	)
+}
+
 // --- LiveBarn
 
 interface LiveBarnBadgeProps {
@@ -2361,6 +2421,8 @@ interface LiveBarnBadgeProps {
 	title?: string
 	/** Just the camera icon; the label moves to a tooltip */
 	compact?: boolean
+	/** A game is on now: shown in red, and "Watch Now" instead of "LiveBarn" */
+	live?: boolean
 }
 
 /**
@@ -2372,16 +2434,22 @@ const IconLink = ({
 	label,
 	icon,
 	onClick,
+	className,
 }: {
 	href: string
 	label: string
 	icon: React.ReactNode
 	onClick?: React.MouseEventHandler<HTMLAnchorElement>
+	className?: string
 }) => {
 	return (
 		<Hint label={label}>
 			<a
-				className={cx("LiveBarnBadge", "LiveBarnBadge--compact")}
+				className={cx(
+					"LiveBarnBadge",
+					"LiveBarnBadge--compact",
+					className,
+				)}
 				href={href}
 				onClick={onClick}
 				aria-label={label}
@@ -2453,6 +2521,7 @@ export const LiveBarnBadge = ({
 	surfaceName,
 	title,
 	compact,
+	live,
 }: LiveBarnBadgeProps) => {
 	const [confirming, setConfirming] = React.useState(false)
 	const onClick = isLiveBarnVodExpired(href, new Date())
@@ -2469,16 +2538,20 @@ export const LiveBarnBadge = ({
 					label={title ?? surfaceName ?? "LiveBarn"}
 					icon={<CameraIcon />}
 					onClick={onClick}
+					className={cx(live && "LiveBarnBadge--live")}
 				/>
 			) : (
 				<Hint label={title}>
 					<Link
-						className="LiveBarnBadge"
+						className={cx(
+							"LiveBarnBadge",
+							live && "LiveBarnBadge--live",
+						)}
 						href={href}
 						onClick={onClick}
 					>
 						<CameraIcon />
-						{surfaceName ?? "LiveBarn"} ↗
+						{surfaceName ?? (live ? "Watch Now" : "LiveBarn")} ↗
 					</Link>
 				</Hint>
 			)}

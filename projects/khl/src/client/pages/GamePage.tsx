@@ -18,6 +18,7 @@ import {getGameEndsAt} from "../../shared/LeagueTime.js"
 import {Comparison} from "../Compare.js"
 import {
 	AsyncContent,
+	Card,
 	Hint,
 	Link,
 	LIVEBARN_TITLES,
@@ -194,9 +195,6 @@ const ResultView = ({game}: {game: GameResponse}) => {
 const PreviewView = ({game, now}: {game: GameResponse; now: Date}) => {
 	return (
 		<>
-			{!game.score && getGameState(game, now) !== "upcoming" && (
-				<Notice title={STRINGS.SCORESHEET_NOT_POSTED} />
-			)}
 			{/* How the teams compare this season, then their previous meetings */}
 			{game.form.away && game.form.home && (
 				<Comparison
@@ -347,6 +345,7 @@ const GameLiveBarnLinks = ({game, now}: {game: GameResponse; now: Date}) => {
 								? "live"
 								: "open"
 					](link.surfaceName)}
+					live={state === "live"}
 				/>
 			))}
 		</>
@@ -399,8 +398,7 @@ const PeriodTotals = ({game}: {game: GameResponse}) => {
 		},
 	]
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>Goals</h2>
+		<Card title="Goals">
 			<StatsTable
 				rows={[away, home]}
 				rowKey={(team) => team.id}
@@ -412,7 +410,7 @@ const PeriodTotals = ({game}: {game: GameResponse}) => {
 				rowKey={(team) => team.id}
 				columns={columns("shots")}
 			/>
-		</section>
+		</Card>
 	)
 }
 
@@ -460,10 +458,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 	}))
 
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Timeline-title")}>
-				Scoring and penalties
-			</h2>
+		<Card title="Scoring and penalties">
 			{byPeriod.length === 0 ? (
 				<p className="Detail-empty">No goals or penalties.</p>
 			) : (
@@ -506,7 +501,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 					</div>
 				))
 			)}
-		</section>
+		</Card>
 	)
 }
 

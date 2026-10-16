@@ -1,7 +1,7 @@
 import "./styles.css"
 import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
-import {createBrowserHistory, Location} from "history"
+import {Action, createBrowserHistory, History, Location} from "history"
 import * as React from "react"
 import {createRoot} from "react-dom/client"
 import {Helmet} from "react-helmet"
@@ -96,6 +96,7 @@ export const CurrentRoute = () => {
 		forceUpdate()
 		return unlisten
 	}, [context.history])
+	useScrollRestoration(context.history)
 
 	const location = context.history.location
 	const match = matchRoute(location.pathname) ?? {
@@ -103,6 +104,128 @@ export const CurrentRoute = () => {
 		params: {},
 	}
 	return renderRoute(match.route, match.params, location)
+}
+
+/** Stop moving to a position after this long, e.g. if the page never grows */
+const SCROLL_SETTLE_TIMEOUT_MS = 5000
+
+/** The key history gives entries it didn't create, e.g. a plain #anchor click */
+const UNKEYED_ENTRY = "default"
+
+type PendingScroll = {kind: "open"} | {kind: "restore"; y: number}
+
+/**
+ * Opening a page, by a link or by loading the site, scrolls to its #hash
+ * element if there is one and to its top otherwise. Query changes (e.g.
+ * picking a season) stay put. Back and forward return to where that page was
+ * scrolled: the browser's own restoration runs while the page is still
+ * loading and too short, so it lands near the top.
+ */
+function useScrollRestoration(history: History) {
+	// The first render opens the page the site loaded on
+	const pending = React.useRef<PendingScroll | null>({kind: "open"})
+
+	React.useEffect(() => {
+		window.history.scrollRestoration = "manual"
+		// The entry the site loaded on is unkeyed too, like every #anchor
+		// click; give it a key so its position can't be confused with theirs
+		if (history.location.key === UNKEYED_ENTRY) {
+			const {pathname, search, hash, state} = history.location
+			history.replace({pathname, search, hash}, state)
+		}
+		// Where each history entry was last scrolled, by location.key
+		const positions = new Map<string, number>()
+		let current = history.location
+		const unlisten = history.listen(({action, location}) => {
+			// Not rendered yet, so this is still the previous page's position
+			if (current.key !== UNKEYED_ENTRY) {
+				positions.set(current.key, window.scrollY)
+			}
+			pending.current = toPendingScroll(
+				action,
+				current,
+				location,
+				positions,
+			)
+			current = location
+		})
+		return () => {
+			unlisten()
+			window.history.scrollRestoration = "auto"
+		}
+	}, [history])
+
+	// After the new page renders, before it paints
+	const {key} = history.location
+	React.useLayoutEffect(() => {
+		const scroll = pending.current
+		pending.current = null
+		if (scroll?.kind === "open") {
+			const id = safeDecodeURIComponent(window.location.hash.slice(1))
+			if (id) {
+				return settleScroll(() => {
+					document.getElementById(id)?.scrollIntoView()
+					return false
+				})
+			}
+			window.scrollTo(0, 0)
+		} else if (scroll?.kind === "restore") {
+			const {y} = scroll
+			return settleScroll(() => {
+				window.scrollTo(0, y)
+				return Math.abs(window.scrollY - y) < 1
+			})
+		}
+	}, [key])
+}
+
+function toPendingScroll(
+	action: Action,
+	from: Location,
+	to: Location,
+	positions: Map<string, number>,
+): PendingScroll | null {
+	if (action === Action.Pop) {
+		const y = positions.get(to.key)
+		return y === undefined ? {kind: "open"} : {kind: "restore", y}
+	}
+	if (action === Action.Push) {
+		const opensPage =
+			to.pathname !== from.pathname ||
+			(to.hash !== "" && to.hash !== from.hash)
+		return opensPage ? {kind: "open"} : null
+	}
+	return null
+}
+
+/**
+ * Runs `scroll` now and again each time the page resizes, since content
+ * still loading can be above the target or make room for it. Stops once it
+ * returns true, the person scrolls, or after a timeout. Returns a cancel
+ * function.
+ */
+function settleScroll(scroll: () => boolean): () => void {
+	const tryScroll = () => {
+		if (scroll()) {
+			stop()
+		}
+	}
+	const observer = new ResizeObserver(tryScroll)
+	const timer = setTimeout(() => stop(), SCROLL_SETTLE_TIMEOUT_MS)
+	const userEvents = ["wheel", "touchstart", "keydown", "mousedown"] as const
+	function stop() {
+		observer.disconnect()
+		clearTimeout(timer)
+		for (const type of userEvents) {
+			window.removeEventListener(type, stop)
+		}
+	}
+	for (const type of userEvents) {
+		window.addEventListener(type, stop, {passive: true})
+	}
+	observer.observe(document.body)
+	tryScroll()
+	return stop
 }
 
 function matchRoute(

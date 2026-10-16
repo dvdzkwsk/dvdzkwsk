@@ -16,6 +16,7 @@ import {KHLSeason, KHLTeam} from "../../shared/KHLJson.js"
 import {Comparison} from "../Compare.js"
 import {
 	AsyncContent,
+	Card,
 	ErrorState,
 	Hint,
 	Link,
@@ -23,6 +24,7 @@ import {
 	PageTitle,
 	Picker,
 	RosterPanels,
+	Section,
 	TeamAvatar,
 } from "../Components.js"
 import {GameCards, HeadToHeadGames, TeamForm} from "../Games.js"
@@ -278,8 +280,7 @@ const RecentComparisons = ({
 		return null
 	}
 	return (
-		<section className="RecentComparisons">
-			<h2 className="SectionLabel">Recent comparisons</h2>
+		<Card title="Recent comparisons" flush>
 			<ul className="RecentComparisons-list">
 				{comparisons.map((comparison) => {
 					const {a, b} = comparison
@@ -306,7 +307,7 @@ const RecentComparisons = ({
 					)
 				})}
 			</ul>
-		</section>
+		</Card>
 	)
 }
 
@@ -381,22 +382,14 @@ const MatchupContent = ({
 				return (
 					<>
 						{matchup.upcoming.length > 0 && (
-							<section>
-								<h2
-									className={cx(
-										"SectionLabel",
-										"Detail-section-title",
-									)}
-								>
-									Next meeting
-								</h2>
+							<Section title="Next meeting">
 								<GameCards
 									games={matchup.upcoming}
 									seasonId={matchup.currentSeason.id}
 									now={now}
 									limit={1}
 								/>
-							</section>
+							</Section>
 						)}
 						{/* The same sections as a game's preview */}
 						<Comparison

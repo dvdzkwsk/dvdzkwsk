@@ -2,6 +2,7 @@ import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	AsyncContent,
+	Card,
 	Hint,
 	Link,
 	LiveBarnBadge,
@@ -41,10 +42,11 @@ export const ActivityFeed = ({
 	now: Date
 }) => {
 	return (
-		<section className={cx("Detail-panel", "Activity")}>
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Recent activity
-			</h2>
+		<Card
+			title="Recent activity"
+			className="Activity"
+			panelClassName="Activity-panel"
+		>
 			{/* Scrolls once it's taller than the past games beside it */}
 			<div className="Activity-scroll">
 				<AsyncContent
@@ -76,7 +78,7 @@ export const ActivityFeed = ({
 					}
 				</AsyncContent>
 			</div>
-		</section>
+		</Card>
 	)
 }
 

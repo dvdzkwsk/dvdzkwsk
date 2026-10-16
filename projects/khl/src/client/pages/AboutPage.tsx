@@ -24,19 +24,9 @@ const FEATURES: Feature[] = [
 		art: PlayerArt,
 	},
 	{
-		title: "Box scores",
-		text: "Every game's goals and shots by period, plus each team's lineup and what every player did.",
-		art: BoxScoreArt,
-	},
-	{
 		title: "Player badges",
 		text: "Badges on player profiles celebrate milestones, playing style, and a few fun extras.",
 		art: BadgesArt,
-	},
-	{
-		title: "Improved filters",
-		text: "Filter games by location, and pick several locations or divisions at once.",
-		art: FiltersArt,
 	},
 	{
 		title: "Activity feed",
@@ -62,6 +52,16 @@ const FEATURES: Feature[] = [
 			</>
 		),
 		art: SearchArt,
+	},
+	{
+		title: "Box scores",
+		text: "Every game's goals and shots by period, plus each team's lineup and what every player did.",
+		art: BoxScoreArt,
+	},
+	{
+		title: "Improved filters",
+		text: "Filter games by location, and pick several locations or divisions at once.",
+		art: FiltersArt,
 	},
 ]
 

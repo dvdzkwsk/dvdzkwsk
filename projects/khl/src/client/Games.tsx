@@ -1143,23 +1143,42 @@ export const GameList = ({
 	return (
 		<div className="GameList-days">
 			{[...days.values()].map((dayGames) => (
-				<section key={dayGames[0]!.game.startsAt}>
-					<h2 className={cx("GameList-day-title", "SectionLabel")}>
-						{formatGameDay(dayGames[0]!.game.startsAt, now)} ·{" "}
-						{dayGames.length}{" "}
-						{dayGames.length === 1 ? "game" : "games"}
-					</h2>
-					<div className="GameList-panel">
-						<GameTable
-							rows={dayGames.map((g) =>
-								toGameTableRow(g, seasonId, now),
-							)}
-							now={now}
-						/>
-					</div>
-				</section>
+				<GameTableSection
+					key={dayGames[0]!.game.startsAt}
+					title={`${formatGameDay(dayGames[0]!.game.startsAt, now)} · ${dayGames.length} ${dayGames.length === 1 ? "game" : "games"}`}
+					rows={dayGames.map((g) => toGameTableRow(g, seasonId, now))}
+					now={now}
+				/>
 			))}
 		</div>
+	)
+}
+
+/**
+ * A GameTable in a panel, titled above it, as the home page lists each day.
+ * Shows `emptyText` when it has no rows.
+ */
+export const GameTableSection = ({
+	title,
+	emptyText,
+	...tableProps
+}: React.ComponentProps<typeof GameTable> & {
+	title: string
+	emptyText?: string
+}) => {
+	return (
+		<section>
+			<h2 className={cx("GameTableSection-title", "SectionLabel")}>
+				{title}
+			</h2>
+			<div className="GameTableSection-panel">
+				{tableProps.rows.length === 0 ? (
+					<p className="GameTableSection-empty">{emptyText}</p>
+				) : (
+					<GameTable {...tableProps} />
+				)}
+			</div>
+		</section>
 	)
 }
 

@@ -1360,24 +1360,24 @@ table {
    goes, and the teams share what's left, their names ending in an ellipsis.
    The selectors outweigh GameTable's own min-widths. */
 @container (max-width: 760px) {
-	:is(.GameTableCard, .GameList-panel) table.StatsTable.GameTable {
+	:is(.GameTableCard, .GameTableSection-panel) table.StatsTable.GameTable {
 		min-width: 0;
 	}
 
-	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--rink {
+	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--rink {
 		display: none;
 	}
 
-	:is(.GameTableCard, .GameList-panel)
+	:is(.GameTableCard, .GameTableSection-panel)
 		.GameTable--scoreboard
 		:is(.GameTable-col--away, .GameTable-col--home),
-	:is(.GameTableCard, .GameList-panel)
+	:is(.GameTableCard, .GameTableSection-panel)
 		.GameTable--scoreboard:not(:has(.GameTable-col--rink))
 		.GameTable-col--links {
 		width: auto;
 	}
 
-	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--links {
+	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--links {
 		width: calc(var(--icon-links-width) + var(--spacing) * 6);
 	}
 }
@@ -1385,12 +1385,12 @@ table {
 /* Narrower still (a phone): the links and logos go too; the game page the
    row links to has the scoresheet and replays */
 @container (max-width: 520px) {
-	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--links,
-	:is(.GameTableCard, .GameList-panel) .GameTable .TeamAvatar {
+	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--links,
+	:is(.GameTableCard, .GameTableSection-panel) .GameTable .TeamAvatar {
 		display: none;
 	}
 
-	:is(.GameTableCard, .GameList-panel) .GameTable .GameTable-col--score {
+	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--score {
 		width: calc(5.5rem + var(--spacing) * 2);
 	}
 }
@@ -1683,7 +1683,7 @@ table {
 	gap: calc(var(--spacing) * 5);
 }
 
-.GameList-day-title {
+.GameTableSection-title {
 	margin-bottom: calc(var(--spacing) * 2);
 }
 
@@ -4548,13 +4548,20 @@ a.Compare-chip:hover {
 }
 
 /* A day's games on the home page, in a card like a rink page's tables */
-.GameList-panel {
+.GameTableSection-panel {
 	container-type: inline-size;
 	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 6);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
 	border-radius: var(--radius);
 	box-shadow: var(--shadow-sm);
+}
+
+.GameTableSection-empty {
+	margin: 0;
+	padding: calc(var(--spacing) * 2) 0;
+	color: var(--muted-fg);
+	font-size: var(--text-base);
 }
 
 /* Each day is its own table; fixed column widths line them all up. Narrow
@@ -6788,7 +6795,7 @@ a.Compare-chip:hover {
 		padding-inline: calc(var(--spacing) * 3);
 	}
 
-	.GameList-panel {
+	.GameTableSection-panel {
 		padding-inline: calc(var(--spacing) * 1);
 	}
 

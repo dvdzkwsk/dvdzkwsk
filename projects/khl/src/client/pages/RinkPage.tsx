@@ -14,7 +14,7 @@ import {
 } from "../Components.js"
 import {
 	GameSummary,
-	GameTableCard,
+	GameTableSection,
 	getRinkStatus,
 	toGameTableRow,
 	toReplayLinks,
@@ -117,7 +117,7 @@ const RinkPage = ({params}: RouteProps) => {
 								<Notice title="LiveBarn doesn't have a feed for this rink" />
 							)}
 
-							<GameTableCard
+							<GameTableSection
 								title="Upcoming games"
 								emptyText="No games scheduled."
 								// About five games, then they scroll inside the card
@@ -135,7 +135,7 @@ const RinkPage = ({params}: RouteProps) => {
 							/>
 
 							{recent.length > 0 && (
-								<GameTableCard
+								<GameTableSection
 									title="Recent games"
 									emptyText="No games played yet."
 									rows={recent.map(({game, livebarn}) => ({

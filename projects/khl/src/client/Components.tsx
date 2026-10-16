@@ -1539,14 +1539,8 @@ export const SiteHeader = () => {
 	return (
 		<header className="SiteHeader">
 			<div className="SiteHeader-inner">
-				{/* "KHL" then the mark, which stands in for the "+" */}
-				<Link
-					className="SiteHeader-brand"
-					href="/"
-					aria-label={STRINGS.PRODUCT_NAME}
-				>
-					{STRINGS.LOGO_TEXT}
-					<SpeedPlusMark />
+				<Link className="SiteHeader-brand" href="/">
+					<Logo />
 				</Link>
 				<SiteSearch />
 				<div className="SiteHeader-end">
@@ -1560,18 +1554,22 @@ export const SiteHeader = () => {
 }
 
 /**
- * The KHL+ mark: a slanted plus with skate spray behind it. Keep in sync with
- * static/favicon.svg.
+ * The KHL+ logo: "KHL" in italics, then the slanted plus from the favicon
+ * (static/favicon.svg, which adds skate spray behind it). Sized and colored
+ * by its parent's text; screen readers hear "KHL+".
  */
-const SpeedPlusMark = () => {
+const Logo = () => {
 	return (
-		<svg className="SpeedPlusMark" viewBox="0 0 32 32" aria-hidden="true">
-			<g transform="skewX(-14) translate(5 0)">
-				<rect x="14.5" y="4" width="7" height="24" rx="2" />
-				<rect x="6" y="12.5" width="24" height="7" rx="2" />
-			</g>
-			<path className="SpeedPlusMark-spray" d="M1 9.5h6M2.5 22.5h5" />
-		</svg>
+		<span className="Logo" role="img" aria-label={STRINGS.PRODUCT_NAME}>
+			{STRINGS.LOGO_TEXT}
+			{/* Cropped to the plus; same shapes as the favicon */}
+			<svg className="Logo-plus" viewBox="6 4 26 24" aria-hidden="true">
+				<g transform="skewX(-14) translate(5 0)">
+					<rect x="14.5" y="4" width="7" height="24" rx="2" />
+					<rect x="6" y="12.5" width="24" height="7" rx="2" />
+				</g>
+			</svg>
+		</span>
 	)
 }
 
@@ -1657,7 +1655,9 @@ export const SiteFooter = () => {
 	return (
 		<footer className="SiteFooter">
 			<div className="SiteFooter-inner">
-				<span className="SiteFooter-brand">{STRINGS.PRODUCT_NAME}</span>
+				<span className="SiteFooter-brand">
+					<Logo />
+				</span>
 				<nav className="SiteFooter-nav">
 					{FOOTER_LINKS.map((item) => (
 						<Link

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 	<!-- The KHL+ mark: a slanted plus with skate spray behind it. Keep in
-	     sync with SpeedPlusMark in src/client/Components.tsx. -->
+	     sync with Logo in src/client/Components.tsx. -->
 	<style>
 		.mark { fill: #2a78d6; }
 		.spray { stroke: #2a78d6; }

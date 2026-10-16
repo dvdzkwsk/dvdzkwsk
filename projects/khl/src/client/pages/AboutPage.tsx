@@ -15,11 +15,11 @@ interface Feature {
 const FEATURES: Feature[] = [
 	{
 		title: "Jump straight to LiveBarn",
-		text: "Open any game on LiveBarn, live or after the fact, or tap a goal or penalty to replay that moment.",
+		text: "Easily open any game on LiveBarn, or jump straight to a key moment.",
 		art: ReplayArt,
 	},
 	{
-		title: "Improved player profiles",
+		title: "Consolidated player profiles",
 		text: "The league site splits you into a separate profile for every team you join. We merge them into one, with career stats across all your teams.",
 		art: PlayerArt,
 	},
@@ -30,7 +30,7 @@ const FEATURES: Feature[] = [
 	},
 	{
 		title: "Player badges",
-		text: "Profiles earn badges for milestones like a first or 100th game, and for steering clear of (or living in) the penalty box.",
+		text: "Badges on player profiles celebrate milestones, playing style, and a few fun extras.",
 		art: BadgesArt,
 	},
 	{
@@ -39,9 +39,9 @@ const FEATURES: Feature[] = [
 		art: FiltersArt,
 	},
 	{
-		title: "Play-by-play recaps",
-		text: "Goals and penalties in the order they happened, with the score after each goal.",
-		art: TimelineArt,
+		title: "Activity feed",
+		text: "Every player and team page shows their latest goals, assists, and penalties, newest first, each a tap away from its replay.",
+		art: ActivityArt,
 	},
 	{
 		title: "Compare any two teams",
@@ -325,78 +325,62 @@ function ReplayArt() {
 	)
 }
 
-/** A final score over three periods, goals above and below the line */
-function TimelineArt() {
-	const goals: [x: number, side: "a" | "b"][] = [
-		[36, "a"],
-		[64, "b"],
-		[112, "a"],
-		[176, "b"],
-		[206, "a"],
+/** Goals, assists, and penalties, newest first, each with a replay */
+function ActivityArt() {
+	const events: [y: number, cls: string, w: number][] = [
+		[20, "AboutArt-win", 64],
+		[44, "AboutArt-a", 48],
+		[68, "AboutArt-warn", 72],
+		[92, "AboutArt-win", 56],
 	]
 	return (
 		<Art>
 			<rect
-				className="AboutArt-a"
-				x="70"
-				y="14"
-				width="10"
-				height="10"
-				rx="2"
+				className="AboutArt-card"
+				x="16"
+				y="8"
+				width="208"
+				height="104"
+				rx="8"
 			/>
-			<text className="AboutArt-score" x="120" y="27" textAnchor="middle">
-				3 – 2
-			</text>
-			<rect
-				className="AboutArt-b"
-				x="160"
-				y="14"
-				width="10"
-				height="10"
-				rx="2"
-			/>
-			<rect
-				className="AboutArt-track"
-				x="12"
-				y="74"
-				width="216"
-				height="4"
-				rx="2"
-			/>
-			<rect
-				className="AboutArt-divider"
-				x="83"
-				y="64"
-				width="2"
-				height="24"
-			/>
-			<rect
-				className="AboutArt-divider"
-				x="155"
-				y="64"
-				width="2"
-				height="24"
-			/>
-			{goals.map(([x, side]) => {
-				const y = side === "a" ? 56 : 96
-				return (
-					<g key={x}>
-						<rect
-							className="AboutArt-divider"
-							x={x - 0.75}
-							y={side === "a" ? y : 78}
-							width="1.5"
-							height="18"
-						/>
-						<circle
-							className={`AboutArt-${side}`}
-							cx={x}
-							cy={y}
-							r="6"
-						/>
-					</g>
-				)
-			})}
+			{events.map(([y, cls, w]) => (
+				<g key={y}>
+					<rect
+						className={cls}
+						x="28"
+						y={y - 5}
+						width="26"
+						height="10"
+						rx="5"
+					/>
+					<rect
+						className="AboutArt-muted"
+						x="64"
+						y={y - 2}
+						width={w}
+						height="4"
+						rx="2"
+					/>
+					<rect
+						className="AboutArt-track"
+						x="164"
+						y={y - 2}
+						width="18"
+						height="4"
+						rx="2"
+					/>
+					<circle
+						className="AboutArt-outline"
+						cx="202"
+						cy={y}
+						r="7"
+					/>
+					<path
+						className="AboutArt-muted"
+						d={`M199.5 ${y - 3.5} L205.5 ${y} L199.5 ${y + 3.5} Z`}
+					/>
+				</g>
+			))}
 		</Art>
 	)
 }

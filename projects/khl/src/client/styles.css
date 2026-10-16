@@ -4912,8 +4912,8 @@ a.Compare-chip:hover {
 	fill: var(--panel-border);
 }
 
-.AboutArt-divider {
-	fill: var(--subtle-fg);
+.AboutArt-warn {
+	fill: var(--warn-fg);
 }
 
 .AboutArt-a {
@@ -5026,19 +5026,12 @@ a.Compare-chip:hover {
 	opacity: 0.5;
 }
 
-.AboutArt-score,
 .AboutArt-rank,
 .AboutArt-key,
 .AboutArt-cell,
 .AboutArt-total {
 	font-family: var(--font-sans);
 	font-weight: var(--weight-bold);
-}
-
-.AboutArt-score {
-	font-size: 20px;
-	letter-spacing: -0.02em;
-	fill: var(--site-fg);
 }
 
 .AboutArt-rank {

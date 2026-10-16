@@ -1539,9 +1539,14 @@ export const SiteHeader = () => {
 	return (
 		<header className="SiteHeader">
 			<div className="SiteHeader-inner">
-				<Link className="SiteHeader-brand" href="/">
+				{/* "KHL" then the mark, which stands in for the "+" */}
+				<Link
+					className="SiteHeader-brand"
+					href="/"
+					aria-label={STRINGS.PRODUCT_NAME}
+				>
+					{STRINGS.LOGO_TEXT}
 					<SpeedPlusMark />
-					{STRINGS.PRODUCT_NAME}
 				</Link>
 				<SiteSearch />
 				<div className="SiteHeader-end">

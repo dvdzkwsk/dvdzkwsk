@@ -3825,7 +3825,7 @@ a.Compare-chip:hover {
 	flex: none;
 	display: inline-flex;
 	align-items: center;
-	gap: calc(var(--spacing) * 1.5);
+	gap: calc(var(--spacing) * 1);
 	font-weight: var(--weight-bold);
 	letter-spacing: -0.02em;
 	color: var(--site-fg);
@@ -3835,11 +3835,12 @@ a.Compare-chip:hover {
 	text-decoration: none;
 }
 
-/* Sized to the brand's text; the favicon (static/favicon.svg) is the same */
+/* The "+" after "KHL", sized to the text; the favicon (static/favicon.svg)
+   is the same mark */
 .SpeedPlusMark {
 	flex: none;
-	width: 22px;
-	height: 22px;
+	width: 20px;
+	height: 20px;
 	fill: var(--brand);
 }
 

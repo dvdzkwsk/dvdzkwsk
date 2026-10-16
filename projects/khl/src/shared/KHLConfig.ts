@@ -2,6 +2,8 @@
 
 export const STRINGS = {
 	PRODUCT_NAME: "KHL+",
+	/** The header logo's text; the mark after it is the "+" */
+	LOGO_TEXT: "KHL",
 	/** The game page's view toggle */
 	GAME_PREVIEW: "Game Preview",
 	GAME_RESULT: "Game Result",

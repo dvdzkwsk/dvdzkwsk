@@ -1540,6 +1540,7 @@ export const SiteHeader = () => {
 		<header className="SiteHeader">
 			<div className="SiteHeader-inner">
 				<Link className="SiteHeader-brand" href="/">
+					<SpeedPlusMark />
 					{STRINGS.PRODUCT_NAME}
 				</Link>
 				<SiteSearch />
@@ -1550,6 +1551,22 @@ export const SiteHeader = () => {
 				<SiteMenu />
 			</div>
 		</header>
+	)
+}
+
+/**
+ * The KHL+ mark: a slanted plus with skate spray behind it. Keep in sync with
+ * static/favicon.svg.
+ */
+const SpeedPlusMark = () => {
+	return (
+		<svg className="SpeedPlusMark" viewBox="0 0 32 32" aria-hidden="true">
+			<g transform="skewX(-14) translate(5 0)">
+				<rect x="14.5" y="4" width="7" height="24" rx="2" />
+				<rect x="6" y="12.5" width="24" height="7" rx="2" />
+			</g>
+			<path className="SpeedPlusMark-spray" d="M1 9.5h6M2.5 22.5h5" />
+		</svg>
 	)
 }
 

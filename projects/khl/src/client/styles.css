@@ -72,6 +72,8 @@
 	/* The two sides of a comparison (validated as a pair for color vision
 	   deficiency and contrast on --panel-bg) */
 	--team-a: #2a78d6;
+	/* The KHL+ mark; matches static/favicon.svg */
+	--brand: #2a78d6;
 	--team-b: #eb6834;
 	--ice-shine: #cfe3fa; /* fresh ice behind the Zamboni */
 
@@ -140,6 +142,7 @@
 	--tie: #a1a1aa;
 	--tie-bg: #24272d;
 	--team-a: #3987e5;
+	--brand: #3987e5;
 	--team-b: #d95926;
 	--ice-shine: #1b3550;
 
@@ -3820,6 +3823,9 @@ a.Compare-chip:hover {
 
 .SiteHeader-brand {
 	flex: none;
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
 	font-weight: var(--weight-bold);
 	letter-spacing: -0.02em;
 	color: var(--site-fg);
@@ -3827,6 +3833,22 @@ a.Compare-chip:hover {
 
 .SiteHeader-brand:hover {
 	text-decoration: none;
+}
+
+/* Sized to the brand's text; the favicon (static/favicon.svg) is the same */
+.SpeedPlusMark {
+	flex: none;
+	width: 22px;
+	height: 22px;
+	fill: var(--brand);
+}
+
+.SpeedPlusMark-spray {
+	fill: none;
+	stroke: var(--brand);
+	stroke-opacity: 0.45;
+	stroke-width: 2.4;
+	stroke-linecap: round;
 }
 
 .SiteNav {

@@ -25,7 +25,7 @@ const FEATURES: Feature[] = [
 	},
 	{
 		title: "Player badges",
-		text: "Badges on player profiles celebrate milestones, playing style, and a few fun extras.",
+		text: "Badges on your profile celebrate your time in the KHL. The more you play, the more you collect.",
 		art: BadgesArt,
 	},
 	{

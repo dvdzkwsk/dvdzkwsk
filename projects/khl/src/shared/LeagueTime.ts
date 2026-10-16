@@ -74,6 +74,56 @@ export function isGameInProgress(game: {startsAt: string}, now: Date): boolean {
 }
 
 /**
+ * Wall-clock time for `clockMs` of game clock in period `n` (1-based):
+ * stop-time periods run longer than their clock, by an estimated factor
+ */
+function toWallMs(n: number, clockMs: number): number {
+	return n >= LEAGUE.FIRST_STOP_TIME_PERIOD
+		? clockMs * LEAGUE.STOP_TIME_FACTOR
+		: clockMs
+}
+
+/** The parts of a game, in order, that getGamePhase estimates */
+export type GamePhase = "warmup" | "1st" | "2nd" | "3rd" | "late"
+
+/**
+ * Roughly which part of a game is being played at `now`, or null outside its
+ * ice slot. Walks forward from the scheduled start like getGameEventClockTime:
+ * warmup until puck drop, then each period and the intermission after it.
+ * "late" once the third should be over: overtime, a shootout, or a game
+ * running long.
+ */
+export function getGamePhase(
+	game: {startsAt: string},
+	now: Date,
+): GamePhase | null {
+	if (!isGameInProgress(game, now)) {
+		return null
+	}
+	const {PERIOD_MINUTES, WARMUP_MINUTES, INTERMISSION_MINUTES} = LEAGUE
+	let at = Date.parse(game.startsAt) + WARMUP_MINUTES * MINUTE_MS
+	if (now.getTime() < at) {
+		return "warmup"
+	}
+	const periods = ["1st", "2nd", "3rd"] as const
+	for (const [i, period] of periods.entries()) {
+		at += toWallMs(i + 1, PERIOD_MINUTES * MINUTE_MS)
+		at += INTERMISSION_MINUTES * MINUTE_MS
+		if (now.getTime() < at) {
+			return period
+		}
+	}
+	return "late"
+}
+
+/** How far through its ice slot a game is at `now`, from 0 to 1 */
+export function getGameProgress(game: {startsAt: string}, now: Date): number {
+	const start = Date.parse(game.startsAt)
+	const end = getGameEndsAt(game).getTime()
+	return Math.min(1, Math.max(0, (now.getTime() - start) / (end - start)))
+}
+
+/**
  * Estimates when a scoresheet event (period, and clock time remaining)
  * happened, as a league-local date and time, or null for shootouts and
  * unparseable times.
@@ -91,19 +141,7 @@ export function getGameEventClockTime(
 	period: string,
 	timeRemaining: string,
 ): {localDate: string; localTime: string} | null {
-	const {
-		PERIOD_MINUTES,
-		WARMUP_MINUTES,
-		INTERMISSION_MINUTES,
-		FIRST_STOP_TIME_PERIOD,
-		STOP_TIME_FACTOR,
-	} = LEAGUE
-	// Wall-clock time for `clockMs` of game clock in period `n`
-	const toWallMs = (n: number, clockMs: number) => {
-		return n >= FIRST_STOP_TIME_PERIOD
-			? clockMs * STOP_TIME_FACTOR
-			: clockMs
-	}
+	const {PERIOD_MINUTES, WARMUP_MINUTES, INTERMISSION_MINUTES} = LEAGUE
 	const clock = /^(\d+):(\d{2})$/.exec(timeRemaining)
 	// "1st", "2nd", "3rd", then "OT"; a shootout has no clock
 	const periodNumber = period === "OT" ? 4 : parseInt(period, 10)

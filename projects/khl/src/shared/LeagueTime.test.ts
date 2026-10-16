@@ -3,6 +3,8 @@ import {
 	addDaysToKey,
 	getDaysBetween,
 	getGameEventClockTime,
+	getGamePhase,
+	getGameProgress,
 } from "./LeagueTime.js"
 
 describe("day keys", () => {
@@ -67,5 +69,44 @@ describe("getGameEventClockTime", () => {
 		expect(at("SO", "")).toBeNull()
 		expect(at("1st", "")).toBeNull()
 		expect(at("1st", "16")).toBeNull()
+	})
+})
+
+/** `minutes` after the same game's scheduled start */
+const after = (minutes: number) => {
+	return new Date(Date.parse(game.startsAt) + minutes * 60_000)
+}
+
+describe("getGamePhase", () => {
+	test("warmup until puck drop", () => {
+		expect(getGamePhase(game, after(0))).toBe("warmup")
+		expect(getGamePhase(game, after(2.9))).toBe("warmup")
+	})
+
+	test("each period runs through the intermission after it", () => {
+		expect(getGamePhase(game, after(3))).toBe("1st")
+		// 3 + 18 + 1
+		expect(getGamePhase(game, after(21.9))).toBe("1st")
+		expect(getGamePhase(game, after(22))).toBe("2nd")
+		expect(getGamePhase(game, after(41))).toBe("3rd")
+	})
+
+	test("late once the stop-time 3rd should be over", () => {
+		// 41 + 18 * 1.25 + 1 = 64.5
+		expect(getGamePhase(game, after(64.4))).toBe("3rd")
+		expect(getGamePhase(game, after(64.5))).toBe("late")
+	})
+
+	test("null outside the ice slot", () => {
+		expect(getGamePhase(game, after(-1))).toBeNull()
+		expect(getGamePhase(game, after(75))).toBeNull()
+	})
+})
+
+describe("getGameProgress", () => {
+	test("the share of the 75-minute slot that's gone by, kept in range", () => {
+		expect(getGameProgress(game, after(-10))).toBe(0)
+		expect(getGameProgress(game, after(30))).toBe(0.4)
+		expect(getGameProgress(game, after(90))).toBe(1)
 	})
 })

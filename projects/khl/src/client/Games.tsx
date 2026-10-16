@@ -56,6 +56,9 @@ import {
 	getDaysBetween,
 	getGameEndsAt,
 	getGameEventClockTime,
+	GamePhase,
+	getGamePhase,
+	getGameProgress,
 	getLeagueDayKey,
 	isGameInProgress,
 } from "../shared/LeagueTime.js"
@@ -82,6 +85,8 @@ interface GameCardsProps {
 	now: Date
 	limit?: number
 	emptyMessage?: string
+	/** Every rink's schedule, to show what's on next at each game's rink */
+	rinks?: Rink[]
 }
 
 /** Cards for games that haven't finished, soonest (and live) first. */
@@ -91,6 +96,7 @@ export const GameCards = ({
 	now,
 	limit,
 	emptyMessage = "No upcoming games scheduled.",
+	rinks,
 }: GameCardsProps) => {
 	const visible = games
 		.filter(({game}) => getGameEndsAt(game) > now)
@@ -107,10 +113,22 @@ export const GameCards = ({
 					game={game}
 					seasonId={seasonId}
 					now={now}
+					following={getFollowingGame(
+						rinks?.find((r) => r.arenaId === rink.arenaId),
+						game,
+					)}
 				/>
 			))}
 		</div>
 	)
+}
+
+/** The next game at a rink after `game`, from its schedule (soonest first) */
+export function getFollowingGame(
+	rink: Rink | undefined,
+	game: RinkGame,
+): RinkGame | null {
+	return rink?.games.find((g) => g.startsAt > game.startsAt) ?? null
 }
 
 interface RinkCardProps {
@@ -119,10 +137,18 @@ interface RinkCardProps {
 	game: RinkGame | null
 	seasonId: string
 	now: Date
+	/** The rink's next game after this one, if known */
+	following?: RinkGame | null
 }
 
 /** A game at a rink: when, who, which division, and how to watch. */
-export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
+export const RinkCard = ({
+	rink,
+	game,
+	seasonId,
+	now,
+	following,
+}: RinkCardProps) => {
 	const live = game !== null && isGameInProgress(game, now)
 	return (
 		<article className={cx("RinkCard", live && "RinkCard--live")}>
@@ -152,7 +178,12 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
 			</header>
 
 			{game ? (
-				<GameSummary game={game} seasonId={seasonId} now={now} />
+				<GameSummary
+					game={game}
+					seasonId={seasonId}
+					now={now}
+					following={following}
+				/>
 			) : (
 				<div className="RinkCard-empty">No games scheduled</div>
 			)}
@@ -162,18 +193,24 @@ export const RinkCard = ({rink, game, seasonId, now}: RinkCardProps) => {
 
 /**
  * A game's time (or LIVE, linking to the rink's feed), teams and their
- * divisions, and when it starts or started. The body of a RinkCard; also used on its own.
+ * divisions, and when it starts or started. Beside that, a live game's
+ * estimated period, or the rink's next game after this one. The body of a
+ * RinkCard; also used on its own.
  */
 export const GameSummary = ({
 	game,
 	seasonId,
 	now,
+	following,
 }: {
 	game: RinkGame
 	seasonId: string
 	now: Date
+	/** The rink's next game after this one, if known */
+	following?: RinkGame | null
 }) => {
 	const live = isGameInProgress(game, now)
+	const phase = getGamePhase(game, now)
 	const [clock, meridiem] = formatGameTime(game.startsAt).split(" ")
 	return (
 		<>
@@ -214,7 +251,32 @@ export const GameSummary = ({
 					/>
 				</ul>
 			</div>
-			<footer className="RinkCard-footer">
+			<footer
+				className={cx(
+					"RinkCard-footer",
+					live && "RinkCard-footer--progress",
+				)}
+				style={
+					live
+						? ({
+								"--RinkCard-progress": `${getGameProgress(game, now) * 100}%`,
+							} as React.CSSProperties)
+						: undefined
+				}
+			>
+				{/* Live: when it started, then its estimated period. Otherwise
+				    what's on after it, then when it starts. */}
+				{!live && following && (
+					<Hint
+						label={`Next here: ${following.awayTeam.name} @ ${following.homeTeam.name}, ${formatGameDay(following.startsAt, now)} at ${formatGameTime(following.startsAt)}`}
+					>
+						<span className="RinkCard-note">
+							Next: {formatFollowingTime(following.startsAt, now)}{" "}
+							· {following.awayTeam.name} @{" "}
+							{following.homeTeam.name}
+						</span>
+					</Hint>
+				)}
 				{/* The card's link to the game; its hit area covers the card */}
 				<Link
 					className={cx("StretchedLink", live && "RinkCard-started")}
@@ -225,9 +287,39 @@ export const GameSummary = ({
 						? `started ${formatGameTime(game.startsAt)}`
 						: formatRelative(game.startsAt, now)}
 				</Link>
+				{phase && (
+					<Hint label="Estimated from the start time; the league doesn't post a live clock">
+						<span
+							className={cx(
+								"RinkCard-note",
+								"RinkCard-note--live",
+							)}
+						>
+							{GAME_PHASE_LABELS[phase]}
+						</span>
+					</Hint>
+				)}
 			</footer>
 		</>
 	)
+}
+
+/** What a live game's footer says it's probably on */
+const GAME_PHASE_LABELS: Record<GamePhase, string> = {
+	warmup: "Warming up",
+	"1st": "~1st period",
+	"2nd": "~2nd period",
+	"3rd": "~3rd period",
+	late: "Wrapping up",
+}
+
+/** "10:15 PM" later today, "Tomorrow", or "Oct 22": short, so the teams fit */
+function formatFollowingTime(startsAt: string, now: Date): string {
+	const day = formatGameDay(startsAt, now)
+	if (day === "Today") {
+		return formatGameTime(startsAt)
+	}
+	return day === "Tomorrow" ? day : formatShortGameDate(startsAt, now)
 }
 
 const RinkCardTeam = ({

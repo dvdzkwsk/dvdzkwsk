@@ -1243,15 +1243,53 @@ table {
 	color: var(--muted-fg);
 }
 
+/* A live game's estimated period, or what's on next at the rink | when it
+   starts or started */
 .RinkCard-footer {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: space-between;
 	gap: calc(var(--spacing) * 2);
 	padding-top: calc(var(--spacing) * 3);
 	border-top: 1px solid var(--panel-border);
 	font-size: var(--text-sm);
 	color: var(--muted-fg);
+}
+
+/* Whatever's last sits at the right end, even alone */
+.RinkCard-footer > :last-child {
+	margin-left: auto;
+}
+
+.RinkCard-footer > a {
+	flex: none;
+}
+
+/* Live: the divider fills in red as the game's ice slot goes by */
+.RinkCard-footer--progress {
+	border-top-color: transparent;
+	background:
+		linear-gradient(var(--live), var(--live)) 0 0 / var(--RinkCard-progress)
+			2px no-repeat border-box,
+		linear-gradient(var(--panel-border), var(--panel-border)) 0 0 / 100% 1px
+			no-repeat border-box;
+}
+
+/* Above the card's stretched link, so it shows its tooltip */
+.RinkCard-note {
+	position: relative;
+	z-index: 1;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	cursor: help;
+}
+
+.RinkCard-note--live {
+	flex: none;
+	color: var(--live);
+	font-weight: var(--weight-medium);
 }
 
 .RinkCard-empty {

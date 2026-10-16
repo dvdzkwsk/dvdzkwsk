@@ -78,7 +78,7 @@ const MatchupPage = ({query}: RouteProps) => {
 		}
 		const queryString = search.toString()
 		// Picking teams isn't worth a back-button stop each
-		history.replace(`/matchup${queryString ? `?${queryString}` : ""}`)
+		history.replace(`/compare${queryString ? `?${queryString}` : ""}`)
 	}
 
 	return (
@@ -87,7 +87,7 @@ const MatchupPage = ({query}: RouteProps) => {
 				<PageTitle>
 					{teamA && teamB
 						? `${teamA.name} vs ${teamB.name}`
-						: "Matchup"}
+						: "Compare"}
 				</PageTitle>
 				<header className={cx("Detail-header", "Matchup-header")}>
 					<MatchupSide
@@ -460,7 +460,7 @@ const TeamPicker = ({
 }
 
 export const MatchupRoute = {
-	path: "/matchup",
-	title: "Matchup",
+	path: "/compare",
+	title: "Compare",
 	content: MatchupPage,
 } as const satisfies Route

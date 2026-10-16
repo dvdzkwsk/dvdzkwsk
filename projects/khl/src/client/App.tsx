@@ -34,6 +34,7 @@ import {
 	initClientLogging,
 	IS_DEV,
 	Route,
+	RouteProps,
 } from "./Util.js"
 
 // --- App
@@ -61,12 +62,29 @@ const ROUTES: Route[] = [
 	TeamRoute,
 	RinkRoute,
 	MatchupRoute,
+	redirectRoute("/matchup", MatchupRoute.path),
 	SearchRoute,
 	AboutRoute,
 	HelpRoute,
 	StatusRoute,
 	...(IS_DEV ? [AdminRoute] : []),
 ]
+
+/**
+ * An old path that moved, keeping its query, e.g. /matchup?a=1 to
+ * /compare?a=1. Built sites also redirect it on the server (Server.ts).
+ */
+function redirectRoute(from: string, to: string): Route {
+	const Redirect = ({query}: RouteProps) => {
+		const {history} = React.useContext(AppContext)
+		React.useLayoutEffect(() => {
+			const search = query.toString()
+			history.replace(`${to}${search ? `?${search}` : ""}`)
+		}, [history, query])
+		return null
+	}
+	return {path: from, title: STRINGS.PRODUCT_NAME, content: Redirect}
+}
 
 export const CurrentRoute = () => {
 	const context = React.useContext(AppContext)

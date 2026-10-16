@@ -1657,7 +1657,7 @@ const NAV_ITEMS = [
 	{href: "/teams", label: "Teams"},
 	// Also active on a player's page, /players/:id
 	{href: "/players", label: "Players"},
-	{href: "/matchup", label: "Matchup"},
+	{href: "/compare", label: "Compare"},
 	...(IS_DEV ? [{href: "/admin", label: "Admin"}] : []),
 ]
 

@@ -89,6 +89,19 @@ const MatchupPage = ({query}: RouteProps) => {
 						? `${teamA.name} vs ${teamB.name}`
 						: "Compare"}
 				</PageTitle>
+				<header className="Matchup-intro">
+					<h1 className="Matchup-intro-title">
+						Compare any two teams
+					</h1>
+					<p className="Matchup-intro-text">
+						Pick a team and season on each side to see their stats,
+						rosters, and head-to-head games side by side.
+					</p>
+					<p className="Matchup-intro-tip">
+						Tip: pick the same team twice to compare two of its
+						seasons.
+					</p>
+				</header>
 				<header className={cx("Detail-header", "Matchup-header")}>
 					<MatchupSide
 						side="a"
@@ -103,29 +116,27 @@ const MatchupPage = ({query}: RouteProps) => {
 							setParams({...params, aSeason: id})
 						}
 					/>
-					{/* Until both teams are picked, the intro has this spot */}
-					{ready && (
-						<div className="Matchup-center">
-							<span className="Matchup-vs">vs</span>
-							<Hint label="Swap sides">
-								<button
-									type="button"
-									className="Matchup-swap"
-									aria-label="Swap sides"
-									onClick={() =>
-										setParams({
-											a: b,
-											aSeason: bSeason,
-											b: a,
-											bSeason: aSeason,
-										})
-									}
-								>
-									<SwapIcon />
-								</button>
-							</Hint>
-						</div>
-					)}
+					<div className="Matchup-center">
+						<span className="Matchup-vs">vs</span>
+						<Hint label="Swap sides">
+							<button
+								type="button"
+								className="Matchup-swap"
+								aria-label="Swap sides"
+								disabled={!a && !b && !aSeason && !bSeason}
+								onClick={() =>
+									setParams({
+										a: b,
+										aSeason: bSeason,
+										b: a,
+										bSeason: aSeason,
+									})
+								}
+							>
+								<SwapIcon />
+							</button>
+						</Hint>
+					</div>
 					<MatchupSide
 						side="b"
 						teams={teamsB}
@@ -138,22 +149,6 @@ const MatchupPage = ({query}: RouteProps) => {
 							setParams({...params, bSeason: id})
 						}
 					/>
-					{!ready && (
-						<div className="Matchup-intro">
-							<h2 className="Matchup-intro-title">
-								Compare any two teams
-							</h2>
-							<p className="Matchup-intro-text">
-								Pick a team and season on each side to see their
-								stats, rosters, and head-to-head games side by
-								side.
-							</p>
-							<p className="Matchup-intro-tip">
-								Tip: pick the same team twice to compare two of
-								its seasons.
-							</p>
-						</div>
-					)}
 				</header>
 				{ready && <MatchupContent state={matchup} now={now} />}
 			</div>

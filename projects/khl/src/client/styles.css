@@ -3181,37 +3181,37 @@ table {
 	transform: rotate(180deg);
 }
 
-/* Until both teams are picked: between the teams, in place of "vs" */
+.Matchup-swap:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* The page's title, above the team pickers */
 .Matchup-intro {
-	grid-area: 1 / 2;
-	align-self: center;
-	justify-self: center;
-	max-width: 16rem;
-	text-align: center;
+	margin-top: calc(var(--spacing) * 2);
 }
 
 .Matchup-intro-title {
 	margin: 0;
-	font-size: var(--text-lg);
-	font-weight: var(--weight-bold);
-	text-wrap: balance;
+	font-size: clamp(2rem, 5vw, 3rem);
+	font-weight: var(--weight-heavy);
+	line-height: 1.05;
+	letter-spacing: -0.025em;
 }
 
 .Matchup-intro-text {
-	margin: calc(var(--spacing) * 1) 0 0;
-	font-size: var(--text-sm);
-	line-height: 1.4;
-	color: var(--muted-fg);
-	text-wrap: balance;
+	max-width: 40rem;
+	margin: calc(var(--spacing) * 3) 0 0;
+	font-size: var(--text-xl);
+	line-height: 1.5;
+	color: var(--prose-fg);
 }
 
 .Matchup-intro-tip {
-	margin: calc(var(--spacing) * 2.5) 0 0;
-	font-size: var(--text-xs);
+	margin: calc(var(--spacing) * 2) 0 0;
+	font-size: var(--text-base);
 	font-style: italic;
-	line-height: 1.4;
 	color: var(--muted-fg);
-	text-wrap: balance;
 }
 
 /* Full-width card: keep its rows a readable width, centered */
@@ -3419,12 +3419,6 @@ a.Compare-chip:hover {
 
 	.Matchup-center {
 		padding-top: calc(var(--spacing) * 6);
-	}
-
-	/* No room between the teams: under both instead */
-	.Matchup-intro {
-		grid-area: 2 / 1 / auto / -1;
-		max-width: none;
 	}
 
 	.Compare-row {

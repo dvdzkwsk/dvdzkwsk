@@ -83,12 +83,12 @@ const PlayerPage = ({params, query}: RouteProps) => {
 				)
 	const now = useNow()
 
-	// ?team=<KHL player id> narrows the page to one of the player's teams. It's
-	// pushed onto history so the back button returns to the previous view.
+	// ?team=<registration key> narrows the page to one of the player's teams.
+	// It's pushed onto history so the back button returns to the previous view.
 	const selectedTeam = query.get("team")
-	const selectTeam = (khlPlayerId: string | null) => {
-		const search = khlPlayerId
-			? `?${new URLSearchParams({team: khlPlayerId})}`
+	const selectTeam = (registrationKey: string | null) => {
+		const search = registrationKey
+			? `?${new URLSearchParams({team: registrationKey})}`
 			: ""
 		if (search !== history.location.search) {
 			history.push({pathname: history.location.pathname, search})
@@ -105,7 +105,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 				{(player) => {
 					const selected =
 						player.registrations.find(
-							(r) => r.khlPlayerId === selectedTeam,
+							(r) => getRegistrationKey(r) === selectedTeam,
 						) ?? null
 					const games = selected
 						? player.games.filter(({game}) => {
@@ -180,7 +180,11 @@ const PlayerPage = ({params, query}: RouteProps) => {
 							<div className="Detail-columns">
 								<PastGames
 									// Reset the list's scroll position when switching teams
-									key={selected?.khlPlayerId ?? "all"}
+									key={
+										selected
+											? getRegistrationKey(selected)
+											: "all"
+									}
 									games={games}
 									now={now}
 									getTeamLogoUrl={(teamId) =>
@@ -214,40 +218,70 @@ function isCurrentRegistration(player: PlayerResponse, r: PlayerRegistration) {
 	)
 }
 
-/** Stat card labels from the KHL player page, and our column headers. */
-const STAT_COLUMNS: [label: string, header: string][] = [
-	["Games Played", "GP"],
-	["Goals", "G"],
-	["Assists", "A"],
-	["Points", "PTS"],
-	["Average Points Per Game", "P/GP"],
-	["Powerplay Goals", "PPG"],
-	["Shorthanded Goals", "SHG"],
-	["Penalty Minutes", "PIM"],
+/**
+ * Stat card labels from the KHL player page, our column headers, and the
+ * matching season table column (where "PPG" is points per game, so P/GP is
+ * computed instead).
+ */
+const STAT_COLUMNS: [label: string, header: string, tableColumn: string][] = [
+	["Games Played", "GP", "GP"],
+	["Goals", "G", "G"],
+	["Assists", "A", "A"],
+	["Points", "PTS", "PTS"],
+	["Average Points Per Game", "P/GP", ""],
+	["Powerplay Goals", "PPG", "PP"],
+	["Shorthanded Goals", "SHG", "SH"],
+	["Penalty Minutes", "PIM", "PIM"],
 ]
 
-/** A registration's stat from its season section (index 0) or a titled one. */
+/**
+ * The profile's season card is per team, but its career card and season
+ * tables cover the whole KHL player id, which can span several teams. Career
+ * stats are summed from the season table rows for the registration's team,
+ * so a shared id isn't counted once per team.
+ */
+type StatScope = "season" | "career"
+
 function getStat(
 	registration: PlayerRegistration,
 	label: string,
-	section: number | string,
+	scope: StatScope,
 ): string {
-	const sections = registration.profile?.statSections ?? []
-	const match =
-		typeof section === "string"
-			? sections.find((s) => s.title === section)
-			: sections[section]
-	return match?.stats.find((s) => s.label === label)?.value ?? ""
+	if (scope === "season") {
+		const section = registration.profile?.statSections[0]
+		return section?.stats.find((s) => s.label === label)?.value ?? ""
+	}
+	const rows = getTeamHistory(registration)
+	const sum = (column: string) => {
+		return rows.reduce((total, row) => {
+			return total + (Number(row.stats[column]) || 0)
+		}, 0)
+	}
+	if (label === "Average Points Per Game") {
+		const gamesPlayed = sum("GP")
+		return gamesPlayed ? (sum("PTS") / gamesPlayed).toFixed(2) : "0.00"
+	}
+	const column = STAT_COLUMNS.find(([l]) => l === label)?.[2]
+	return column ? String(sum(column)) : ""
 }
 
 function sumStat(
 	registrations: PlayerRegistration[],
 	label: string,
-	section: number | string,
+	scope: StatScope,
 ): number {
 	return registrations.reduce((total, r) => {
-		return total + (Number(getStat(r, label, section)) || 0)
+		return total + (Number(getStat(r, label, scope)) || 0)
 	}, 0)
+}
+
+/** The registration's season table rows for its own team */
+function getTeamHistory(registration: PlayerRegistration): HistoryRow[] {
+	return (registration.profile?.seasonTables ?? []).flatMap((table) => {
+		return table.rows
+			.filter((row) => row.teamId === registration.teamId)
+			.map((row) => ({...row, type: table.title}))
+	})
 }
 
 /** Which of the player's teams to show: all of them, or one */
@@ -258,7 +292,7 @@ const PlayerTeamPicker = ({
 }: {
 	player: PlayerResponse
 	selected: PlayerRegistration | null
-	onSelectTeam: (khlPlayerId: string | null) => void
+	onSelectTeam: (registrationKey: string | null) => void
 }) => {
 	const current = player.registrations.filter((r) => {
 		return isCurrentRegistration(player, r)
@@ -274,7 +308,7 @@ const PlayerTeamPicker = ({
 				{label: "Current", items: current.map(toTeamItem)},
 				{label: "Past", items: past.map(toTeamItem)},
 			].filter((group) => group.items.length > 0)}
-			value={selected?.khlPlayerId ?? ALL_TEAMS}
+			value={selected ? getRegistrationKey(selected) : ALL_TEAMS}
 			onChange={(value) =>
 				onSelectTeam(value === ALL_TEAMS ? null : value)
 			}
@@ -296,14 +330,11 @@ const PlayerHeader = ({
 	})
 	const position = player.registrations.find((r) => r.profile?.position)
 		?.profile?.position
-	const totals = (
-		registrations: PlayerRegistration[],
-		section: number | string,
-	) => {
-		const gp = sumStat(registrations, "Games Played", section)
-		const g = sumStat(registrations, "Goals", section)
-		const a = sumStat(registrations, "Assists", section)
-		const pim = sumStat(registrations, "Penalty Minutes", section)
+	const totals = (registrations: PlayerRegistration[], scope: StatScope) => {
+		const gp = sumStat(registrations, "Games Played", scope)
+		const g = sumStat(registrations, "Goals", scope)
+		const a = sumStat(registrations, "Assists", scope)
+		const pim = sumStat(registrations, "Penalty Minutes", scope)
 		return {GP: gp, G: g, A: a, PTS: g + a, PIM: pim}
 	}
 
@@ -330,7 +361,7 @@ const PlayerHeader = ({
 								.join(" · ")
 							return (
 								<span
-									key={r.khlPlayerId}
+									key={getRegistrationKey(r)}
 									className="PlayerHero-team"
 								>
 									<TeamAvatar
@@ -361,12 +392,12 @@ const PlayerHeader = ({
 					{current.length > 0 && (
 						<HeroStatGroup
 							label="This season"
-							stats={totals(current, 0)}
+							stats={totals(current, "season")}
 						/>
 					)}
 					<HeroStatGroup
 						label="Career"
-						stats={totals(player.registrations, "Career Stats")}
+						stats={totals(player.registrations, "career")}
 					/>
 					<HeroLastResults games={player.games} skipped={skipped} />
 
@@ -391,11 +422,7 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 	}, [player.playerId])
 	const badges = getBadges({
 		name: player.name,
-		gamesPlayed: sumStat(
-			player.registrations,
-			"Games Played",
-			"Career Stats",
-		),
+		gamesPlayed: sumStat(player.registrations, "Games Played", "career"),
 		recentPenalties: recent.status === "success" ? recent.data : null,
 	})
 	if (badges.length === 0) {
@@ -430,6 +457,14 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 
 const ALL_TEAMS = "all"
 
+/**
+ * One KHL player id can span several teams, and a team can issue the player
+ * more than one id, so a registration takes both to identify.
+ */
+function getRegistrationKey(r: PlayerRegistration): string {
+	return `${r.khlPlayerId}-${r.teamId}`
+}
+
 /** "Division 5B", from the profile's "Stingers - Division 5B" line. */
 function getDivision(registration: PlayerRegistration): string {
 	return registration.profile?.teamLine?.split(" - ").at(-1) ?? ""
@@ -438,7 +473,7 @@ function getDivision(registration: PlayerRegistration): string {
 function toTeamItem(r: PlayerRegistration): PickerItem {
 	const seasons = `${r.seasonIds.length} ${r.seasonIds.length === 1 ? "season" : "seasons"}`
 	return {
-		value: r.khlPlayerId,
+		value: getRegistrationKey(r),
 		label: r.teamName,
 		icon: (
 			<TeamAvatar name={r.teamName} logoUrl={r.teamLogoUrl} size={20} />
@@ -468,14 +503,9 @@ const PlayerStats = ({
 		isCurrentRegistration(player, r),
 	)
 
-	// KHL tracks stats per registration; merge every registration's season
-	// tables into one history, newest first.
+	// Merge every registration's seasons into one history, newest first
 	const history: HistoryRow[] = registrations
-		.flatMap((r) => {
-			return (r.profile?.seasonTables ?? []).flatMap((table) => {
-				return table.rows.map((row) => ({...row, type: table.title}))
-			})
-		})
+		.flatMap(getTeamHistory)
 		.sort((a, b) => Number(b.seasonId) - Number(a.seasonId))
 
 	return (
@@ -495,7 +525,7 @@ const PlayerStats = ({
 				</Tabs.List>
 				<Tabs.Panel value="season">
 					{current.length > 0 ? (
-						<StatsByTeam registrations={current} section={0} />
+						<StatsByTeam registrations={current} scope="season" />
 					) : (
 						<p className="Detail-empty">
 							{selected
@@ -507,7 +537,7 @@ const PlayerStats = ({
 				<Tabs.Panel value="career">
 					<StatsByTeam
 						registrations={registrations}
-						section="Career Stats"
+						scope="career"
 						showTotal
 					/>
 				</Tabs.Panel>
@@ -562,21 +592,20 @@ type StatsRow =
 
 const StatsByTeam = ({
 	registrations,
-	section,
+	scope,
 	showTotal,
 }: {
 	registrations: PlayerRegistration[]
-	/** The profile's season section (0) or a titled one, e.g. "Career Stats" */
-	section: number | string
+	scope: StatScope
 	showTotal?: boolean
 }) => {
 	const getTotal = (label: string) => {
 		if (label === "Average Points Per Game") {
-			const gamesPlayed = sumStat(registrations, "Games Played", section)
-			const points = sumStat(registrations, "Points", section)
+			const gamesPlayed = sumStat(registrations, "Games Played", scope)
+			const points = sumStat(registrations, "Points", scope)
 			return gamesPlayed ? (points / gamesPlayed).toFixed(2) : "0.00"
 		}
-		return String(sumStat(registrations, label, section))
+		return String(sumStat(registrations, label, scope))
 	}
 	const rows: StatsRow[] = registrations.map((registration) => ({
 		kind: "registration",
@@ -620,14 +649,16 @@ const StatsByTeam = ({
 			render: (row: StatsRow) =>
 				row.kind === "total"
 					? getTotal(label)
-					: getStat(row.registration, label, section),
+					: getStat(row.registration, label, scope),
 		})),
 	]
 	return (
 		<StatsTable
 			rows={rows}
 			rowKey={(row) =>
-				row.kind === "total" ? "total" : row.registration.khlPlayerId
+				row.kind === "total"
+					? "total"
+					: getRegistrationKey(row.registration)
 			}
 			rowClassName={(row) =>
 				row.kind === "total" ? "StatsTable-total" : undefined

@@ -118,7 +118,7 @@ The two external sites share no ids. `Arenas.ts` is the join table. It records t
 
 ### 4. Scraped ids ↔ stable people: `Database.ts`
 
-The KHL issues a new player id for every team registration. Search results, rosters, and box scores all pass through `db.recordRegistrations(...)`, which matches each KHL id to a person-level UUID by normalized name (`normalizePlayerName`). `/players/:playerId` uses that UUID and fans out to all of the person's registrations. The database lives on a Fly volume (`KHL_DB_PATH`), so those UUIDs survive deploys. Migrations in `MIGRATIONS` are append-only, and their order is tracked with `PRAGMA user_version`.
+The KHL usually issues a new player id for every team registration, but some ids span several teams, so a registration is a (KHL player id, team) pair. Search results, rosters, and box scores all pass through `db.recordRegistrations(...)`, which matches each KHL id to a person-level UUID by normalized name (`normalizePlayerName`). `/players/:playerId` uses that UUID and fans out to all of the person's registrations. The database lives on a Fly volume (`KHL_DB_PATH`), so those UUIDs survive deploys. Migrations in `MIGRATIONS` are append-only, and their order is tracked with `PRAGMA user_version`.
 
 ### 5. League time: `LeagueTime.ts`
 

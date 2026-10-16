@@ -106,8 +106,8 @@ export async function searchKHLPlayers(
 }
 
 /**
- * A player id is a single team registration, so the team and season are
- * needed for the page to show that team's details.
+ * A player id can span several teams, so the team and season are needed for
+ * the page to show one team's details.
  */
 export async function getKHLPlayer(
 	playerId: string,

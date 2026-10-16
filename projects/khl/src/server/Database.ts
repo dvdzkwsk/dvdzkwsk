@@ -8,16 +8,17 @@ import {KHLPlayerSearchResult, normalizePlayerName} from "../shared/KHLJson.js"
 const logger = new Logger("Database")
 
 /**
- * KHL has no person-level id: every team registration gets its own player id,
- * and even the same team sometimes issues a new one. We give each person a
- * UUID and attach their KHL player ids ("registrations") to it.
+ * KHL has no person-level id: a player id usually covers one team, but some
+ * span several, and the same team sometimes issues a new one. We give each
+ * person a UUID and attach their KHL player id and team pairs
+ * ("registrations") to it.
  */
 export interface Player {
 	id: string
 	name: string
 }
 
-/** One KHL player id, which is always on a single team. */
+/** One KHL player id on one team. */
 export interface Registration {
 	khlPlayerId: string
 	playerId: string
@@ -73,6 +74,41 @@ const MIGRATIONS = [
 	);
 	CREATE INDEX status_checks_day ON status_checks (day, component);
 	CREATE INDEX status_checks_component ON status_checks (component, checked_at);
+	`,
+	`
+	-- One KHL player id can span several teams, so a registration is the
+	-- (player id, team) pair. Seasons were recorded against the player id
+	-- alone, which merged every team's seasons, so they're dropped here; the
+	-- all-seasons search refills them the next time each player is viewed.
+	DROP TABLE registration_seasons;
+
+	CREATE TABLE registrations_by_team (
+		khl_player_id TEXT NOT NULL,
+		player_id TEXT NOT NULL REFERENCES players (id),
+		name TEXT NOT NULL,
+		position TEXT,
+		team_id TEXT NOT NULL,
+		team_name TEXT NOT NULL,
+		team_logo_url TEXT,
+		updated_at TEXT NOT NULL,
+		PRIMARY KEY (khl_player_id, team_id)
+	);
+	INSERT INTO registrations_by_team
+		(khl_player_id, player_id, name, position, team_id, team_name, team_logo_url, updated_at)
+	SELECT khl_player_id, player_id, name, position, team_id, team_name, team_logo_url, updated_at
+	FROM registrations;
+	DROP TABLE registrations;
+	ALTER TABLE registrations_by_team RENAME TO registrations;
+	CREATE INDEX registrations_player_id ON registrations (player_id);
+
+	CREATE TABLE registration_seasons (
+		khl_player_id TEXT NOT NULL,
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		PRIMARY KEY (khl_player_id, team_id, season_id),
+		FOREIGN KEY (khl_player_id, team_id)
+			REFERENCES registrations (khl_player_id, team_id)
+	);
 	`,
 ]
 
@@ -135,9 +171,9 @@ export class KHLDatabase {
 			.query<RegistrationRow, {playerId: string}>(
 				`SELECT r.*, group_concat(s.season_id) AS season_ids
 				FROM registrations r
-				LEFT JOIN registration_seasons s USING (khl_player_id)
+				LEFT JOIN registration_seasons s USING (khl_player_id, team_id)
 				WHERE r.player_id = $playerId
-				GROUP BY r.khl_player_id`,
+				GROUP BY r.khl_player_id, r.team_id`,
 			)
 			.all({playerId})
 		return rows.map(toRegistration)
@@ -161,7 +197,7 @@ export class KHLDatabase {
 						`INSERT INTO registrations
 							(khl_player_id, player_id, name, position, team_id, team_name, team_logo_url, updated_at)
 						VALUES ($khlPlayerId, $playerId, $name, $position, $teamId, $teamName, $teamLogoUrl, $now)
-						ON CONFLICT (khl_player_id) DO UPDATE SET
+						ON CONFLICT (khl_player_id, team_id) DO UPDATE SET
 							name = excluded.name,
 							position = coalesce(excluded.position, position),
 							team_name = excluded.team_name,
@@ -180,11 +216,12 @@ export class KHLDatabase {
 					})
 				this.db
 					.query(
-						`INSERT OR IGNORE INTO registration_seasons (khl_player_id, season_id)
-						VALUES ($khlPlayerId, $seasonId)`,
+						`INSERT OR IGNORE INTO registration_seasons (khl_player_id, team_id, season_id)
+						VALUES ($khlPlayerId, $teamId, $seasonId)`,
 					)
 					.run({
 						khlPlayerId: result.playerId,
+						teamId: result.teamId,
 						seasonId: result.seasonId,
 					})
 				playerIds.set(result.playerId, playerId)

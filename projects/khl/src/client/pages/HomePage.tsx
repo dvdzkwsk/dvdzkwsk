@@ -1,8 +1,10 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import * as React from "react"
 import {LIST_GAMES_ENDPOINT, LIST_RINKS_ENDPOINT} from "../../shared/ApiJson.js"
+import {getLeagueDayKey} from "../../shared/LeagueTime.js"
 import {AsyncContent, PageShell, Section} from "../Components.js"
 import {
+	countEndedToday,
 	filterScheduledGames,
 	GameCards,
 	GameFilters,
@@ -10,16 +12,20 @@ import {
 	GameList,
 	getPastDays,
 	getScheduledGames,
+	getTodayAndUpcomingGames,
+	includesToday,
 	includesUpcomingDays,
 	NoGames,
 	readGameFilters,
+	ScheduledGame,
 	writeGameFilters,
 } from "../Games.js"
 import {AppContext, Route, RouteProps, useAsync, useNow} from "../Util.js"
 
 /**
- * Every upcoming game in the league, filterable by day, rink, and division.
- * Past days (or a range reaching into the past) show their results too.
+ * Today's and upcoming games in the league, filterable by day, rink, and
+ * division. Today's finished games and past days (or a range reaching into
+ * the past) show their results too.
  */
 const HomePage = ({query}: RouteProps) => {
 	const {history} = React.useContext(AppContext)
@@ -41,6 +47,23 @@ const HomePage = ({query}: RouteProps) => {
 		return response.games
 	}, [pastFrom, pastTo])
 	const hasPast = pastDays.length > 0
+	// The schedule drops today's games once they're final, so today's come
+	// from the scoreboard too. Refetch as each one ends to pick up its score.
+	const today = includesToday(filters.day, now) ? getLeagueDayKey(now) : null
+	const endedToday =
+		state.status === "success" ? countEndedToday(state.data.rinks, now) : 0
+	const todayState = useAsync(async () => {
+		if (!today) {
+			return []
+		}
+		const response = await doRequest(LIST_GAMES_ENDPOINT, {from: today})
+		return response.games
+	}, [today, endedToday])
+	// Keep showing the last scoreboard while a refetch loads
+	const todayGames = React.useRef<ScheduledGame[]>([])
+	if (todayState.status === "success") {
+		todayGames.current = todayState.data
+	}
 	const setFilters = (changes: Partial<GameFilterValues>) => {
 		// Replace rather than push: filter tweaks shouldn't fill up history
 		history.replace({
@@ -63,7 +86,10 @@ const HomePage = ({query}: RouteProps) => {
 						const games = [
 							...pastGames,
 							...(includesUpcomingDays(filters.day, now)
-								? upcoming
+								? getTodayAndUpcomingGames(
+										rinks,
+										today ? todayGames.current : [],
+									)
 								: []),
 						]
 						const {forDay, visible} = filterScheduledGames(

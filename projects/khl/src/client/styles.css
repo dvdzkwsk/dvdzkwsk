@@ -3186,7 +3186,7 @@ table {
 	grid-area: 1 / 2;
 	align-self: center;
 	justify-self: center;
-	max-width: 14rem;
+	max-width: 16rem;
 	text-align: center;
 }
 
@@ -3200,6 +3200,15 @@ table {
 .Matchup-intro-text {
 	margin: calc(var(--spacing) * 1) 0 0;
 	font-size: var(--text-sm);
+	line-height: 1.4;
+	color: var(--muted-fg);
+	text-wrap: balance;
+}
+
+.Matchup-intro-tip {
+	margin: calc(var(--spacing) * 2.5) 0 0;
+	font-size: var(--text-xs);
+	font-style: italic;
 	line-height: 1.4;
 	color: var(--muted-fg);
 	text-wrap: balance;

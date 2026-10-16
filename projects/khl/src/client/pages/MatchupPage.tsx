@@ -144,8 +144,13 @@ const MatchupPage = ({query}: RouteProps) => {
 								Compare any two teams
 							</h2>
 							<p className="Matchup-intro-text">
-								Pick a team and season on each side, or the same
-								team twice to compare two of its seasons.
+								Pick a team and season on each side to see their
+								stats, rosters, and head-to-head games side by
+								side.
+							</p>
+							<p className="Matchup-intro-tip">
+								Tip: pick the same team twice to compare two of
+								its seasons.
 							</p>
 						</div>
 					)}

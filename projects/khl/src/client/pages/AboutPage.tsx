@@ -15,7 +15,7 @@ interface Feature {
 const FEATURES: Feature[] = [
 	{
 		title: "Jump straight to LiveBarn",
-		text: "Stop struggling to find a game or highlight on LiveBarn. KHL+ gives you links to jump to every game and key moment.",
+		text: "Stop struggling to find a game or highlight on LiveBarn. KHL+ gives you links to jump to every game and key moment.†",
 		art: ReplayArt,
 	},
 	{

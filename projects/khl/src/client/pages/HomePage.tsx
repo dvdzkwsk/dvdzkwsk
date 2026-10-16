@@ -1,8 +1,7 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {LIST_GAMES_ENDPOINT, LIST_RINKS_ENDPOINT} from "../../shared/ApiJson.js"
-import {AsyncContent, PageShell} from "../Components.js"
+import {AsyncContent, PageShell, Section} from "../Components.js"
 import {
 	filterScheduledGames,
 	GameCards,
@@ -110,22 +109,14 @@ const HomePage = ({query}: RouteProps) => {
 										{/* The next few matching games, as cards. Hidden when nothing
 										    matches; the list below says so. */}
 										{visible.length > 0 && (
-											<section>
-												<h2
-													className={cx(
-														"SectionLabel",
-														"HomePage-section-title",
-													)}
-												>
-													Up next
-												</h2>
+											<Section title="Up next">
 												<GameCards
 													games={visible}
 													seasonId={season.id}
 													now={now}
 													limit={3}
 												/>
-											</section>
+											</Section>
 										)}
 										<GameList
 											games={visible}

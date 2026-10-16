@@ -1,7 +1,6 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	BENCHMARK_SITE_LABELS,
@@ -13,6 +12,7 @@ import {
 	RUN_BENCHMARK_ENDPOINT,
 } from "../../shared/ApiJson.js"
 import {
+	Card,
 	ErrorState,
 	Hint,
 	InlineLoader,
@@ -106,10 +106,7 @@ const StatesDemo = () => {
 		setRuns((n) => n + 1)
 	}
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Loading and error states
-			</h2>
+		<Card title="Loading and error states">
 			<p className="Admin-note">
 				Errors are real ErrorStates, so showing one logs it like any
 				other.
@@ -186,7 +183,7 @@ const StatesDemo = () => {
 					/>
 				)}
 			</div>
-		</section>
+		</Card>
 	)
 }
 
@@ -200,10 +197,7 @@ const SIMULATED_LOADING_OPTIONS: {value: SimulatedLoading; label: string}[] = [
 const SimulatedLoadingPicker = () => {
 	const [mode, setMode] = React.useState(readSimulatedLoading)
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Simulate slow loading
-			</h2>
+		<Card title="Simulate slow loading">
 			<p className="Admin-note">
 				Applies to every page's data loads until you turn it off or
 				close the tab.
@@ -217,7 +211,7 @@ const SimulatedLoadingPicker = () => {
 					setMode(next)
 				}}
 			/>
-		</section>
+		</Card>
 	)
 }
 
@@ -300,10 +294,7 @@ const BenchmarkRunner = () => {
 		)
 	}
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Speed benchmark
-			</h2>
+		<Card title="Speed benchmark">
 			<p className="Admin-note">
 				Opens khl.dvdzkwsk.com and the league's player search in
 				headless Chrome, searches each player, and opens their page.
@@ -355,7 +346,7 @@ const BenchmarkRunner = () => {
 					/>
 				</div>
 			)}
-		</section>
+		</Card>
 	)
 }
 

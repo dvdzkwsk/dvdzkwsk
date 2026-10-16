@@ -1,5 +1,4 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	GET_STANDINGS_ENDPOINT,
@@ -8,6 +7,7 @@ import {
 import {KHLStandingsDivision, KHLStandingsRow} from "../../shared/KHLJson.js"
 import {
 	AsyncContent,
+	Card,
 	PageShell,
 	Picker,
 	SeasonFilter,
@@ -298,10 +298,7 @@ const StandingsTable = ({
 		})),
 	]
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				{title}
-			</h2>
+		<Card title={title}>
 			<div className="Standings-table">
 				<StatsTable
 					columns={columns}
@@ -309,7 +306,7 @@ const StandingsTable = ({
 					rowKey={({row}) => row.teamId}
 				/>
 			</div>
-		</section>
+		</Card>
 	)
 }
 

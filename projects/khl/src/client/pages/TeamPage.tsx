@@ -1,5 +1,4 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	GET_TEAM_ACTIVITY_ENDPOINT,
@@ -11,12 +10,14 @@ import {getGoalsByTeam} from "../../shared/KHLJson.js"
 import {ActivityFeed} from "../Activity.js"
 import {
 	AsyncContent,
+	Card,
 	Link,
 	PageShell,
 	PageTitle,
 	Picker,
-	SegmentedControl,
 	RosterTables,
+	Section,
+	SegmentedControl,
 	TeamAvatar,
 } from "../Components.js"
 import {GameCards, HeroLastResults, HeroStatGroup, PastGames} from "../Games.js"
@@ -54,22 +55,14 @@ const TeamPage = ({params, query}: RouteProps) => {
 							<SeasonPicker team={team} />
 						</div>
 						<TeamHeader team={team} />
-						<section>
-							<h2
-								className={cx(
-									"SectionLabel",
-									"Detail-section-title",
-								)}
-							>
-								Upcoming games
-							</h2>
+						<Section title="Upcoming games">
 							<GameCards
 								games={team.upcoming}
 								seasonId={team.season.id}
 								now={now}
 								emptyMessage={`No upcoming games in ${team.season.name}.`}
 							/>
-						</section>
+						</Section>
 						<div className="Detail-columns">
 							<PastGames
 								games={team.games}
@@ -220,9 +213,9 @@ const TeamLeaders = ({roster}: {roster: TeamResponse["roster"]}) => {
 		return null
 	}
 	return (
-		<section>
-			<div className="Leaders-header">
-				<h2 className="SectionLabel">Team leaders</h2>
+		<Section
+			title="Team leaders"
+			actions={
 				<SegmentedControl<LeaderKind>
 					label="Leaders"
 					options={[
@@ -232,7 +225,8 @@ const TeamLeaders = ({roster}: {roster: TeamResponse["roster"]}) => {
 					value={kind}
 					onChange={setKind}
 				/>
-			</div>
+			}
+		>
 			<div className="Leaders-grid">
 				{kind === "skaters" ? (
 					<>
@@ -259,7 +253,7 @@ const TeamLeaders = ({roster}: {roster: TeamResponse["roster"]}) => {
 					</>
 				)}
 			</div>
-		</section>
+		</Section>
 	)
 }
 
@@ -323,12 +317,9 @@ const LeaderCard = ({
 const Roster = ({team}: {team: TeamResponse}) => {
 	const {skaters, goalies} = team.roster
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Roster · {skaters.length + goalies.length}
-			</h2>
+		<Card title={`Roster · ${skaters.length + goalies.length}`}>
 			<RosterTables roster={team.roster} />
-		</section>
+		</Card>
 	)
 }
 

@@ -1,6 +1,5 @@
 import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
@@ -19,12 +18,14 @@ import {
 } from "../Badges.js"
 import {
 	AsyncContent,
+	Card,
 	Hint,
 	Link,
 	PageShell,
 	PageTitle,
 	Picker,
 	PickerItem,
+	Section,
 	StatsTable,
 	StatsTableColumn,
 	TeamAvatar,
@@ -169,21 +170,13 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									onRetry={state.reload}
 								/>
 							)}
-							<section>
-								<h2
-									className={cx(
-										"SectionLabel",
-										"Detail-section-title",
-									)}
-								>
-									Upcoming games
-								</h2>
+							<Section title="Upcoming games">
 								<GameCards
 									games={upcoming}
 									seasonId={player.currentSeason.id}
 									now={now}
 								/>
-							</section>
+							</Section>
 							<div className="Detail-columns">
 								<PastGames
 									// Reset the list's scroll position when switching teams
@@ -486,7 +479,7 @@ const PlayerStats = ({
 		.sort((a, b) => Number(b.seasonId) - Number(a.seasonId))
 
 	return (
-		<section className="Detail-panel">
+		<Card>
 			<Tabs.Root defaultValue="career">
 				<Tabs.List className="Tabs-list">
 					<Tabs.Tab className="Tabs-tab" value="career">
@@ -560,7 +553,7 @@ const PlayerStats = ({
 					/>
 				</Tabs.Panel>
 			</Tabs.Root>
-		</section>
+		</Card>
 	)
 }
 

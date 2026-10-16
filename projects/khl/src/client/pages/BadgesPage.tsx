@@ -1,7 +1,7 @@
 import * as React from "react"
 import {URLS} from "../../shared/KHLConfig.js"
 import {Badge, BadgeIcon, BADGES} from "../Badges.js"
-import {Link, PageShell} from "../Components.js"
+import {Card, Link, PageShell} from "../Components.js"
 import {Route} from "../Util.js"
 
 // --- /badges: every badge a player can have, and how to get it
@@ -36,8 +36,7 @@ const BadgeSection = ({title, badges}: {title: string; badges: Badge[]}) => {
 		return null
 	}
 	return (
-		<section className="BadgesPage-section">
-			<h2 className="SectionLabel">{title}</h2>
+		<Card title={title} flush>
 			<ul className="BadgesPage-list">
 				{badges.map((badge) => (
 					<li key={badge.id} className="BadgesPage-badge">
@@ -53,7 +52,7 @@ const BadgeSection = ({title, badges}: {title: string; badges: Badge[]}) => {
 					</li>
 				))}
 			</ul>
-		</section>
+		</Card>
 	)
 }
 

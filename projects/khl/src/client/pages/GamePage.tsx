@@ -18,6 +18,7 @@ import {getGameEndsAt} from "../../shared/LeagueTime.js"
 import {Comparison} from "../Compare.js"
 import {
 	AsyncContent,
+	Card,
 	Hint,
 	Link,
 	LIVEBARN_TITLES,
@@ -400,8 +401,7 @@ const PeriodTotals = ({game}: {game: GameResponse}) => {
 		},
 	]
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>Goals</h2>
+		<Card title="Goals">
 			<StatsTable
 				rows={[away, home]}
 				rowKey={(team) => team.id}
@@ -413,7 +413,7 @@ const PeriodTotals = ({game}: {game: GameResponse}) => {
 				rowKey={(team) => team.id}
 				columns={columns("shots")}
 			/>
-		</section>
+		</Card>
 	)
 }
 
@@ -461,10 +461,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 	}))
 
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Timeline-title")}>
-				Scoring and penalties
-			</h2>
+		<Card title="Scoring and penalties">
 			{byPeriod.length === 0 ? (
 				<p className="Detail-empty">No goals or penalties.</p>
 			) : (
@@ -507,7 +504,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 					</div>
 				))
 			)}
-		</section>
+		</Card>
 	)
 }
 

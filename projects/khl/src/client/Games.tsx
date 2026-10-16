@@ -4,6 +4,7 @@ import {PreviewCard} from "@base-ui/react/preview-card"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
+	Card,
 	ChevronIcon,
 	CityDot,
 	Hint,
@@ -333,7 +334,10 @@ function isSkippedGame(skipped: SkippedGames | undefined, {game}: FeedGame) {
 	return skipped instanceof Set && !!game.id && skipped.has(game.id)
 }
 
-/** A titled card around a GameTable, or `emptyText` when it has no rows. */
+/**
+ * A GameTable in a titled Card, or `emptyText` when it has no rows. Every
+ * list of games is one: the home page's days, rinks', teams', and players'.
+ */
 export const GameTableCard = ({
 	title,
 	emptyText,
@@ -342,28 +346,23 @@ export const GameTableCard = ({
 	...tableProps
 }: React.ComponentProps<typeof GameTable> & {
 	title: string
-	emptyText: string
+	/** Shown instead of an empty table */
+	emptyText?: string
 	/** Controls beside the title, e.g. a filter */
 	actions?: React.ReactNode
 	/** A loader in place of the table, while what it shows isn't known yet */
 	loading?: boolean
 }) => {
 	return (
-		<section className="GameTableCard">
-			<div className="GameTableCard-header">
-				<h2 className="SectionLabel">{title}</h2>
-				{actions}
-			</div>
+		<Card title={title} actions={actions}>
 			{loading ? (
-				<div className="GameTableCard-empty">
-					<InlineLoader label={`Loading ${title.toLowerCase()}…`} />
-				</div>
+				<InlineLoader label={`Loading ${title.toLowerCase()}…`} />
 			) : tableProps.rows.length === 0 ? (
-				<div className="GameTableCard-empty">{emptyText}</div>
+				<p className="GameTableCard-empty">{emptyText}</p>
 			) : (
 				<GameTable {...tableProps} />
 			)}
-		</section>
+		</Card>
 	)
 }
 
@@ -1143,7 +1142,7 @@ export const GameList = ({
 	return (
 		<div className="GameList-days">
 			{[...days.values()].map((dayGames) => (
-				<GameTableSection
+				<GameTableCard
 					key={dayGames[0]!.game.startsAt}
 					title={`${formatGameDay(dayGames[0]!.game.startsAt, now)} · ${dayGames.length} ${dayGames.length === 1 ? "game" : "games"}`}
 					rows={dayGames.map((g) => toGameTableRow(g, seasonId, now))}
@@ -1151,34 +1150,6 @@ export const GameList = ({
 				/>
 			))}
 		</div>
-	)
-}
-
-/**
- * A GameTable in a panel, titled above it, as the home page lists each day.
- * Shows `emptyText` when it has no rows.
- */
-export const GameTableSection = ({
-	title,
-	emptyText,
-	...tableProps
-}: React.ComponentProps<typeof GameTable> & {
-	title: string
-	emptyText?: string
-}) => {
-	return (
-		<section>
-			<h2 className={cx("GameTableSection-title", "SectionLabel")}>
-				{title}
-			</h2>
-			<div className="GameTableSection-panel">
-				{tableProps.rows.length === 0 ? (
-					<p className="GameTableSection-empty">{emptyText}</p>
-				) : (
-					<GameTable {...tableProps} />
-				)}
-			</div>
-		</section>
 	)
 }
 
@@ -1873,16 +1844,12 @@ export const HeadToHeadGames = ({left, right, games, now}: HeadToHeadProps) => {
 		return null
 	}
 	return (
-		<section className="Detail-panel">
-			<h2 className={cx("SectionLabel", "Detail-panel-title")}>
-				Previous meetings
-			</h2>
-			<GameTable
-				rows={games.map((game) => headToHeadToRow(game, left, right))}
-				now={now}
-				showDay
-			/>
-		</section>
+		<GameTableCard
+			title="Previous meetings"
+			rows={games.map((game) => headToHeadToRow(game, left, right))}
+			now={now}
+			showDay
+		/>
 	)
 }
 

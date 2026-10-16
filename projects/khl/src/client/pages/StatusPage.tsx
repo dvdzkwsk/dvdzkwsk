@@ -13,7 +13,7 @@ import {
 } from "../../shared/ApiJson.js"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {MINUTE_MS} from "../../shared/LeagueTime.js"
-import {Hint, Link, PageLoader, PageShell} from "../Components.js"
+import {Card, Hint, Link, PageLoader, PageShell} from "../Components.js"
 import {formatDayKey} from "../Games.js"
 import {formatRelative, Route, useNow} from "../Util.js"
 
@@ -62,7 +62,7 @@ const StatusPage = () => {
 						/>
 						{status && (
 							<>
-								<section className="StatusPage-panel">
+								<Card>
 									<ul className="StatusPage-components">
 										{status.components.map((component) => (
 											<ComponentRow
@@ -74,7 +74,7 @@ const StatusPage = () => {
 										))}
 									</ul>
 									<Legend />
-								</section>
+								</Card>
 								<DeployPanel deploy={status.deploy} now={now} />
 							</>
 						)}
@@ -389,8 +389,7 @@ const StatusIcon = ({level, size}: {level: StatusLevel; size: number}) => {
 
 const DeployPanel = ({deploy, now}: {deploy: DeployInfo; now: Date}) => {
 	return (
-		<section className="StatusPage-panel StatusDeploy">
-			<h2 className="SectionLabel">Deployment</h2>
+		<Card title="Deployment">
 			<dl className="StatusDeploy-list">
 				<div>
 					<dt>Commit</dt>
@@ -441,7 +440,7 @@ const DeployPanel = ({deploy, now}: {deploy: DeployInfo; now: Date}) => {
 					</dd>
 				</div>
 			</dl>
-		</section>
+		</Card>
 	)
 }
 

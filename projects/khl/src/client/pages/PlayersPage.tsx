@@ -1,5 +1,4 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	LeaguePlayer,
@@ -10,6 +9,7 @@ import {
 import {normalizePlayerName} from "../../shared/KHLJson.js"
 import {
 	AsyncContent,
+	Card,
 	compareSkaters,
 	GOALIE_COLUMNS,
 	Link,
@@ -293,19 +293,13 @@ const PlayerGroups = ({
 				</div>
 			)}
 			{groups.map((group) => (
-				<section
+				<Card
 					key={group.key}
-					className={cx("Detail-panel", "PlayersPage-group")}
+					className="PlayersPage-group"
+					title={
+						<span className="PlayersPage-title">{group.title}</span>
+					}
 				>
-					<h2
-						className={cx(
-							"SectionLabel",
-							"Detail-panel-title",
-							"PlayersPage-title",
-						)}
-					>
-						{group.title}
-					</h2>
 					<PlayersTable
 						rows={group.rows}
 						columns={
@@ -316,7 +310,7 @@ const PlayerGroups = ({
 						showTeam={groupBy !== "team"}
 						showDivision={groupBy === "none"}
 					/>
-				</section>
+				</Card>
 			))}
 		</>
 	)

@@ -1,5 +1,5 @@
 import {cx} from "@dvdzkwsk/util/ReactUtil"
-import {InfoPopover} from "./Components.js"
+import {Card, InfoPopover} from "./Components.js"
 import {SeasonSummary} from "../shared/ApiJson.js"
 import {KHLGamePreviewStats} from "../shared/KHLJson.js"
 
@@ -146,7 +146,7 @@ export const Comparison = ({
 	previewStats: KHLGamePreviewStats | null
 }) => {
 	return (
-		<section className={cx("Detail-panel", "Compare")}>
+		<Card panelClassName="Compare">
 			<div className="Compare-group" role="group" aria-label="Stats">
 				{getComparisonStats(a, b, previewStats).map((stat) => (
 					<ValueRow
@@ -160,7 +160,7 @@ export const Comparison = ({
 					/>
 				))}
 			</div>
-		</section>
+		</Card>
 	)
 }
 

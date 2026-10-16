@@ -1265,42 +1265,10 @@ table {
 	font-weight: var(--weight-semibold);
 }
 
-/* === Game table cards (e.g. past games) === */
-
-/* Its own container: the table fits the card's width, which may be half a
-   page beside another card */
-.GameTableCard {
-	container-type: inline-size;
-	display: flex;
-	flex-direction: column;
-	min-height: 0;
-	overflow: hidden;
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
-}
-
-/* The title, and any controls (e.g. a filter) at the other end */
-.GameTableCard-header {
-	flex: none;
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: calc(var(--spacing) * 2);
-	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 4)
-		calc(var(--spacing) * 2);
-}
-
-/* Overhangs the padding, so a filter doesn't push the table down past the
-   card beside it */
-.GameTableCard-header > .Segmented {
-	margin-block: calc(var(--spacing) * -2);
-}
+/* === Game table cards (every list of games) === */
 
 .GameTableCard-empty {
-	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 4);
+	margin: 0;
 	color: var(--muted-fg);
 	font-size: var(--text-base);
 }
@@ -1351,33 +1319,28 @@ table {
 	font-size: var(--text-3xs);
 }
 
-/* Inset like the other cards' tables */
-.GameTableCard .StatsTable-wrapper {
-	padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 2);
-}
-
 /* A narrow card fits its table instead of scrolling it sideways: the rink
    goes, and the teams share what's left, their names ending in an ellipsis.
    The selectors outweigh GameTable's own min-widths. */
 @container (max-width: 760px) {
-	:is(.GameTableCard, .GameTableSection-panel) table.StatsTable.GameTable {
+	.Card-panel table.StatsTable.GameTable {
 		min-width: 0;
 	}
 
-	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--rink {
+	.Card-panel .GameTable .GameTable-col--rink {
 		display: none;
 	}
 
-	:is(.GameTableCard, .GameTableSection-panel)
+	.Card-panel
 		.GameTable--scoreboard
 		:is(.GameTable-col--away, .GameTable-col--home),
-	:is(.GameTableCard, .GameTableSection-panel)
+	.Card-panel
 		.GameTable--scoreboard:not(:has(.GameTable-col--rink))
 		.GameTable-col--links {
 		width: auto;
 	}
 
-	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--links {
+	.Card-panel .GameTable .GameTable-col--links {
 		width: calc(var(--icon-links-width) + var(--spacing) * 6);
 	}
 }
@@ -1385,12 +1348,12 @@ table {
 /* Narrower still (a phone): the links and logos go too; the game page the
    row links to has the scoresheet and replays */
 @container (max-width: 520px) {
-	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--links,
-	:is(.GameTableCard, .GameTableSection-panel) .GameTable .TeamAvatar {
+	.Card-panel .GameTable .GameTable-col--links,
+	.Card-panel .GameTable .TeamAvatar {
 		display: none;
 	}
 
-	:is(.GameTableCard, .GameTableSection-panel) .GameTable .GameTable-col--score {
+	.Card-panel .GameTable .GameTable-col--score {
 		width: calc(5.5rem + var(--spacing) * 2);
 	}
 }
@@ -1401,10 +1364,6 @@ table {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 5);
-}
-
-.HomePage-section-title {
-	margin-bottom: calc(var(--spacing) * 3);
 }
 
 /* The trigger reports data-pressed while open; it isn't a selected filter */
@@ -1681,10 +1640,6 @@ table {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 5);
-}
-
-.GameTableSection-title {
-	margin-bottom: calc(var(--spacing) * 2);
 }
 
 .GameList-empty {
@@ -2346,22 +2301,53 @@ table {
 	color: var(--muted-fg);
 }
 
-.Detail-section-title {
-	margin-bottom: calc(var(--spacing) * 3);
+/* === Section and Card: a title (and any controls) above the content; a
+   Card's content sits in a panel. Every titled block in the app is one. === */
+
+.Section {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+	min-width: 0;
 }
 
-.Detail-panel {
+.Section-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 2);
+}
+
+.Section-title {
+	flex: 1;
 	min-width: 0;
-	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5)
-		calc(var(--spacing) * 5);
+}
+
+/* Overhangs the header, so a section with a filter starts its content at
+   the same height as the one beside it */
+.Section-header > .Segmented {
+	margin-block: calc(var(--spacing) * -3);
+}
+
+/* Its own container, so a table fits the card's width, which may be half a
+   page beside another card */
+.Card-panel {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	container-type: inline-size;
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
 	border-radius: var(--radius);
 	box-shadow: var(--shadow-sm);
 }
 
-.Detail-panel-title {
-	margin-bottom: calc(var(--spacing) * 2);
+/* Lists whose rows run to the edges pad themselves */
+.Card-panel--flush {
+	overflow: hidden;
+	padding: 0;
 }
 
 .Detail-subtitle {
@@ -2615,10 +2601,6 @@ table {
 	}
 }
 
-.Timeline-title {
-	margin-bottom: calc(var(--spacing) * 4);
-}
-
 /* Team leaders | head-to-head, in equal halves on wide screens */
 
 /* Both teams' rosters, side by side until the screen gets narrow */
@@ -2639,13 +2621,6 @@ table {
 	display: flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 2);
-	margin-top: 0;
-	font-size: var(--text-lg);
-	font-weight: var(--weight-semibold);
-}
-
-.GamePage-roster-title .SectionLabel {
-	margin-left: auto;
 }
 
 /* Series record: headline, one bar split into wins/ties/wins, legend */
@@ -2851,17 +2826,15 @@ table {
 .Activity {
 	contain: size;
 	align-self: stretch;
-	display: flex;
-	flex-direction: column;
 	min-height: 16rem;
-	/* The scroll area pads itself, so its scrollbar runs along the card's
-	   edge instead of over the replay buttons */
-	padding-inline: 0;
-	padding-bottom: 0;
 }
 
-.Activity .Detail-panel-title {
-	padding-inline: calc(var(--spacing) * 5);
+/* The scroll area pads itself, so its scrollbar runs along the card's edge
+   instead of over the replay buttons */
+.Activity-panel {
+	display: flex;
+	flex-direction: column;
+	padding: 0;
 }
 
 @media (max-width: 1080px) {
@@ -2917,7 +2890,7 @@ table {
 	min-height: 0;
 	overflow: auto;
 	overscroll-behavior: contain;
-	padding: 0 calc(var(--spacing) * 5) calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
 }
 
 /* Loading, centered in the space the feed will fill */
@@ -3267,20 +3240,10 @@ table {
 
 /* === RecentComparisons (Compare page, before both teams are picked) === */
 
-.RecentComparisons {
-	display: flex;
-	flex-direction: column;
-	gap: calc(var(--spacing) * 2);
-}
-
 .RecentComparisons-list {
 	margin: 0;
 	padding: calc(var(--spacing) * 1);
 	list-style: none;
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
 }
 
 .RecentComparisons-item {
@@ -4548,22 +4511,6 @@ a.Compare-chip:hover {
 }
 
 /* A day's games on the home page, in a card like a rink page's tables */
-.GameTableSection-panel {
-	container-type: inline-size;
-	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 6);
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
-}
-
-.GameTableSection-empty {
-	margin: 0;
-	padding: calc(var(--spacing) * 2) 0;
-	color: var(--muted-fg);
-	font-size: var(--text-base);
-}
-
 /* Each day is its own table; fixed column widths line them all up. Narrow
    screens scroll it sideways rather than squeezing the names. */
 .GameTable {
@@ -4753,14 +4700,6 @@ a.Compare-chip:hover {
 }
 
 /* === Team leaders === */
-
-.Leaders-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: calc(var(--spacing) * 4);
-	margin-bottom: calc(var(--spacing) * 3);
-}
 
 /* Team page: leaders beside the roster, which needs the width; stacked
    when narrow */
@@ -5340,20 +5279,6 @@ a.Compare-chip:hover {
 	gap: calc(var(--spacing) * 6);
 }
 
-.SearchResults-group {
-	display: flex;
-	flex-direction: column;
-	gap: calc(var(--spacing) * 2);
-}
-
-.SearchResults-card {
-	overflow: hidden;
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
-}
-
 .SearchResults-list {
 	margin: 0;
 	padding: calc(var(--spacing) * 1);
@@ -5445,20 +5370,10 @@ a.Compare-chip:hover {
 	color: var(--prose-fg);
 }
 
-.BadgesPage-section {
-	display: flex;
-	flex-direction: column;
-	gap: calc(var(--spacing) * 3);
-}
-
 .BadgesPage-list {
 	margin: 0;
 	padding: 0;
 	list-style: none;
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
 }
 
 .BadgesPage-badge {
@@ -6495,13 +6410,8 @@ a.Compare-chip:hover {
 	background: var(--subtle-bg);
 }
 
-.StatusPage-panel {
+.StatusPage > .Section {
 	margin-top: calc(var(--spacing) * 4);
-	padding: calc(var(--spacing) * 5);
-	background: var(--panel-bg);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius);
-	box-shadow: var(--shadow-sm);
 }
 
 .StatusBanner {
@@ -6689,7 +6599,7 @@ a.Compare-chip:hover {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: calc(var(--spacing) * 4);
-	margin: calc(var(--spacing) * 3) 0 0;
+	margin: 0;
 }
 
 .StatusDeploy-list dt {
@@ -6718,10 +6628,6 @@ a.Compare-chip:hover {
 @media (max-width: 600px) {
 	.StatusPage-header {
 		margin-top: 0;
-	}
-
-	.StatusPage-panel {
-		padding: calc(var(--spacing) * 4);
 	}
 
 	.StatusComponent-head {
@@ -6795,16 +6701,9 @@ a.Compare-chip:hover {
 		padding-inline: calc(var(--spacing) * 3);
 	}
 
-	.GameTableSection-panel {
-		padding-inline: calc(var(--spacing) * 1);
-	}
-
-	.GameTableCard-header {
-		padding-inline: calc(var(--spacing) * 3);
-	}
-
-	.GameTableCard .StatsTable-wrapper {
-		padding-inline: calc(var(--spacing) * 1);
+	.Card-panel:not(.Card-panel--flush, .Activity-panel),
+	.Activity-scroll {
+		padding: calc(var(--spacing) * 3);
 	}
 
 	.Detail-header,

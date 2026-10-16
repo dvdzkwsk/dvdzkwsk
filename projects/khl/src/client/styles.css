@@ -3181,21 +3181,12 @@ table {
 	transform: rotate(180deg);
 }
 
-.Matchup-swap:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-/* Until both teams are picked: between the teams, below "vs", covering the
-   end of the divider line */
+/* Until both teams are picked: between the teams, in place of "vs" */
 .Matchup-intro {
-	position: relative;
 	grid-area: 1 / 2;
-	align-self: end;
+	align-self: center;
 	justify-self: center;
 	max-width: 14rem;
-	padding-top: calc(var(--spacing) * 2);
-	background: var(--panel-bg);
 	text-align: center;
 }
 
@@ -3425,8 +3416,6 @@ a.Compare-chip:hover {
 	.Matchup-intro {
 		grid-area: 2 / 1 / auto / -1;
 		max-width: none;
-		padding-top: 0;
-		background: none;
 	}
 
 	.Compare-row {

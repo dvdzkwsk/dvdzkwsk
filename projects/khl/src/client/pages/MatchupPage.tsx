@@ -103,27 +103,29 @@ const MatchupPage = ({query}: RouteProps) => {
 							setParams({...params, aSeason: id})
 						}
 					/>
-					<div className="Matchup-center">
-						<span className="Matchup-vs">vs</span>
-						<Hint label="Swap sides">
-							<button
-								type="button"
-								className="Matchup-swap"
-								aria-label="Swap sides"
-								disabled={!a && !b && !aSeason && !bSeason}
-								onClick={() =>
-									setParams({
-										a: b,
-										aSeason: bSeason,
-										b: a,
-										bSeason: aSeason,
-									})
-								}
-							>
-								<SwapIcon />
-							</button>
-						</Hint>
-					</div>
+					{/* Until both teams are picked, the intro has this spot */}
+					{ready && (
+						<div className="Matchup-center">
+							<span className="Matchup-vs">vs</span>
+							<Hint label="Swap sides">
+								<button
+									type="button"
+									className="Matchup-swap"
+									aria-label="Swap sides"
+									onClick={() =>
+										setParams({
+											a: b,
+											aSeason: bSeason,
+											b: a,
+											bSeason: aSeason,
+										})
+									}
+								>
+									<SwapIcon />
+								</button>
+							</Hint>
+						</div>
+					)}
 					<MatchupSide
 						side="b"
 						teams={teamsB}

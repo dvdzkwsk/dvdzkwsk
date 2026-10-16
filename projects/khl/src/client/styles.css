@@ -5079,6 +5079,7 @@ a.Compare-chip:hover {
 
 /* A badge's emoji in a rounded tile */
 .BadgeIcon {
+	position: relative;
 	display: grid;
 	place-items: center;
 	flex: none;
@@ -5089,6 +5090,23 @@ a.Compare-chip:hover {
 	background: var(--subtle-bg);
 	font-size: var(--text-2xl);
 	line-height: 1;
+}
+
+/* "×2" on the corner, for a badge earned more than once */
+.BadgeIcon-count {
+	position: absolute;
+	top: calc(var(--spacing) * -1.5);
+	right: calc(var(--spacing) * -1.5);
+	min-width: 18px;
+	padding: 0 calc(var(--spacing) * 1);
+	border: 2px solid var(--panel-bg);
+	border-radius: var(--radius-pill);
+	background: var(--accent);
+	color: var(--accent-fg);
+	font-size: var(--text-3xs);
+	font-weight: var(--weight-bold);
+	line-height: 14px;
+	text-align: center;
 }
 
 /* About an emoji's width, at the flag's 3:2 */

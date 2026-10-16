@@ -409,14 +409,17 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 				</Link>
 			</h2>
 			<ul className="PlayerBadges">
-				{badges.map((badge) => (
-					<Hint key={badge.id} label={<BadgeHint badge={badge} />}>
+				{badges.map(({badge, count}) => (
+					<Hint
+						key={badge.id}
+						label={<BadgeHint badge={badge} count={count} />}
+					>
 						<li
 							className="PlayerBadges-badge"
 							tabIndex={0}
-							aria-label={`${badge.label}: ${badge.description}`}
+							aria-label={`${badge.label}${count > 1 ? ` ×${count}` : ""}: ${badge.description}`}
 						>
-							<BadgeIcon badge={badge} />
+							<BadgeIcon badge={badge} count={count} />
 						</li>
 					</Hint>
 				))}

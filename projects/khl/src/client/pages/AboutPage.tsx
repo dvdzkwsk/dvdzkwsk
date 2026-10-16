@@ -1,3 +1,4 @@
+import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
@@ -30,7 +31,7 @@ const FEATURES: Feature[] = [
 	},
 	{
 		title: "Activity feed",
-		text: "Every player and team page shows their latest goals, assists, and penalties. Easily jump to the replay for each key moment.",
+		text: "Every player and team page shows their latest goals, assists, and penalties, with direct links to LiveBarn.*",
 		art: ActivityArt,
 	},
 	{
@@ -92,6 +93,15 @@ const AboutPage = () => {
 						<FeatureCard key={feature.title} feature={feature} />
 					))}
 				</ul>
+
+				{/* See getGameEventClockTime for how the times are estimated */}
+				<p className={cx("AboutPage-note", "AboutPage-note--footer")}>
+					*Scoresheets only give the game clock, not the time of day,
+					so we estimate when each goal or penalty happened from the
+					scheduled start, typical warmups and intermissions, and
+					stoppages. Replays can land a minute or two off, so you may
+					need to scrub a little.
+				</p>
 			</div>
 		</PageShell>
 	)

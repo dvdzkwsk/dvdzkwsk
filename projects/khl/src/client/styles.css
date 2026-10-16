@@ -4873,6 +4873,13 @@ a.Compare-chip:hover {
 	color: var(--muted-fg);
 }
 
+/* Below the cards, for the "*" on one of them */
+.AboutPage-note--footer {
+	max-width: 720px;
+	margin-top: calc(var(--spacing) * 6);
+	line-height: 1.5;
+}
+
 /* The diagrams: shapes only, colored by the theme */
 .AboutArt {
 	display: block;

@@ -1811,7 +1811,8 @@ function toSuggestionsByKind(
 	response: SearchResponse,
 ): Record<SuggestionKind, Suggestion[]> {
 	const players = response.players.map((player): Suggestion => {
-		const teams = player.registrations.map((r) => r.teamName)
+		// Once per team, though a player is registered once per season
+		const teams = [...new Set(player.registrations.map((r) => r.teamName))]
 		return {
 			key: `player:${player.playerId}`,
 			kind: "player",
@@ -1964,11 +1965,15 @@ const SiteSearch = () => {
 		search("")
 	}
 
-	// Leaving the page (e.g. after picking a suggestion) clears the search
+	// Leaving the page (e.g. after picking a suggestion) clears the search.
+	// On /search it keeps the query instead, to refine it from here.
 	React.useEffect(() => {
 		clear()
 		setExpanded(false)
-	}, [location.pathname])
+		if (location.pathname === "/search") {
+			setInput(new URLSearchParams(location.search).get("q") ?? "")
+		}
+	}, [location.pathname, location.search])
 
 	const onSubmit = (e: React.FormEvent) => {
 		e.preventDefault()
@@ -2114,14 +2119,7 @@ const SiteSearch = () => {
 											</span>
 										)}
 									</span>
-									<span
-										className={cx(
-											"SiteSearch-kind",
-											`SiteSearch-kind--${item.kind}`,
-										)}
-									>
-										{SUGGESTION_KIND_LABELS[item.kind]}
-									</span>
+									<SearchKind kind={item.kind} />
 								</Autocomplete.Item>
 							)}
 						</Autocomplete.List>
@@ -2168,35 +2166,79 @@ export const SearchResults = ({response}: {response: SearchResponse}) => {
 	return (
 		<div className="SearchResults">
 			{kinds.map((kind) => (
-				<section key={kind} className="SearchResults-group">
-					<h2 className="SectionLabel">
-						{SUGGESTION_KIND_HEADINGS[kind]} · {byKind[kind].length}
-					</h2>
-					<ul className="SearchResults-list">
-						{byKind[kind].map((item) => (
-							<li key={item.key}>
-								<Link
-									className="SearchResults-item"
-									href={item.href}
-								>
-									<SuggestionIcon suggestion={item} />
-									<span className="SearchResults-item-text">
-										<span className="SearchResults-item-label">
-											{item.label}
-										</span>
-										{item.detail && (
-											<span className="SearchResults-item-detail">
-												{item.detail}
-											</span>
-										)}
-									</span>
-								</Link>
-							</li>
-						))}
-					</ul>
-				</section>
+				<SearchResultsGroup
+					key={kind}
+					kind={kind}
+					items={byKind[kind]}
+				/>
 			))}
 		</div>
+	)
+}
+
+/** Results shown per kind before "Show more" */
+const SEARCH_RESULTS_LIMIT = 5
+
+const SearchResultsGroup = ({
+	kind,
+	items,
+}: {
+	kind: SuggestionKind
+	items: Suggestion[]
+}) => {
+	const [expanded, setExpanded] = React.useState(false)
+	const hidden = expanded
+		? 0
+		: Math.max(0, items.length - SEARCH_RESULTS_LIMIT)
+	return (
+		<section className="SearchResults-group">
+			<h2 className="SectionLabel">
+				{SUGGESTION_KIND_HEADINGS[kind]} · {items.length}
+			</h2>
+			<div className="SearchResults-card">
+				<ul className="SearchResults-list">
+					{items.slice(0, items.length - hidden).map((item) => (
+						<li key={item.key}>
+							<Link
+								className="SearchResults-item"
+								href={item.href}
+							>
+								<SuggestionIcon suggestion={item} />
+								<span className="SearchResults-item-text">
+									<span className="SearchResults-item-label">
+										{item.label}
+									</span>
+									{item.detail && (
+										<span className="SearchResults-item-detail">
+											{item.detail}
+										</span>
+									)}
+								</span>
+								<SearchKind kind={item.kind} />
+							</Link>
+						</li>
+					))}
+				</ul>
+				{hidden > 0 && (
+					<button
+						type="button"
+						className="SearchResults-more"
+						onClick={() => setExpanded(true)}
+					>
+						Show {hidden} more
+					</button>
+				)}
+			</div>
+		</section>
+	)
+}
+
+/** "Player", "Team", or "Location", in that kind's color, on a search result */
+const SearchKind = ({kind}: {kind: SuggestionKind}) => {
+	return (
+		<span className={cx("SearchKind", `SearchKind--${kind}`)}>
+			{SUGGESTION_KIND_LABELS[kind]}
+		</span>
 	)
 }
 

@@ -4099,7 +4099,8 @@ a.Compare-chip:hover {
 	text-overflow: ellipsis;
 }
 
-.SiteSearch-kind {
+/* A search result's kind: on the header dropdown and /search */
+.SearchKind {
 	flex: none;
 	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
 	border-radius: var(--radius-pill);
@@ -4109,17 +4110,17 @@ a.Compare-chip:hover {
 	color: var(--muted-fg);
 }
 
-.SiteSearch-kind--player {
+.SearchKind--player {
 	background: var(--kind-player-bg);
 	color: var(--kind-player-fg);
 }
 
-.SiteSearch-kind--team {
+.SearchKind--team {
 	background: var(--kind-team-bg);
 	color: var(--kind-team-fg);
 }
 
-.SiteSearch-kind--rink {
+.SearchKind--rink {
 	background: var(--kind-rink-bg);
 	color: var(--kind-rink-fg);
 }
@@ -5159,7 +5160,13 @@ a.Compare-chip:hover {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 6);
+	width: 100%;
 	max-width: 760px;
+	margin-inline: auto;
+}
+
+.SearchPage-header {
+	text-align: center;
 }
 
 .SearchPage-title {
@@ -5169,47 +5176,17 @@ a.Compare-chip:hover {
 	letter-spacing: -0.025em;
 }
 
-.SearchPage-form {
-	position: relative;
-}
-
-.SearchPage-icon {
-	position: absolute;
-	top: 50%;
-	left: calc(var(--spacing) * 4);
-	width: 18px;
-	height: 18px;
-	translate: 0 -50%;
-	color: var(--subtle-fg);
-	pointer-events: none;
-}
-
-/* 16px, or iOS zooms in on focus */
-.SearchPage-input {
-	width: 100%;
-	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4)
-		calc(var(--spacing) * 3) calc(var(--spacing) * 11);
-	border: 1px solid var(--panel-border);
-	border-radius: var(--radius-pill);
-	background: var(--panel-bg);
-	color: inherit;
-	font: inherit;
-	font-size: var(--text-lg);
-}
-
-.SearchPage-input::-webkit-search-cancel-button {
-	appearance: none;
-}
-
-.SearchPage-input:focus {
-	outline: none;
-	border-color: var(--subtle-fg);
-	box-shadow: 0 0 0 4px var(--focus-ring);
+.SearchPage-query {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-size: var(--text-xl);
+	color: var(--muted-fg);
+	overflow-wrap: anywhere;
 }
 
 .SearchPage-hint,
 .SearchResults-empty {
 	margin: 0;
+	text-align: center;
 	color: var(--muted-fg);
 }
 
@@ -5227,14 +5204,38 @@ a.Compare-chip:hover {
 	gap: calc(var(--spacing) * 2);
 }
 
-.SearchResults-list {
-	margin: 0;
-	padding: calc(var(--spacing) * 1);
-	list-style: none;
+.SearchResults-card {
+	overflow: hidden;
 	background: var(--panel-bg);
 	border: 1px solid var(--panel-border);
 	border-radius: var(--radius);
 	box-shadow: var(--shadow-sm);
+}
+
+.SearchResults-list {
+	margin: 0;
+	padding: calc(var(--spacing) * 1);
+	list-style: none;
+}
+
+/* Like a stats table's "Show all", along the card's bottom */
+.SearchResults-more {
+	appearance: none;
+	display: block;
+	width: 100%;
+	padding: calc(var(--spacing) * 2.5);
+	border: 0;
+	border-top: 1px solid var(--panel-border);
+	background: none;
+	font: inherit;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-medium);
+	color: var(--link);
+	cursor: pointer;
+}
+
+.SearchResults-more:hover {
+	background: var(--subtle-bg);
 }
 
 .SearchResults-item {

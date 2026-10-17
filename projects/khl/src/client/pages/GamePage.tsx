@@ -1,4 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
@@ -82,11 +83,12 @@ const GamePage = ({params, query}: RouteProps) => {
 							view={getGameView(game, query)}
 							now={now}
 						/>
-						{getGameView(game, query) === "result" ? (
-							<ResultView game={game} />
-						) : (
-							<PreviewView game={game} now={now} />
-						)}
+						{matchFn(getGameView(game, query), {
+							result: () => <ResultView game={game} />,
+							preview: () => (
+								<PreviewView game={game} now={now} />
+							),
+						})}
 					</div>
 				)}
 			</AsyncContent>
@@ -236,6 +238,50 @@ const GameHeader = ({
 	now: Date
 }) => {
 	const {boxScore} = game
+	const notFinal = (
+		<>
+			{matchValue(getGameState(game, now), {
+				upcoming: null,
+				live: (
+					<span
+						className={cx(
+							"BoxScore-status",
+							"BoxScore-status--live",
+						)}
+					>
+						Live
+					</span>
+				),
+				final: null,
+			})}
+			{/* Away @ home, until there's a score */}
+			<span className="BoxScore-at">@</span>
+			<div className="BoxScore-time">
+				{formatGameTime(boxScore.startsAt)}
+			</div>
+			<div className="BoxScore-when">
+				{formatGameDate(boxScore.startsAt, now)}
+			</div>
+		</>
+	)
+	const center = matchFn(view, {
+		result: () =>
+			game.score ? (
+				<>
+					<span className="BoxScore-status">Final</span>
+					<div className="BoxScore-score">
+						{formatScore(game.score.away, game.score.home)}
+					</div>
+					<div className="BoxScore-when">
+						{formatGameDate(boxScore.startsAt, now)} ·{" "}
+						{formatGameTime(boxScore.startsAt)}
+					</div>
+				</>
+			) : (
+				notFinal
+			),
+		preview: () => notFinal,
+	})
 	return (
 		<header className={cx("Detail-header", "BoxScore-header")}>
 			<HeaderTeam
@@ -244,39 +290,7 @@ const GameHeader = ({
 				form={game.form.away}
 			/>
 			<div className="BoxScore-center">
-				{view === "result" && game.score ? (
-					<>
-						<span className="BoxScore-status">Final</span>
-						<div className="BoxScore-score">
-							{formatScore(game.score.away, game.score.home)}
-						</div>
-						<div className="BoxScore-when">
-							{formatGameDate(boxScore.startsAt, now)} ·{" "}
-							{formatGameTime(boxScore.startsAt)}
-						</div>
-					</>
-				) : (
-					<>
-						{getGameState(game, now) === "live" && (
-							<span
-								className={cx(
-									"BoxScore-status",
-									"BoxScore-status--live",
-								)}
-							>
-								Live
-							</span>
-						)}
-						{/* Away @ home, until there's a score */}
-						<span className="BoxScore-at">@</span>
-						<div className="BoxScore-time">
-							{formatGameTime(boxScore.startsAt)}
-						</div>
-						<div className="BoxScore-when">
-							{formatGameDate(boxScore.startsAt, now)}
-						</div>
-					</>
-				)}
+				{center}
 				{boxScore.arena && (
 					<div className="BoxScore-when">
 						<RinkLink arena={boxScore.arena} />
@@ -342,23 +356,27 @@ const GameLiveBarnLinks = ({game, now}: {game: GameResponse; now: Date}) => {
 		return <NotOnLiveBarn />
 	}
 	const state = getGameState(game, now)
+	const title = matchValue(state, {
+		upcoming: LIVEBARN_TITLES.open,
+		live: LIVEBARN_TITLES.live,
+		final: LIVEBARN_TITLES.replay,
+	})
+	const live = matchValue(state, {upcoming: false, live: true, final: false})
 	return (
 		<>
 			{livebarn.map((link) => (
 				<LiveBarnBadge
 					key={link.surfaceId}
-					href={state === "final" ? link.vodUrl : link.liveUrl}
+					href={matchValue(state, {
+						upcoming: link.liveUrl,
+						live: link.liveUrl,
+						final: link.vodUrl,
+					})}
 					surfaceName={
 						livebarn.length > 1 ? link.surfaceName : undefined
 					}
-					title={LIVEBARN_TITLES[
-						state === "final"
-							? "replay"
-							: state === "live"
-								? "live"
-								: "open"
-					](link.surfaceName)}
-					live={state === "live"}
+					title={title(link.surfaceName)}
+					live={live}
 				/>
 			))}
 		</>
@@ -379,7 +397,7 @@ const HeaderTeam = ({
 			{/* "■ Away": the swatch matches the head-to-head colors */}
 			<span className="BoxScore-eyebrow">
 				<span className="Compare-key" aria-hidden />
-				{homeAway === "away" ? "Away" : "Home"}
+				{matchValue(homeAway, {away: "Away", home: "Home"})}
 			</span>
 			<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={88} />
 			<div className="BoxScore-team-name">
@@ -486,30 +504,28 @@ const Timeline = ({game}: {game: GameResponse}) => {
 							{formatPeriodName(period)}
 						</h3>
 						<ol className="Timeline-list">
-							{events.map((event, i) => (
-								<TimelineItem
-									key={i}
-									event={event}
-									team={teams.get(
-										event.kind === "goal"
-											? event.goal.teamId
-											: event.penalty.teamId,
-									)}
-									side={
-										(event.kind === "goal"
-											? event.goal.teamId
-											: event.penalty.teamId) === home.id
-											? "home"
-											: "away"
-									}
-									playerIds={game.playerIds}
-									replays={toEventReplayLinks(
-										game.boxScore,
-										game.livebarn,
-										getEventAt(event),
-									)}
-								/>
-							))}
+							{events.map((event, i) => {
+								const teamId = matchField(event, "kind", {
+									goal: (e) => e.goal.teamId,
+									penalty: (e) => e.penalty.teamId,
+								})
+								return (
+									<TimelineItem
+										key={i}
+										event={event}
+										team={teams.get(teamId)}
+										side={
+											teamId === home.id ? "home" : "away"
+										}
+										playerIds={game.playerIds}
+										replays={toEventReplayLinks(
+											game.boxScore,
+											game.livebarn,
+											getEventAt(event),
+										)}
+									/>
+								)
+							})}
 						</ol>
 					</div>
 				))
@@ -544,9 +560,8 @@ const TimelineItem = ({
 			estimated={replay.estimated}
 		/>
 	))
-	if (event.kind === "penalty") {
-		const {penalty} = event
-		return (
+	return matchField(event, "kind", {
+		penalty: ({penalty}) => (
 			<li
 				className={cx(
 					"Timeline-item",
@@ -574,73 +589,90 @@ const TimelineItem = ({
 				<span className="Timeline-tag">{penalty.duration}</span>
 				{replayLinks}
 			</li>
-		)
-	}
-	const {goal, awayGoals, homeGoals} = event
-	return (
-		<li
-			className={cx(
-				"Timeline-item",
-				"Timeline-item--goal",
-				`Timeline-item--${side}`,
-			)}
-		>
-			<span className="Timeline-time">{goal.time}</span>
-			{avatar}
-			<div className="Timeline-body">
-				<div className="Timeline-scorer">
-					<PlayerName player={goal.scorer} playerIds={playerIds} />
-					{goal.scorerSeasonGoals !== null && (
-						<span className="Timeline-detail">
-							{" "}
-							({goal.scorerSeasonGoals})
-						</span>
-					)}
-					{goal.type && (
-						<Hint label={GOAL_TYPES[goal.type]}>
-							<span className="Timeline-type">{goal.type}</span>
-						</Hint>
-					)}
-				</div>
-				<div className="Timeline-detail">
-					{goal.assists.length === 0
-						? "Unassisted"
-						: goal.assists.map((assist, i) => (
-								<span key={assist.id}>
-									{i > 0 && ", "}
-									<PlayerName
-										player={assist}
-										playerIds={playerIds}
-									/>
-								</span>
-							))}
-				</div>
-			</div>
-			{/* The scoring team's number changed: it takes the team's color */}
-			<span
-				className={cx("Timeline-tag", "Timeline-score")}
-				aria-label={`${awayGoals}–${homeGoals}`}
+		),
+		goal: ({goal, awayGoals, homeGoals}) => (
+			<li
+				className={cx(
+					"Timeline-item",
+					"Timeline-item--goal",
+					`Timeline-item--${side}`,
+				)}
 			>
+				<span className="Timeline-time">{goal.time}</span>
+				{avatar}
+				<div className="Timeline-body">
+					<div className="Timeline-scorer">
+						<PlayerName
+							player={goal.scorer}
+							playerIds={playerIds}
+						/>
+						{goal.scorerSeasonGoals !== null && (
+							<span className="Timeline-detail">
+								{" "}
+								({goal.scorerSeasonGoals})
+							</span>
+						)}
+						{goal.type && (
+							<Hint label={GOAL_TYPES[goal.type]}>
+								<span className="Timeline-type">
+									{goal.type}
+								</span>
+							</Hint>
+						)}
+					</div>
+					<div className="Timeline-detail">
+						{goal.assists.length === 0
+							? "Unassisted"
+							: goal.assists.map((assist, i) => (
+									<span key={assist.id}>
+										{i > 0 && ", "}
+										<PlayerName
+											player={assist}
+											playerIds={playerIds}
+										/>
+									</span>
+								))}
+					</div>
+				</div>
+				{/* The scoring team's number changed: it takes the team's color */}
 				<span
-					className={cx(side === "away" && "Timeline-score-changed")}
+					className={cx("Timeline-tag", "Timeline-score")}
+					aria-label={`${awayGoals}–${homeGoals}`}
 				>
-					{awayGoals}
+					<span
+						className={cx(
+							matchValue(side, {
+								away: "Timeline-score-changed",
+								home: false,
+							}),
+						)}
+					>
+						{awayGoals}
+					</span>
+					<span className="Timeline-score-dash">–</span>
+					<span
+						className={cx(
+							matchValue(side, {
+								away: false,
+								home: "Timeline-score-changed",
+							}),
+						)}
+					>
+						{homeGoals}
+					</span>
 				</span>
-				<span className="Timeline-score-dash">–</span>
-				<span
-					className={cx(side === "home" && "Timeline-score-changed")}
-				>
-					{homeGoals}
-				</span>
-			</span>
-			{replayLinks}
-		</li>
-	)
+				{replayLinks}
+			</li>
+		),
+	})
 }
 
 /** When a timeline event happened on the scoresheet */
 function getEventAt(event: TimelineEvent): {period: string; time: string} {
-	return event.kind === "goal" ? event.goal : event.penalty
+	return matchField(event, "kind", {
+		goal: (e) => e.goal,
+		penalty: (e) => e.penalty,
+	})
 }
 
 function getEventPeriod(event: TimelineEvent): string {

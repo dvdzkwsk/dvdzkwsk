@@ -1,4 +1,5 @@
 import {z} from "zod"
+import {matchFn} from "./MatchUtil.js"
 
 export type HttpMethodWithoutBody = "GET" | "DELETE"
 export type HttpMethodWithBody = "POST" | "PUT" | "PATCH"
@@ -107,10 +108,10 @@ export async function doFetch<TRequestBody, TResponseBody>(
 		)
 	}
 
-	const body: unknown =
-		request.responseFormat === "text"
-			? await response.text()
-			: await response.json()
+	const body: unknown = await matchFn(request.responseFormat ?? "json", {
+		json: () => response.json(),
+		text: () => response.text(),
+	})
 	const responseResult = request.responseSchema.safeParse(body)
 	if (!responseResult.success) {
 		throw new Error(

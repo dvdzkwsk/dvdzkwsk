@@ -1,4 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {matchField} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {LIST_GAMES_ENDPOINT, LIST_RINKS_ENDPOINT} from "../../shared/ApiJson.js"
 import {getLeagueDayKey} from "../../shared/LeagueTime.js"
@@ -50,8 +51,11 @@ const HomePage = ({query}: RouteProps) => {
 	// The schedule drops today's games once they're final, so today's come
 	// from the scoreboard too. Refetch as each one ends to pick up its score.
 	const today = includesToday(filters.day, now) ? getLeagueDayKey(now) : null
-	const endedToday =
-		state.status === "success" ? countEndedToday(state.data.rinks, now) : 0
+	const endedToday = matchField(state, "status", {
+		loading: () => 0,
+		error: () => 0,
+		success: (s) => countEndedToday(s.data.rinks, now),
+	})
 	const todayState = useAsync(async () => {
 		if (!today) {
 			return []
@@ -61,9 +65,13 @@ const HomePage = ({query}: RouteProps) => {
 	}, [today, endedToday])
 	// Keep showing the last scoreboard while a refetch loads
 	const todayGames = React.useRef<ScheduledGame[]>([])
-	if (todayState.status === "success") {
-		todayGames.current = todayState.data
-	}
+	matchField(todayState, "status", {
+		loading: () => {},
+		error: () => {},
+		success: (s) => {
+			todayGames.current = s.data
+		},
+	})
 	const setFilters = (changes: Partial<GameFilterValues>) => {
 		// Replace rather than push: filter tweaks shouldn't fill up history
 		history.replace({
@@ -80,8 +88,11 @@ const HomePage = ({query}: RouteProps) => {
 					loadingLabel="Loading the schedule…"
 				>
 					{({rinks, season}) => {
-						const pastGames =
-							pastState.status === "success" ? pastState.data : []
+						const pastGames = matchField(pastState, "status", {
+							loading: () => [],
+							error: () => [],
+							success: (s) => s.data,
+						})
 						const upcoming = getScheduledGames(rinks, now)
 						const games = [
 							...pastGames,

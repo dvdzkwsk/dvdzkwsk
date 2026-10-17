@@ -1,4 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	LeaguePlayer,
@@ -101,9 +102,11 @@ const PlayersPage = ({query}: RouteProps) => {
 	const [toolbarData, setToolbarData] =
 		React.useState<PlayersResponse | null>(null)
 	React.useEffect(() => {
-		if (state.status === "success") {
-			setToolbarData(state.data)
-		}
+		matchField(state, "status", {
+			loading: () => {},
+			error: () => {},
+			success: (s) => setToolbarData(s.data),
+		})
 	}, [state])
 
 	// The first time, every team's stats page is fetched
@@ -130,7 +133,10 @@ const PlayersPage = ({query}: RouteProps) => {
 									replaceQueryParam(
 										history,
 										"position",
-										next === "skaters" ? null : next,
+										matchFn(next, {
+											skaters: () => null,
+											goalies: (v) => v,
+										}),
 									)
 								}
 							/>
@@ -240,7 +246,10 @@ const PlayerGroups = ({
 	name: string
 	onRetry: () => void
 }) => {
-	const label = position === "goalies" ? "goalies" : "skaters"
+	const label = matchValue(position, {
+		goalies: "goalies",
+		skaters: "skaters",
+	})
 	// A new array each render, so it's compared by value
 	const divisionsKey = divisions.join(",")
 	const groups = React.useMemo(() => {
@@ -250,16 +259,19 @@ const PlayerGroups = ({
 			divisionsKey.split(",").filter(Boolean),
 		)
 		const needle = normalizePlayerName(name)
-		const players = position === "goalies" ? data.goalies : data.skaters
+		const players = matchValue(position, {
+			goalies: data.goalies,
+			skaters: data.skaters,
+		})
+		const compare = matchValue(position, {
+			goalies: compareGoalies,
+			skaters: compareSkaters,
+		})
 		const rows = players
 			.filter((p) => normalizePlayerName(p.name).includes(needle))
 			.map((player) => ({player, team: teams.get(player.teamId)!}))
 			.filter((row) => visible.has(row.team.divisionName))
-			.sort((a, b) =>
-				position === "goalies"
-					? compareGoalies(a.player, b.player)
-					: compareSkaters(a.player, b.player),
-			)
+			.sort((a, b) => compare(a.player, b.player))
 		return groupPlayers(rows, groupBy, label)
 	}, [data, position, groupBy, label, divisionsKey, name])
 	return (
@@ -302,13 +314,20 @@ const PlayerGroups = ({
 				>
 					<PlayersTable
 						rows={group.rows}
-						columns={
-							position === "goalies"
-								? GOALIE_COLUMNS
-								: SKATER_COLUMNS
-						}
-						showTeam={groupBy !== "team"}
-						showDivision={groupBy === "none"}
+						columns={matchValue(position, {
+							goalies: GOALIE_COLUMNS,
+							skaters: SKATER_COLUMNS,
+						})}
+						showTeam={matchValue(groupBy, {
+							division: true,
+							team: false,
+							none: true,
+						})}
+						showDivision={matchValue(groupBy, {
+							division: false,
+							team: false,
+							none: true,
+						})}
 					/>
 				</Card>
 			))}
@@ -322,57 +341,64 @@ function groupPlayers(
 	groupBy: GroupBy,
 	label: string,
 ): PlayerGroup[] {
-	if (groupBy === "none") {
-		return rows.length > 0
-			? [{key: "all", title: `All ${label} · ${rows.length}`, rows}]
-			: []
-	}
-	const byKey = new Map<string, PlayerRow[]>()
-	const keyOf = (row: PlayerRow) =>
-		groupBy === "team" ? row.team.team.id : row.team.divisionName
-	for (const row of rows) {
-		byKey.set(keyOf(row), [...(byKey.get(keyOf(row)) ?? []), row])
-	}
-	const groups = [...byKey.values()]
-	if (groupBy === "division") {
-		return sortByDivision(groups, (g) => g[0]!.team.divisionName).map(
-			(g) => ({
+	return matchFn(groupBy, {
+		none: () =>
+			rows.length > 0
+				? [{key: "all", title: `All ${label} · ${rows.length}`, rows}]
+				: [],
+		division: () =>
+			sortByDivision(
+				splitRows(rows, (row) => row.team.divisionName),
+				(g) => g[0]!.team.divisionName,
+			).map((g) => ({
 				key: g[0]!.team.divisionName,
 				title: `${g[0]!.team.divisionName} · ${g.length}`,
 				rows: g,
+			})),
+		// Teams by division, then by name within it
+		team: () =>
+			sortByDivision(
+				splitRows(rows, (row) => row.team.team.id).sort((a, b) =>
+					a[0]!.team.team.name.localeCompare(b[0]!.team.team.name),
+				),
+				(g) => g[0]!.team.divisionName,
+			).map((g) => {
+				const {team, divisionName} = g[0]!.team
+				return {
+					key: team.id,
+					title: (
+						<>
+							<TeamAvatar
+								name={team.name}
+								logoUrl={team.logoUrl}
+								size={24}
+							/>
+							<TeamLink
+								className="PlayersPage-team-name"
+								team={team}
+								seasonId={team.seasonId}
+							/>
+							<span>
+								{divisionName} · {g.length}
+							</span>
+						</>
+					),
+					rows: g,
+				}
 			}),
-		)
-	}
-	// Teams by division, then by name within it
-	return sortByDivision(
-		groups.sort((a, b) =>
-			a[0]!.team.team.name.localeCompare(b[0]!.team.team.name),
-		),
-		(g) => g[0]!.team.divisionName,
-	).map((g) => {
-		const {team, divisionName} = g[0]!.team
-		return {
-			key: team.id,
-			title: (
-				<>
-					<TeamAvatar
-						name={team.name}
-						logoUrl={team.logoUrl}
-						size={24}
-					/>
-					<TeamLink
-						className="PlayersPage-team-name"
-						team={team}
-						seasonId={team.seasonId}
-					/>
-					<span>
-						{divisionName} · {g.length}
-					</span>
-				</>
-			),
-			rows: g,
-		}
 	})
+}
+
+/** `rows` split by `keyOf`, in order of each key's first row */
+function splitRows(
+	rows: PlayerRow[],
+	keyOf: (row: PlayerRow) => string,
+): PlayerRow[][] {
+	const byKey = new Map<string, PlayerRow[]>()
+	for (const row of rows) {
+		byKey.set(keyOf(row), [...(byKey.get(keyOf(row)) ?? []), row])
+	}
+	return [...byKey.values()]
 }
 
 /** Goalies by wins, then the fewest goals against per game */

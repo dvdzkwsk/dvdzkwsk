@@ -7,6 +7,7 @@ import {Cloudflare} from "./Cloudflare.js"
 import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
 import {getGitRevision} from "../pkg/util/GitUtil.js"
+import {matchFn, matchField} from "../pkg/util/MatchUtil.js"
 
 const logger = new Logger("Build")
 
@@ -47,8 +48,8 @@ type DeployTarget =
 /** Run with --dev to start dev servers, --deploy to build and publish. */
 async function main() {
 	const project = await promptBuildTarget()
-	switch (project.type) {
-		case "webapp":
+	return matchFn(project.type, {
+		webapp: () => {
 			if (process.argv.includes("--dev")) {
 				return devWebApp(project)
 			}
@@ -56,7 +57,8 @@ async function main() {
 				return deployWebApp(project)
 			}
 			return buildWebApp(project)
-	}
+		},
+	})
 }
 
 async function promptBuildTarget(): Promise<Project> {
@@ -138,12 +140,10 @@ function buildWebApp(project: Project): string {
 }
 
 function deployWebApp(project: Project) {
-	switch (project.deploy.type) {
-		case "netlify":
-			return deployToNetlify(project, project.deploy.siteIdEnvVar)
-		case "fly":
-			return deployToFly(project, project.deploy.domain)
-	}
+	return matchField(project.deploy, "type", {
+		netlify: (deploy) => deployToNetlify(project, deploy.siteIdEnvVar),
+		fly: (deploy) => deployToFly(project, deploy.domain),
+	})
 }
 
 /**

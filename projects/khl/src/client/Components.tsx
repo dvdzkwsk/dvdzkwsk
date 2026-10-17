@@ -14,6 +14,7 @@ import {Tooltip} from "@base-ui/react/tooltip"
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {Helmet} from "react-helmet"
@@ -529,25 +530,31 @@ export const RosterTables = ({
 	if (skaters.length === 0 && goalies.length === 0) {
 		return (
 			<p className="Detail-empty">
-				{kind === "game"
-					? "The league hasn't posted this game's lineup."
-					: "No roster for this season."}
+				{matchValue(kind, {
+					season: "No roster for this season.",
+					game: "The league hasn't posted this game's lineup.",
+					"pending-game": "No roster for this season.",
+				})}
 			</p>
 		)
 	}
 	// A game's lineup shows every column the league lists for it
-	const skaterColumns = {
+	const skaterColumns = matchValue(kind, {
 		season: SKATER_COLUMNS,
 		game: roster.skaterColumns,
 		"pending-game": GAME_SKATER_COLUMNS,
-	}[kind]
-	const goalieColumns = {
+	})
+	const goalieColumns = matchValue(kind, {
 		season: GOALIE_COLUMNS,
 		game: roster.goalieColumns,
 		"pending-game": GAME_GOALIE_COLUMNS,
-	}[kind]
+	})
 	// Season stats don't belong under a game's columns
-	const blank = kind === "pending-game"
+	const blank = matchValue(kind, {
+		season: false,
+		game: false,
+		"pending-game": true,
+	})
 	// Blank tables have no stats to rank by, so they go by name
 	const sortedSkaters = [...skaters]
 		.sort(blank ? (a, b) => a.name.localeCompare(b.name) : compareSkaters)
@@ -630,6 +637,11 @@ export const RosterPanels = ({
 	teams: RosterPanelTeam[]
 	kind?: RosterKind
 }) => {
+	const rosterLabel = matchValue(kind, {
+		season: "Roster",
+		game: "Lineup",
+		"pending-game": "Roster",
+	})
 	return (
 		<div className="GamePage-rosters">
 			{teams.map(({team, roster, note, title}) => (
@@ -649,7 +661,7 @@ export const RosterPanels = ({
 						<Hint label={title}>
 							<span className="SectionLabel">
 								{note && `${note} · `}
-								{kind === "game" ? "Lineup" : "Roster"} ·{" "}
+								{rosterLabel} ·{" "}
 								{roster.skaters.length + roster.goalies.length}
 							</span>
 						</Hint>
@@ -927,23 +939,21 @@ export function AsyncContent<T>({
 	size?: "inline" | "page"
 	children: (data: T) => React.ReactNode
 }) {
-	if (state.status === "loading") {
-		return size === "inline" ? (
-			<InlineLoader label={loadingLabel} slowNote={slowNote} />
-		) : (
-			<PageLoader label={loadingLabel} slowNote={slowNote} />
-		)
-	}
-	if (state.status === "error") {
-		return (
-			<ErrorState
-				title={errorTitle}
-				error={state.error}
-				onRetry={state.reload}
-			/>
-		)
-	}
-	return <>{children(state.data)}</>
+	return matchField(state, "status", {
+		loading: () =>
+			matchFn(size ?? "page", {
+				inline: () => (
+					<InlineLoader label={loadingLabel} slowNote={slowNote} />
+				),
+				page: () => (
+					<PageLoader label={loadingLabel} slowNote={slowNote} />
+				),
+			}),
+		error: (s) => (
+			<ErrorState title={errorTitle} error={s.error} onRetry={s.reload} />
+		),
+		success: (s) => <>{children(s.data)}</>,
+	})
 }
 
 // --- Loaders: PageLoader for a whole page, InlineLoader inside a section
@@ -1160,11 +1170,10 @@ export const ErrorState = ({
 
 	return (
 		<div className={cx("ErrorState", `ErrorState--${size}`)} role="alert">
-			{size === "page" ? (
-				<MissedShot className="ErrorState-art" />
-			) : (
-				<AlertIcon />
-			)}
+			{matchFn(size, {
+				page: () => <MissedShot className="ErrorState-art" />,
+				inline: () => <AlertIcon />,
+			})}
 			<div className="ErrorState-body">
 				<div className="ErrorState-title">{title}</div>
 				<p className="ErrorState-description">{describeError(error)}</p>
@@ -1738,15 +1747,14 @@ const ThemeSwitch = () => {
 	})
 	return (
 		<Hint
-			label={
-				theme === "dark"
-					? "Switch to light mode"
-					: "Switch to dark mode"
-			}
+			label={matchValue(theme, {
+				light: "Switch to dark mode",
+				dark: "Switch to light mode",
+			})}
 		>
 			<Switch.Root
 				className="ThemeSwitch"
-				checked={theme === "dark"}
+				checked={matchValue(theme, {light: false, dark: true})}
 				onCheckedChange={(dark) => {
 					const next: Theme = dark ? "dark" : "light"
 					applyTheme(next)
@@ -1995,12 +2003,39 @@ const SiteSearch = () => {
 		}
 	}
 
-	const message =
-		status.kind === "searching" && suggestions.length === 0
-			? "Searching…"
-			: status.kind === "done" && suggestions.length === 0
-				? `No players, teams, or locations match “${status.query}”.`
-				: null
+	const message = matchField(status, "kind", {
+		idle: () => null,
+		searching: () => (suggestions.length === 0 ? "Searching…" : null),
+		done: (s) =>
+			suggestions.length === 0
+				? `No players, teams, or locations match “${s.query}”.`
+				: null,
+		error: () => null,
+	})
+	const errorState = matchField(status, "kind", {
+		idle: () => null,
+		searching: () => null,
+		done: () => null,
+		error: (s) => (
+			<ErrorState
+				title={`Couldn't search for “${s.query}”`}
+				error={s.error}
+				onRetry={() => search(s.query)}
+				size="inline"
+			/>
+		),
+	})
+	const seeAllLink = matchField(status, "kind", {
+		idle: () => null,
+		searching: () => null,
+		done: (s) =>
+			suggestions.length > 0 && (
+				<Link className="SiteSearch-all" href={getSearchHref(s.query)}>
+					See all results for “{s.query}”
+				</Link>
+			),
+		error: () => null,
+	})
 
 	return (
 		<Autocomplete.Root
@@ -2081,7 +2116,14 @@ const SiteSearch = () => {
 					Cancel
 				</button>
 			</div>
-			<Autocomplete.Portal hidden={status.kind === "idle"}>
+			<Autocomplete.Portal
+				hidden={matchValue(status.kind, {
+					idle: true,
+					searching: false,
+					done: false,
+					error: false,
+				})}
+			>
 				<Autocomplete.Positioner
 					className={cx("Positioner", "SiteSearch-positioner")}
 					sideOffset={6}
@@ -2095,14 +2137,7 @@ const SiteSearch = () => {
 								</div>
 							)}
 						</Autocomplete.Status>
-						{status.kind === "error" && (
-							<ErrorState
-								title={`Couldn't search for “${status.query}”`}
-								error={status.error}
-								onRetry={() => search(status.query)}
-								size="inline"
-							/>
-						)}
+						{errorState}
 						<Autocomplete.List className="SiteSearch-list">
 							{(item: Suggestion) => (
 								<Autocomplete.Item
@@ -2135,14 +2170,7 @@ const SiteSearch = () => {
 								</Autocomplete.Item>
 							)}
 						</Autocomplete.List>
-						{status.kind === "done" && suggestions.length > 0 && (
-							<Link
-								className="SiteSearch-all"
-								href={getSearchHref(status.query)}
-							>
-								See all results for “{status.query}”
-							</Link>
-						)}
+						{seeAllLink}
 					</Autocomplete.Popup>
 				</Autocomplete.Positioner>
 			</Autocomplete.Portal>
@@ -2251,17 +2279,15 @@ const SearchKind = ({kind}: {kind: SuggestionKind}) => {
 
 /** Team logo, a person for players, or a pin in the city's color for rinks. */
 const SuggestionIcon = ({suggestion}: {suggestion: Suggestion}) => {
-	if (suggestion.kind === "team") {
-		return (
+	return matchFn(suggestion.kind, {
+		team: () => (
 			<TeamAvatar
 				name={suggestion.label}
 				logoUrl={suggestion.logoUrl}
 				size={30}
 			/>
-		)
-	}
-	if (suggestion.kind === "rink") {
-		return (
+		),
+		rink: () => (
 			<span
 				className="SiteSearch-icon-circle"
 				style={{color: getCity(suggestion.city ?? "")?.color}}
@@ -2279,23 +2305,23 @@ const SuggestionIcon = ({suggestion}: {suggestion: Suggestion}) => {
 					<circle cx="12" cy="10" r="3" />
 				</svg>
 			</span>
-		)
-	}
-	return (
-		<span className="SiteSearch-icon-circle">
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				strokeLinecap="round"
-				aria-hidden
-			>
-				<circle cx="12" cy="8" r="4" />
-				<path d="M4 21a8 8 0 0 1 16 0" />
-			</svg>
-		</span>
-	)
+		),
+		player: () => (
+			<span className="SiteSearch-icon-circle">
+				<svg
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2"
+					strokeLinecap="round"
+					aria-hidden
+				>
+					<circle cx="12" cy="8" r="4" />
+					<path d="M4 21a8 8 0 0 1 16 0" />
+				</svg>
+			</span>
+		),
+	})
 }
 
 export const SearchIcon = ({
@@ -2329,7 +2355,7 @@ interface HomeAwayBadgeProps {
 
 /** "Home" or "Away" beside a team name. */
 export const HomeAwayBadge = ({homeAway, truncated}: HomeAwayBadgeProps) => {
-	const label = homeAway === "home" ? "Home" : "Away"
+	const label = matchValue(homeAway, {home: "Home", away: "Away"})
 	return (
 		<Hint label={truncated ? label : undefined}>
 			<span
@@ -2635,6 +2661,40 @@ const ReplayDialog = ({
 	const recordedOn = date
 		? `, and this one is from ${formatGameDate(toLeagueInstant(date, "12:00"), new Date())}`
 		: ""
+	// With no warning (the dialog is closed), it reads as the estimate
+	const copy = matchFn(warning ?? "estimated", {
+		expired: () => ({
+			title: "This replay may be gone",
+			description: (
+				<p>
+					LiveBarn only keeps recordings for{" "}
+					{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}. The video
+					may no longer be available.
+				</p>
+			),
+			openLabel: "Open LiveBarn anyway ↗",
+		}),
+		estimated: () => ({
+			title: "This time is an estimate",
+			description: (
+				<>
+					<p>
+						The league doesn't post the wall clock time for game
+						events, only the game clock, so this link starts at our
+						best estimate from the game's scheduled start time.
+					</p>
+					<p>
+						You may need to scrub a little to find the moment, but
+						hopefully we get you pretty close!
+					</p>
+				</>
+			),
+			openLabel: "Open LiveBarn ↗",
+		}),
+	})
+	const offerToHide =
+		warning !== null &&
+		matchValue(warning, {expired: false, estimated: true})
 	return (
 		<AlertDialog.Root
 			open={warning !== null}
@@ -2644,37 +2704,15 @@ const ReplayDialog = ({
 				<AlertDialog.Backdrop className="ReplayDialog-backdrop" />
 				<AlertDialog.Popup className="ReplayDialog">
 					<AlertDialog.Title className="ReplayDialog-title">
-						{warning === "expired"
-							? "This replay may be gone"
-							: "This time is an estimate"}
+						{copy.title}
 					</AlertDialog.Title>
 					<AlertDialog.Description
 						className="ReplayDialog-text"
 						render={<div />}
 					>
-						{warning === "expired" ? (
-							<p>
-								LiveBarn only keeps recordings for{" "}
-								{LIVEBARN_VOD_EXPIRY / DAY_MS} days{recordedOn}.
-								The video may no longer be available.
-							</p>
-						) : (
-							<>
-								<p>
-									The league doesn't post the wall clock time
-									for game events, only the game clock, so
-									this link starts at our best estimate from
-									the game's scheduled start time.
-								</p>
-								<p>
-									You may need to scrub a little to find the
-									moment, but hopefully we get you pretty
-									close!
-								</p>
-							</>
-						)}
+						{copy.description}
 					</AlertDialog.Description>
-					{warning === "estimated" && (
+					{offerToHide && (
 						<label className="ReplayDialog-check">
 							<input
 								type="checkbox"
@@ -2701,9 +2739,7 @@ const ReplayDialog = ({
 							target="_blank"
 							onClick={onClose}
 						>
-							{warning === "expired"
-								? "Open LiveBarn anyway ↗"
-								: "Open LiveBarn ↗"}
+							{copy.openLabel}
 						</a>
 					</div>
 				</AlertDialog.Popup>

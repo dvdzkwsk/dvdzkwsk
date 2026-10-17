@@ -1,6 +1,6 @@
 import type {Express} from "express"
 import {z} from "zod"
-import {ApiEndpoint, ApiRequest} from "./ApiUtil.js"
+import {ApiEndpoint, ApiRequest, isMethodWithoutBody} from "./ApiUtil.js"
 
 /** Throw from a handler to respond with a specific status, e.g. 404. */
 export class ApiError extends Error {
@@ -27,9 +27,7 @@ export function registerEndpoint<TRequest extends ApiRequest, TResponse>(
 	>
 	app[method](endpoint.uri, async (req, res) => {
 		const input = {
-			...(endpoint.method === "GET" || endpoint.method === "DELETE"
-				? req.query
-				: req.body),
+			...(isMethodWithoutBody(endpoint.method) ? req.query : req.body),
 			...req.params,
 		}
 		const request = endpoint.requestSchema.safeParse(input)

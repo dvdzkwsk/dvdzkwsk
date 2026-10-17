@@ -1,3 +1,4 @@
+import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import {Card, InfoPopover} from "./Components.js"
 import {SeasonSummary} from "../shared/ApiJson.js"
@@ -214,12 +215,14 @@ const ValueRow = ({
 	valueB: number | null
 }) => {
 	const known = valueA !== null && valueB !== null
-	const leader: Side | null =
-		!known || better === null || valueA === valueB
-			? null
-			: valueA > valueB === (better === "higher")
-				? "a"
-				: "b"
+	let leader: Side | null = null
+	if (known && better !== null && valueA !== valueB) {
+		const aLeads = matchValue(better, {
+			higher: valueA > valueB,
+			lower: valueA < valueB,
+		})
+		leader = aLeads ? "a" : "b"
+	}
 	const fills = getBarFills(valueA, valueB)
 	const show = (value: number | null) =>
 		value === null ? "–" : format(value)

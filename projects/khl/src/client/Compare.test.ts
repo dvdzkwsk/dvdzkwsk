@@ -1,3 +1,4 @@
+import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {describe, expect, test} from "bun:test"
 import {getBarFills} from "./Compare.js"
 
@@ -17,7 +18,7 @@ function drawRow(a: number | null, b: number | null): string {
 		}
 		const filled = "#".repeat(Math.round(fill * WIDTH))
 		const empty = " ".repeat(WIDTH - filled.length)
-		return `[${side === "a" ? empty + filled : filled + empty}]`
+		return `[${matchValue(side, {a: empty + filled, b: filled + empty})}]`
 	}
 	const show = (value: number | null) => (value === null ? "–" : value)
 	return `${bar(fills.a, "a")} ${show(a)} | ${show(b)} ${bar(fills.b, "b")}`

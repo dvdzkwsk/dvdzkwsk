@@ -1,6 +1,7 @@
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {z} from "zod"
@@ -75,12 +76,14 @@ const MatchupPage = ({query}: RouteProps) => {
 		[ready, teamA?.id, teamA?.seasonId, teamB?.id, teamB?.seasonId],
 	)
 	const now = useNow()
-	const data = matchup.status === "success" ? matchup.data : null
+	const data = getLoadedData(matchup)
+	const loadedA = getLoadedData(teamsA)
+	const loadedB = getLoadedData(teamsB)
 	const recent = useRecentComparisons(
-		ready && teamsA.status === "success" && teamsB.status === "success"
+		ready && loadedA && loadedB
 			? {
-					a: toRecentSide(teamA, teamsA.data),
-					b: toRecentSide(teamB, teamsB.data),
+					a: toRecentSide(teamA, loadedA),
+					b: toRecentSide(teamB, loadedB),
 				}
 			: null,
 	)
@@ -343,20 +346,29 @@ function useTeamSeasons(team: KHLTeam | null): KHLSeason[] | null {
 		// A team's seasons are the same from any of them
 		[team?.id],
 	)
-	return state.status === "success" ? state.data : null
+	return getLoadedData(state)
+}
+
+/** The state's data once loaded; null while loading or after an error */
+function getLoadedData<T>(state: AsyncState<T>): T | null {
+	return matchField(state, "status", {
+		loading: () => null,
+		error: () => null,
+		success: (s) => s.data,
+	})
 }
 
 function findTeam(
 	teams: AsyncState<TeamsResponse>,
 	teamId: string | null,
 ): KHLTeam | null {
-	if (teams.status !== "success" || !teamId) {
+	const data = getLoadedData(teams)
+	if (!data || !teamId) {
 		return null
 	}
 	return (
-		teams.data.divisions
-			.flatMap((d) => d.teams)
-			.find((t) => t.id === teamId) ?? null
+		data.divisions.flatMap((d) => d.teams).find((t) => t.id === teamId) ??
+		null
 	)
 }
 
@@ -445,24 +457,29 @@ const MatchupSide = ({
 	onTeamChange: (teamId: string) => void
 	onSeasonChange: (seasonId: string | null) => void
 }) => {
-	if (teams.status === "error") {
+	const error = matchField(teams, "status", {
+		loading: () => null,
+		error: (t) => t.error,
+		success: () => null,
+	})
+	if (error) {
 		return (
 			<div className={cx("Matchup-side", `Matchup-side--${side}`)}>
 				<ErrorState
 					title="Couldn't load this season's teams"
-					error={teams.error}
+					error={error}
 					onRetry={teams.reload}
 					size="inline"
 				/>
 			</div>
 		)
 	}
-	const data = teams.status === "success" ? teams.data : null
+	const data = getLoadedData(teams)
 	return (
 		<div className={cx("Matchup-side", `Matchup-side--${side}`)}>
 			<span className="Matchup-label">
 				<span className="Compare-key" aria-hidden />
-				Team {side === "a" ? 1 : 2}
+				Team {matchValue(side, {a: 1, b: 2})}
 			</span>
 			{team ? (
 				<TeamAvatar name={team.name} logoUrl={team.logoUrl} size={72} />

@@ -1,3 +1,4 @@
+import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
@@ -23,6 +24,7 @@ import {
 	ActivityResponse,
 } from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
+import {KHLGoal} from "../shared/KHLJson.js"
 
 /** Whose feed it is: a player's leaves their own name off their events */
 type ActivitySubject = "player" | "team"
@@ -52,7 +54,11 @@ export const ActivityFeed = ({
 			title="Recent activity"
 			className="Activity"
 			panelClassName="Activity-panel"
-			loading={state.status === "loading"}
+			loading={matchValue(state.status, {
+				loading: true,
+				error: false,
+				success: false,
+			})}
 			slowNote="Still working. This is the first time we're loading these scoresheets, so it will take a little bit longer."
 		>
 			{/* Scrolls once it's taller than the past games beside it */}
@@ -100,9 +106,10 @@ const ActivityEmpty = ({subject}: {subject: ActivitySubject}) => {
 				Nothing on the scoresheet lately
 			</p>
 			<p className="Activity-empty-text">
-				{subject === "player"
-					? "Goals, assists, and penalties"
-					: "The team's goals and penalties"}{" "}
+				{matchValue(subject, {
+					player: "Goals, assists, and penalties",
+					team: "The team's goals and penalties",
+				})}{" "}
 				from the last {LOOKBACK_MONTHS} months of games will show up
 				here.
 			</p>
@@ -140,7 +147,11 @@ const ActivityEventItem = ({
 	now: Date
 }) => {
 	const {team, opponent} = game
-	const at = event.kind === "penalty" ? event.penalty : event.goal
+	const at = matchField(event, "kind", {
+		goal: (e) => e.goal,
+		assist: (e) => e.goal,
+		penalty: (e) => e.penalty,
+	})
 	return (
 		<li className={cx("Activity-event", `Activity-event--${event.kind}`)}>
 			<div className="Activity-when">
@@ -166,15 +177,18 @@ const ActivityEventItem = ({
 				</div>
 				<div className="Activity-game">
 					{/* A player may have been on any of their teams */}
-					{subject === "player" && (
-						<>
-							<TeamLink
-								team={team}
-								seasonId={team.seasonId}
-							/>{" "}
-						</>
-					)}
-					{game.homeAway === "home" ? "vs" : "@"}{" "}
+					{matchValue(subject, {
+						player: (
+							<>
+								<TeamLink
+									team={team}
+									seasonId={team.seasonId}
+								/>{" "}
+							</>
+						),
+						team: null,
+					})}
+					{matchValue(game.homeAway, {home: "vs", away: "@"})}{" "}
 					<TeamLink team={opponent} seasonId={opponent.seasonId} />
 				</div>
 			</div>
@@ -205,72 +219,89 @@ const ActivityEventBody = ({
 	subject: ActivitySubject
 	playerIds: Record<string, string>
 }) => {
-	if (event.kind === "penalty") {
-		const {penalty} = event
-		return (
+	return matchField(event, "kind", {
+		penalty: ({penalty}) => (
 			<>
-				{subject === "team" && (
-					<>
-						{penalty.player ? (
-							<PlayerName
-								player={penalty.player}
-								playerIds={playerIds}
-							/>
-						) : (
-							"Bench"
-						)}{" "}
-						·{" "}
-					</>
-				)}
+				{matchValue(subject, {
+					team: (
+						<>
+							{penalty.player ? (
+								<PlayerName
+									player={penalty.player}
+									playerIds={playerIds}
+								/>
+							) : (
+								"Bench"
+							)}{" "}
+							·{" "}
+						</>
+					),
+					player: null,
+				})}
 				{penalty.infraction}
 				<span className="Activity-detail"> · {penalty.duration}</span>
 			</>
-		)
-	}
-	const {goal} = event
-	const type = goal.type && (
-		<Hint label={GOAL_TYPES[goal.type]}>
-			<span className="Activity-type">{goal.type}</span>
-		</Hint>
-	)
-	if (event.kind === "assist") {
-		return (
+		),
+		assist: ({goal}) => (
 			<>
 				On <PlayerName player={goal.scorer} playerIds={playerIds} />
 				's goal
-				{type}
+				{renderGoalType(goal)}
 			</>
-		)
-	}
-	return (
-		<>
-			{subject === "team" && (
-				<>
-					<span className="Activity-scorer">
-						<PlayerName
-							player={goal.scorer}
-							playerIds={playerIds}
-						/>
-					</span>{" "}
-					·{" "}
-				</>
-			)}
-			<span className={cx(subject === "team" && "Activity-detail")}>
-				{goal.assists.length === 0
-					? "Unassisted"
-					: goal.assists.map((assist, i) => (
-							<React.Fragment key={assist.id}>
-								{i > 0
-									? ", "
-									: subject === "player" && "Assisted by "}
+		),
+		goal: ({goal}) => (
+			<>
+				{matchValue(subject, {
+					team: (
+						<>
+							<span className="Activity-scorer">
 								<PlayerName
-									player={assist}
+									player={goal.scorer}
 									playerIds={playerIds}
 								/>
-							</React.Fragment>
-						))}
-			</span>
-			{type}
-		</>
+							</span>{" "}
+							·{" "}
+						</>
+					),
+					player: null,
+				})}
+				<span
+					className={cx(
+						matchValue(subject, {
+							team: "Activity-detail",
+							player: null,
+						}),
+					)}
+				>
+					{goal.assists.length === 0
+						? "Unassisted"
+						: goal.assists.map((assist, i) => (
+								<React.Fragment key={assist.id}>
+									{i > 0
+										? ", "
+										: matchValue(subject, {
+												player: "Assisted by ",
+												team: null,
+											})}
+									<PlayerName
+										player={assist}
+										playerIds={playerIds}
+									/>
+								</React.Fragment>
+							))}
+				</span>
+				{renderGoalType(goal)}
+			</>
+		),
+	})
+}
+
+function renderGoalType(goal: KHLGoal) {
+	return (
+		goal.type && (
+			<Hint label={GOAL_TYPES[goal.type]}>
+				<span className="Activity-type">{goal.type}</span>
+			</Hint>
+		)
 	)
 }

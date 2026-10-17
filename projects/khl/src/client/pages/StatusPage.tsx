@@ -1,6 +1,7 @@
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {matchFn, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
@@ -185,14 +186,14 @@ function getOverall(
 	const level = getWorstLevel(
 		components.map((c) => c.latest?.status ?? "operational"),
 	)
-	switch (level) {
-		case "operational":
-			return {level, title: "All systems operational"}
-		case "degraded":
-			return {level, title: `${named("degraded")} slow to respond`}
-		case "outage":
-			return {level, title: `${named("outage")} down`}
-	}
+	return matchFn(level, {
+		operational: (level) => ({level, title: "All systems operational"}),
+		degraded: (level) => ({
+			level,
+			title: `${named("degraded")} slow to respond`,
+		}),
+		outage: (level) => ({level, title: `${named("outage")} down`}),
+	})
 }
 
 const LEVEL_ORDER: StatusLevel[] = ["operational", "degraded", "outage"]
@@ -376,11 +377,11 @@ const StatusIcon = ({level, size}: {level: StatusLevel; size: number}) => {
 			aria-hidden
 		>
 			<circle cx="8" cy="8" r="8" />
-			{level === "operational" && (
-				<path d="M4.75 8.25 7 10.5l4.25-4.75" />
-			)}
-			{level === "degraded" && <path d="M5 8h6" />}
-			{level === "outage" && <path d="m5.5 5.5 5 5m0-5-5 5" />}
+			{matchValue(level, {
+				operational: <path d="M4.75 8.25 7 10.5l4.25-4.75" />,
+				degraded: <path d="M5 8h6" />,
+				outage: <path d="m5.5 5.5 5 5m0-5-5 5" />,
+			})}
 		</svg>
 	)
 }

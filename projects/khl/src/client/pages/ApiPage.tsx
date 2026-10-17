@@ -2,6 +2,7 @@ import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {z} from "zod"
@@ -584,7 +585,7 @@ const RequestPanel = ({
 	exampleKind: ExampleKind
 	onExampleKindChange: (kind: ExampleKind) => void
 }) => {
-	const code = exampleKind === "curl" ? docs.curl : docs.fetch
+	const code = matchValue(exampleKind, {curl: docs.curl, fetch: docs.fetch})
 	return (
 		<CodePanel
 			title="Request"
@@ -600,7 +601,10 @@ const RequestPanel = ({
 		>
 			<CodeBlock
 				code={code}
-				language={exampleKind === "curl" ? "shell" : "ts"}
+				language={matchValue(exampleKind, {
+					curl: "shell",
+					fetch: "ts",
+				} as const)}
 				wrap
 			/>
 		</CodePanel>
@@ -616,34 +620,10 @@ const ResponsePanel = ({docs}: {docs: ApiEndpointDocs}) => {
 		setView("live")
 		setSendCount((n) => n + 1)
 	}
-	return (
-		<CodePanel
-			title="Response"
-			tabs={
-				<SegmentedControl
-					label="Response view"
-					options={RESPONSE_OPTIONS}
-					value={view}
-					onChange={setView}
-				/>
-			}
-			actions={
-				view === "live" ? (
-					<button
-						type="button"
-						className="CodePanel-send"
-						onClick={send}
-					>
-						<PlayIcon />
-						{sendCount > 0 ? "Send again" : "Send"}
-					</button>
-				) : undefined
-			}
-			copyText={view === "type" ? types : undefined}
-		>
-			{view === "type" ? (
-				<CodeBlock code={types} language="ts" scroll />
-			) : sendCount === 0 ? (
+	const body = matchFn(view, {
+		type: () => <CodeBlock code={types} language="ts" scroll />,
+		live: () =>
+			sendCount === 0 ? (
 				<div className="CodePanel-empty">
 					<p>
 						Send the request above to {window.location.host} and see
@@ -660,7 +640,35 @@ const ResponsePanel = ({docs}: {docs: ApiEndpointDocs}) => {
 				</div>
 			) : (
 				<LiveResponse docs={docs} sendCount={sendCount} />
-			)}
+			),
+	})
+	return (
+		<CodePanel
+			title="Response"
+			tabs={
+				<SegmentedControl
+					label="Response view"
+					options={RESPONSE_OPTIONS}
+					value={view}
+					onChange={setView}
+				/>
+			}
+			actions={matchFn(view, {
+				type: () => undefined,
+				live: () => (
+					<button
+						type="button"
+						className="CodePanel-send"
+						onClick={send}
+					>
+						<PlayIcon />
+						{sendCount > 0 ? "Send again" : "Send"}
+					</button>
+				),
+			})}
+			copyText={matchValue(view, {type: types, live: undefined})}
+		>
+			{body}
 		</CodePanel>
 	)
 }
@@ -689,53 +697,54 @@ const LiveResponse = ({
 		return {json, bytes: new TextEncoder().encode(json).length, ms}
 	}, [docs.endpoint, sendCount])
 
-	if (state.status === "loading") {
-		return (
+	return matchField(state, "status", {
+		loading: () => (
 			<p className="CodePanel-status" role="status">
 				<span className="CodePanel-spinner" aria-hidden />
 				Sending request…
 			</p>
-		)
-	}
-	if (state.status === "error") {
-		const {error} = state
-		const status = error instanceof FetchError ? error.status : null
-		const message =
-			error instanceof FetchError
-				? (error.serverMessage ?? error.message)
-				: error.message
-		return (
-			<>
-				<p className="CodePanel-status">
-					{status === null ? (
-						<span className="CodePanel-failed">Failed</span>
-					) : (
-						<StatusBadge status={status} />
+		),
+		error: ({error}) => {
+			const status = error instanceof FetchError ? error.status : null
+			const message =
+				error instanceof FetchError
+					? (error.serverMessage ?? error.message)
+					: error.message
+			return (
+				<>
+					<p className="CodePanel-status">
+						{status === null ? (
+							<span className="CodePanel-failed">Failed</span>
+						) : (
+							<StatusBadge status={status} />
+						)}
+					</p>
+					<CodeBlock code={message} language="shell" wrap />
+				</>
+			)
+		},
+		success: ({data}) => {
+			const {json, bytes, ms} = data
+			const lines = json.split("\n")
+			const shown = lines.slice(0, RESPONSE_PREVIEW_LINES)
+			return (
+				<>
+					<p className="CodePanel-status">
+						<StatusBadge status={200} />
+						<span>{formatBytes(bytes)}</span>
+						<span>{Math.round(ms).toLocaleString()} ms</span>
+					</p>
+					<CodeBlock code={shown.join("\n")} language="json" scroll />
+					{lines.length > shown.length && (
+						<p className="CodePanel-footnote">
+							Showing the first {shown.length} of{" "}
+							{lines.length.toLocaleString()} lines.
+						</p>
 					)}
-				</p>
-				<CodeBlock code={message} language="shell" wrap />
-			</>
-		)
-	}
-	const {json, bytes, ms} = state.data
-	const lines = json.split("\n")
-	const shown = lines.slice(0, RESPONSE_PREVIEW_LINES)
-	return (
-		<>
-			<p className="CodePanel-status">
-				<StatusBadge status={200} />
-				<span>{formatBytes(bytes)}</span>
-				<span>{Math.round(ms).toLocaleString()} ms</span>
-			</p>
-			<CodeBlock code={shown.join("\n")} language="json" scroll />
-			{lines.length > shown.length && (
-				<p className="CodePanel-footnote">
-					Showing the first {shown.length} of{" "}
-					{lines.length.toLocaleString()} lines.
-				</p>
-			)}
-		</>
-	)
+				</>
+			)
+		},
+	})
 }
 
 function formatBytes(bytes: number): string {
@@ -881,26 +890,37 @@ const CodeBlock = ({
 		>
 			<code>
 				{tokens.map((token, i) => {
-					if (token.kind === "plain") {
-						return token.text
-					}
 					const className = `CodeBlock-${token.kind}`
-					// References only: a declaration's own name isn't a link
-					const isTypeName =
-						token.kind === "type" && typeNames.has(token.text)
-					return isTypeName ? (
-						<a
-							key={i}
-							href={`#${toTypeAnchor(token.text)}`}
-							className={cx(className, "CodeBlock-link")}
-						>
-							{token.text}
-						</a>
-					) : (
+					const span = () => (
 						<span key={i} className={className}>
 							{token.text}
 						</span>
 					)
+					return matchFn(token.kind, {
+						plain: () => token.text,
+						// References only: a declaration's own name isn't a link
+						type: () =>
+							typeNames.has(token.text) ? (
+								<a
+									key={i}
+									href={`#${toTypeAnchor(token.text)}`}
+									className={cx(className, "CodeBlock-link")}
+								>
+									{token.text}
+								</a>
+							) : (
+								span()
+							),
+						keyword: span,
+						builtin: span,
+						definition: span,
+						property: span,
+						function: span,
+						string: span,
+						number: span,
+						comment: span,
+						punctuation: span,
+					})
 				})}
 			</code>
 		</pre>

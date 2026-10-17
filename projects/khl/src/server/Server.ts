@@ -65,7 +65,7 @@ import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	CacheCheckResponse,
 	CHECK_CACHE_ENDPOINT,
-	getRegistrationKey,
+	getPlayerRegistrationKey,
 	GET_CACHE_ENTRY_ENDPOINT,
 	GET_PLAYER_INTEGRITY_ENDPOINT,
 	JsonValue,
@@ -539,7 +539,7 @@ async function getPlayerIntegrity(
 		await Promise.all(
 			registrations.map(async (r) => {
 				return [
-					getRegistrationKey(r),
+					getPlayerRegistrationKey(r),
 					await loadIntegrityProfile(r),
 				] as const
 			}),
@@ -558,7 +558,7 @@ async function getPlayerIntegrity(
 			const reconciled = reconcileRegistration(
 				r,
 				getOwnSearchResults(r),
-				pages.get(getRegistrationKey(r))!.profile,
+				pages.get(getPlayerRegistrationKey(r))!.profile,
 			)
 			if (reconciled) {
 				db.reconcileRegistration({
@@ -580,7 +580,7 @@ async function getPlayerIntegrity(
 
 	const integrityRegistrations = registrations.map(
 		(r): IntegrityRegistration => {
-			const page = pages.get(getRegistrationKey(r))!
+			const page = pages.get(getPlayerRegistrationKey(r))!
 			const ownSearchResults = getOwnSearchResults(r)
 			const stored = toIntegrityRecord(r)
 			const expected =
@@ -612,10 +612,10 @@ async function getPlayerIntegrity(
 	// Search rows with the player's name that aren't this player's recorded
 	// registrations: attached to another player, or not recorded at all (an
 	// id's new team is a new registration, recorded by the next resync)
-	const ownKeys = new Set(registrations.map(getRegistrationKey))
+	const ownKeys = new Set(registrations.map(getPlayerRegistrationKey))
 	const unlinked = new Map<string, IntegrityUnlinked>()
 	for (const s of searchResults ?? []) {
-		const key = getRegistrationKey({
+		const key = getPlayerRegistrationKey({
 			khlPlayerId: s.playerId,
 			teamId: s.teamId,
 		})

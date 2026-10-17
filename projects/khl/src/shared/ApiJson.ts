@@ -142,10 +142,19 @@ export const PlayerRegistrationSchema = z.object({
 }) satisfies z.ZodType<PlayerRegistration>
 
 /**
- * One KHL player id can span several teams, and a team can issue the player
- * more than one id, so a registration takes both to identify.
+ * Identifies a `PlayerRegistration`: one player on one team, under one KHL
+ * player id. The id alone isn't enough, because a player can keep one id
+ * across several teams (one player is on 8 teams under KHL player id 562354).
+ * Keyed by id alone:
+ *
+ * - The team picker would open whichever of the 8 teams is listed first, no
+ *   matter which team was chosen.
+ * - The integrity report loads each team's KHL player page and compares it
+ *   with what's stored for that team. It would keep only one of the 8 pages,
+ *   so it would flag correct data on the other 7 teams as wrong, and a resync
+ *   would overwrite it.
  */
-export function getRegistrationKey(
+export function getPlayerRegistrationKey(
 	r: Pick<PlayerRegistration, "khlPlayerId" | "teamId">,
 ): string {
 	return `${r.khlPlayerId}-${r.teamId}`

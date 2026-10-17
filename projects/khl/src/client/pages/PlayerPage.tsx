@@ -5,7 +5,7 @@ import * as React from "react"
 import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
-	getRegistrationKey,
+	getPlayerRegistrationKey,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
@@ -120,7 +120,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 				{(player) => {
 					const selected =
 						player.registrations.find(
-							(r) => getRegistrationKey(r) === selectedTeam,
+							(r) => getPlayerRegistrationKey(r) === selectedTeam,
 						) ?? null
 					const games = selected
 						? player.games.filter(({game}) => {
@@ -197,7 +197,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 									// Reset the list's scroll position when switching teams
 									key={
 										selected
-											? getRegistrationKey(selected)
+											? getPlayerRegistrationKey(selected)
 											: "all"
 									}
 									games={games}
@@ -329,7 +329,7 @@ const PlayerTeamPicker = ({
 				{label: "Current", items: current.map(toTeamItem)},
 				{label: "Past", items: past.map(toTeamItem)},
 			].filter((group) => group.items.length > 0)}
-			value={selected ? getRegistrationKey(selected) : ALL_TEAMS}
+			value={selected ? getPlayerRegistrationKey(selected) : ALL_TEAMS}
 			onChange={(value) =>
 				onSelectTeam(value === ALL_TEAMS ? null : value)
 			}
@@ -382,7 +382,7 @@ const PlayerHeader = ({
 								.join(" · ")
 							return (
 								<span
-									key={getRegistrationKey(r)}
+									key={getPlayerRegistrationKey(r)}
 									className="PlayerHero-team"
 								>
 									<TeamAvatar
@@ -490,7 +490,7 @@ function getDivision(registration: PlayerRegistration): string {
 function toTeamItem(r: PlayerRegistration): PickerItem {
 	const seasons = `${r.seasonIds.length} ${r.seasonIds.length === 1 ? "season" : "seasons"}`
 	return {
-		value: getRegistrationKey(r),
+		value: getPlayerRegistrationKey(r),
 		label: r.teamName,
 		icon: (
 			<TeamAvatar name={r.teamName} logoUrl={r.teamLogoUrl} size={20} />
@@ -680,7 +680,8 @@ const StatsByTeam = ({
 			rowKey={(row) =>
 				matchField(row, "kind", {
 					total: () => "total",
-					registration: (r) => getRegistrationKey(r.registration),
+					registration: (r) =>
+						getPlayerRegistrationKey(r.registration),
 				})
 			}
 			rowClassName={(row) =>

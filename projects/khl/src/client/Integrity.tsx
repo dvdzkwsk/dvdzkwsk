@@ -28,7 +28,7 @@ import {
 	CHECK_CACHE_ENDPOINT,
 	GET_CACHE_ENTRY_ENDPOINT,
 	GET_PLAYER_INTEGRITY_ENDPOINT,
-	getRegistrationKey,
+	getPlayerRegistrationKey,
 	IntegrityCacheEntry,
 	IntegrityCacheKind,
 	IntegrityRegistration,
@@ -876,9 +876,13 @@ const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
 						/>
 						{report.registrations.map((r) => (
 							<ExpandableRow
-								key={getRegistrationKey(r)}
-								expanded={isExpanded(getRegistrationKey(r))}
-								onToggle={() => toggle(getRegistrationKey(r))}
+								key={getPlayerRegistrationKey(r)}
+								expanded={isExpanded(
+									getPlayerRegistrationKey(r),
+								)}
+								onToggle={() =>
+									toggle(getPlayerRegistrationKey(r))
+								}
 								label={
 									<TeamLabel
 										name={r.teamName}
@@ -911,10 +915,12 @@ const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
 							/>
 							{report.unlinked.map((u) => (
 								<ExpandableRow
-									key={getRegistrationKey(u)}
-									expanded={isExpanded(getRegistrationKey(u))}
+									key={getPlayerRegistrationKey(u)}
+									expanded={isExpanded(
+										getPlayerRegistrationKey(u),
+									)}
 									onToggle={() =>
-										toggle(getRegistrationKey(u))
+										toggle(getPlayerRegistrationKey(u))
 									}
 									label={
 										<TeamLabel

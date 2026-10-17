@@ -2,6 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import {ConsoleTransport, Logger, setLoggerTransports} from "@dvdzkwsk/logger"
 import {ApiError, registerEndpoint} from "@dvdzkwsk/util/ApiServerUtil"
+import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import compression from "compression"
@@ -13,9 +14,17 @@ import {
 	LiveBarnSurfaceMapping,
 	toDisplayArena,
 } from "./Arenas.js"
-import {openDatabase, Registration} from "./Database.js"
+import {openDatabase, Player, Registration} from "./Database.js"
+import {
+	compareRegistration,
+	diffJson,
+	reconcileRegistration,
+	toIntegrityRecord,
+} from "./Integrity.js"
 import {
 	KHL_ALL_SEASONS,
+	getKHLPlayerSearchUrl,
+	getKHLPlayerUrl,
 	getKHLArena,
 	getKHLBoxScore,
 	getKHLGamePreviewStats,
@@ -54,6 +63,20 @@ import {
 	HeadToHeadGame,
 	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
+	CacheCheckResponse,
+	CHECK_CACHE_ENDPOINT,
+	getPlayerRegistrationKey,
+	GET_CACHE_ENTRY_ENDPOINT,
+	GET_PLAYER_INTEGRITY_ENDPOINT,
+	JsonValue,
+	JsonValueSchema,
+	IntegrityCacheEntry,
+	IntegrityRegistration,
+	IntegrityRegistrationCacheKeys,
+	IntegrityUnlinked,
+	PlayerIntegrityResponse,
+	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
+	RESYNC_PLAYER_ENDPOINT,
 	GET_TEAM_ACTIVITY_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	GET_RINK_ENDPOINT,
@@ -100,6 +123,7 @@ import {
 	KHLScoreboardGame,
 	KHLScoreboardTeam,
 	KHLLeagueTeam,
+	KHLPlayerSearchResult,
 	KHLRosterRow,
 	KHLSeason,
 	KHLTeam,
@@ -294,27 +318,405 @@ registerEndpoint(
 	},
 )
 
-/** The player's registrations, most recently active first. */
-async function getPlayerRegistrations(playerId: string) {
+registerEndpoint(app, GET_PLAYER_INTEGRITY_ENDPOINT, async ({playerId}) => {
+	return getPlayerIntegrity(getStoredPlayer(playerId))
+})
+
+registerEndpoint(app, RELOAD_PLAYER_INTEGRITY_ENDPOINT, async ({playerId}) => {
+	const player = getStoredPlayer(playerId)
+	const keys = [getHistoryCacheKey(player)]
+	for (const r of db.getRegistrations(playerId)) {
+		const latestSeasonId = r.seasonIds.at(-1)
+		if (latestSeasonId) {
+			keys.push(
+				getPlayerCacheKey(r.khlPlayerId, r.teamId, latestSeasonId),
+			)
+		}
+	}
+	keys.forEach(invalidateCache)
+	logger.info("reloadIntegrity", "dropped cached KHL pages", {
+		playerId,
+		keys,
+	})
+	return getPlayerIntegrity(player)
+})
+
+registerEndpoint(app, RESYNC_PLAYER_ENDPOINT, async ({playerId}) => {
+	return getPlayerIntegrity(getStoredPlayer(playerId), {apply: true})
+})
+
+/**
+ * Cache keys an integrity report lists. Their loaders only fetch and parse,
+ * so a check can run one again without side effects.
+ */
+const INSPECTABLE_CACHE_PREFIXES = ["history:", "player:", "schedule:"]
+
+function assertInspectableCacheKey(key: string) {
+	if (!INSPECTABLE_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+		throw new ApiError(400, `cache key ${key} can't be inspected`)
+	}
+}
+
+registerEndpoint(app, GET_CACHE_ENTRY_ENDPOINT, async ({key}) => {
+	assertInspectableCacheKey(key)
+	const entry = getLoadedCacheEntry(key)
+	return {
+		key,
+		...toIntegrityCacheInfo(key),
+		value: entry ? JsonValueSchema.parse(await entry.value) : null,
+	}
+})
+
+registerEndpoint(
+	app,
+	CHECK_CACHE_ENDPOINT,
+	async ({key}): Promise<CacheCheckResponse> => {
+		assertInspectableCacheKey(key)
+		const checkedAt = new Date().toISOString()
+		const entry = getLoadedCacheEntry(key)
+		if (!entry) {
+			return {
+				key,
+				status: "not-cached",
+				checkedAt,
+				differences: [],
+				differenceCount: 0,
+				khl: null,
+				error: null,
+			}
+		}
+		const cachedValue = JsonValueSchema.parse(await entry.value)
+		let khl: JsonValue
+		try {
+			// Deliberately past the cache: the point is the KHL's page now
+			khl = JsonValueSchema.parse(await entry.load())
+		} catch (cause) {
+			const error = toError(cause)
+			logger.warn("checkCache", "KHL page unavailable", {key, error})
+			return {
+				key,
+				status: "failed",
+				checkedAt,
+				differences: [],
+				differenceCount: 0,
+				khl: null,
+				error: error.message,
+			}
+		}
+		const differences = diffJson(cachedValue, khl)
+		return {
+			key,
+			status: differences.length > 0 ? "differs" : "match",
+			checkedAt,
+			differences: differences.slice(0, LIMITS.CACHE_CHECK_DIFFERENCES),
+			differenceCount: differences.length,
+			khl,
+			error: null,
+		}
+	},
+)
+
+function getStoredPlayer(playerId: string): Player {
 	const player = db.getPlayer(playerId)
 	if (!player) {
 		throw new ApiError(404, `player ${playerId} not found`)
 	}
+	return player
+}
 
-	// Pick up registrations from every season (including teams the player
-	// joined since we last looked) before reading them back.
-	const nameKey = normalizePlayerName(player.name)
-	await cached(`history:${nameKey}`, HOUR, async () => {
-		const results = await searchKHLPlayers(player.name, KHL_ALL_SEASONS)
-		db.recordRegistrations(
-			results.filter((r) => normalizePlayerName(r.name) === nameKey),
-		)
-	})
+/** The player's registrations, most recently active first. */
+async function getPlayerRegistrations(playerId: string) {
+	const player = getStoredPlayer(playerId)
+	await syncPlayerHistory(player)
 	const registrations = db
 		.getRegistrations(playerId)
 		.filter((r) => r.seasonIds.length > 0)
-		.sort((a, b) => Number(b.seasonIds.at(-1)) - Number(a.seasonIds.at(-1)))
+		.sort(compareLatestSeasonFirst)
 	return {player, registrations}
+}
+
+function compareLatestSeasonFirst(a: Registration, b: Registration): number {
+	return Number(b.seasonIds.at(-1) ?? 0) - Number(a.seasonIds.at(-1) ?? 0)
+}
+
+function getHistoryCacheKey(player: Player): string {
+	return `history:${normalizePlayerName(player.name)}`
+}
+
+/**
+ * The KHL's all-seasons search rows with the player's name, one per
+ * registration per season. Records nothing; see `syncPlayerHistory`.
+ */
+function searchPlayerHistory(player: Player): Promise<KHLPlayerSearchResult[]> {
+	const nameKey = normalizePlayerName(player.name)
+	return cached(getHistoryCacheKey(player), HOUR, async () => {
+		return (await searchKHLPlayers(player.name, KHL_ALL_SEASONS)).filter(
+			(r) => normalizePlayerName(r.name) === nameKey,
+		)
+	})
+}
+
+/** Search results already recorded, so each load is recorded once */
+const recordedHistories = new WeakSet<KHLPlayerSearchResult[]>()
+
+/**
+ * Picks up the player's registrations from every season (including teams
+ * they joined since we last looked) and returns the search rows.
+ */
+async function syncPlayerHistory(
+	player: Player,
+): Promise<KHLPlayerSearchResult[]> {
+	const results = await searchPlayerHistory(player)
+	if (!recordedHistories.has(results)) {
+		db.recordRegistrations(results)
+		recordedHistories.add(results)
+	}
+	return results
+}
+
+/**
+ * Compares every registration attached to the player with the KHL's search
+ * and player pages, and lists what a resync would change. Writes nothing
+ * unless `apply`, which records the search's new ids and seasons and then
+ * stores each registration as the KHL has it. The cache is read before
+ * anything loads, so it shows what the player's page would have used.
+ */
+async function getPlayerIntegrity(
+	player: Player,
+	{apply = false}: {apply?: boolean} = {},
+): Promise<PlayerIntegrityResponse> {
+	const checkedAt = new Date().toISOString()
+	const historyKey = getHistoryCacheKey(player)
+	// By key: two KHL ids on the same team can share a schedule
+	const cache = new Map<string, IntegrityCacheEntry>()
+	const addCacheEntry = (
+		kind: IntegrityCacheEntry["kind"],
+		key: string,
+		label: string,
+	) => {
+		if (!cache.has(key)) {
+			cache.set(key, {key, kind, label, ...toIntegrityCacheInfo(key)})
+		}
+	}
+	addCacheEntry("search", historyKey, `“${player.name}”, all seasons`)
+
+	let searchResults: KHLPlayerSearchResult[] | null = null
+	let searchError: string | null = null
+	try {
+		searchResults = apply
+			? await syncPlayerHistory(player)
+			: await searchPlayerHistory(player)
+	} catch (cause) {
+		const error = toError(cause)
+		logger.warn("getPlayerIntegrity", "KHL search unavailable", {
+			playerId: player.id,
+			error,
+		})
+		searchError = error.message
+	}
+
+	let registrations = db
+		.getRegistrations(player.id)
+		.sort(compareLatestSeasonFirst)
+	for (const r of registrations) {
+		const keys = getRegistrationCacheKeys(r)
+		if (keys.profile) {
+			addCacheEntry(
+				"profile",
+				keys.profile,
+				`${r.teamName} · KHL id ${r.khlPlayerId} · season ${r.seasonIds.at(-1)}`,
+			)
+		}
+		r.seasonIds.forEach((seasonId, i) => {
+			addCacheEntry(
+				"schedule",
+				keys.schedules[i]!,
+				`${r.teamName} · season ${seasonId}`,
+			)
+		})
+	}
+
+	const pages = new Map(
+		await Promise.all(
+			registrations.map(async (r) => {
+				return [
+					getPlayerRegistrationKey(r),
+					await loadIntegrityProfile(r),
+				] as const
+			}),
+		),
+	)
+	const getOwnSearchResults = (r: Registration) => {
+		return (
+			searchResults?.filter(
+				(s) => s.playerId === r.khlPlayerId && s.teamId === r.teamId,
+			) ?? null
+		)
+	}
+
+	if (apply) {
+		for (const r of registrations) {
+			const reconciled = reconcileRegistration(
+				r,
+				getOwnSearchResults(r),
+				pages.get(getPlayerRegistrationKey(r))!.profile,
+			)
+			if (reconciled) {
+				db.reconcileRegistration({
+					...reconciled,
+					khlPlayerId: r.khlPlayerId,
+				})
+				logger.info("resync", "updated registration", {
+					playerId: player.id,
+					khlPlayerId: r.khlPlayerId,
+					teamId: r.teamId,
+					differences: diffJson(toIntegrityRecord(r), reconciled),
+				})
+			}
+		}
+		registrations = db
+			.getRegistrations(player.id)
+			.sort(compareLatestSeasonFirst)
+	}
+
+	const integrityRegistrations = registrations.map(
+		(r): IntegrityRegistration => {
+			const page = pages.get(getPlayerRegistrationKey(r))!
+			const ownSearchResults = getOwnSearchResults(r)
+			const stored = toIntegrityRecord(r)
+			const expected =
+				reconcileRegistration(r, ownSearchResults, page.profile) ??
+				stored
+			return {
+				khlPlayerId: r.khlPlayerId,
+				name: r.name,
+				position: r.position,
+				teamId: r.teamId,
+				teamName: r.teamName,
+				teamLogoUrl: r.teamLogoUrl,
+				seasonIds: r.seasonIds,
+				updatedAt: r.updatedAt,
+				...page,
+				searchResults: ownSearchResults ?? [],
+				mismatches: compareRegistration(
+					r,
+					ownSearchResults,
+					page.profile,
+				),
+				stored,
+				expected,
+				differences: diffJson(stored, expected),
+				cacheKeys: getRegistrationCacheKeys(r),
+			}
+		},
+	)
+
+	// Search rows with the player's name that aren't this player's recorded
+	// registrations: attached to another player, or not recorded at all (an
+	// id's new team is a new registration, recorded by the next resync)
+	const ownKeys = new Set(registrations.map(getPlayerRegistrationKey))
+	const unlinked = new Map<string, IntegrityUnlinked>()
+	for (const s of searchResults ?? []) {
+		const key = getPlayerRegistrationKey({
+			khlPlayerId: s.playerId,
+			teamId: s.teamId,
+		})
+		if (ownKeys.has(key)) {
+			continue
+		}
+		const otherPlayerId = db.findPlayerIdForRegistration(s.playerId)
+		const row = unlinked.get(key) ?? {
+			khlPlayerId: s.playerId,
+			name: s.name,
+			teamId: s.teamId,
+			teamName: s.teamName,
+			seasonIds: [],
+			playerId: otherPlayerId === player.id ? null : otherPlayerId,
+			khlUrl: "",
+		}
+		row.seasonIds.push(s.seasonId)
+		unlinked.set(key, row)
+	}
+	for (const row of unlinked.values()) {
+		row.seasonIds.sort((a, b) => Number(a) - Number(b))
+		row.khlUrl = getKHLPlayerUrl(
+			row.khlPlayerId,
+			row.teamId,
+			row.seasonIds.at(-1)!,
+		).toString()
+	}
+
+	return {
+		playerId: player.id,
+		name: player.name,
+		createdAt: player.createdAt,
+		checkedAt,
+		cache: [...cache.values()],
+		registrations: integrityRegistrations,
+		unlinked: [...unlinked.values()],
+		searchUrl: getKHLPlayerSearchUrl(
+			player.name,
+			KHL_ALL_SEASONS,
+		).toString(),
+		searchError,
+	}
+}
+
+/**
+ * The cache keys of the KHL pages the player's page loads for a registration:
+ * its player page (see `loadIntegrityProfile`) and its schedules (see
+ * `getPlayerSchedules`)
+ */
+function getRegistrationCacheKeys(
+	r: Registration,
+): IntegrityRegistrationCacheKeys {
+	const latestSeasonId = r.seasonIds.at(-1)
+	return {
+		profile: latestSeasonId
+			? getPlayerCacheKey(r.khlPlayerId, r.teamId, latestSeasonId)
+			: null,
+		schedules: r.seasonIds.map((seasonId) => {
+			return getScheduleCacheKey(r.teamId, seasonId)
+		}),
+	}
+}
+
+/** A registration's KHL player page as of its latest season */
+async function loadIntegrityProfile(
+	r: Registration,
+): Promise<
+	Pick<IntegrityRegistration, "profile" | "profileError" | "profileUrl">
+> {
+	const latestSeasonId = r.seasonIds.at(-1)
+	if (!latestSeasonId) {
+		return {
+			profile: null,
+			profileError: "No seasons recorded, so there's no page to load",
+			profileUrl: null,
+		}
+	}
+	const profileUrl = getKHLPlayerUrl(
+		r.khlPlayerId,
+		r.teamId,
+		latestSeasonId,
+	).toString()
+	try {
+		const profile = await getPlayer(r.khlPlayerId, r.teamId, latestSeasonId)
+		return {profile, profileError: null, profileUrl}
+	} catch (cause) {
+		const error = toError(cause)
+		logger.warn("getPlayerIntegrity", "KHL player page unavailable", {
+			khlPlayerId: r.khlPlayerId,
+			error,
+		})
+		return {profile: null, profileError: error.message, profileUrl}
+	}
+}
+
+function toIntegrityCacheInfo(
+	key: string,
+): Pick<IntegrityCacheEntry, "cachedAt" | "expiresAt"> {
+	return getCacheInfo(key) ?? {cachedAt: null, expiresAt: null}
 }
 
 /**
@@ -1243,14 +1645,26 @@ function getSeasonTtl(isCurrentSeason: boolean): number {
 	return isCurrentSeason ? 10 * MINUTE : 24 * HOUR
 }
 
+function getPlayerCacheKey(
+	playerId: string,
+	teamId: string,
+	seasonId: string,
+): string {
+	return `player:${playerId}:${teamId}:${seasonId}`
+}
+
 function getPlayer(playerId: string, teamId: string, seasonId: string) {
 	return cached(
-		`player:${playerId}:${teamId}:${seasonId}`,
+		getPlayerCacheKey(playerId, teamId, seasonId),
 		10 * MINUTE,
 		() => {
 			return getKHLPlayer(playerId, teamId, seasonId)
 		},
 	)
+}
+
+function getScheduleCacheKey(teamId: string, seasonId: string): string {
+	return `schedule:${teamId}:${seasonId}`
 }
 
 function getSchedule(
@@ -1259,7 +1673,7 @@ function getSchedule(
 	isCurrentSeason: boolean,
 ): Promise<KHLGame[]> {
 	return cached(
-		`schedule:${teamId}:${seasonId}`,
+		getScheduleCacheKey(teamId, seasonId),
 		getSeasonTtl(isCurrentSeason),
 		() => {
 			return getKHLTeamSchedule(teamId, seasonId)
@@ -1919,7 +2333,46 @@ async function verifyArenaMapping(
 	})
 }
 
-const cache = new Map<string, {expiresAt: number; value: Promise<unknown>}>()
+interface CacheEntry {
+	expiresAt: number
+	/** When `value` resolved; null while it's loading */
+	loadedAt: number | null
+	value: Promise<unknown>
+	/** What loaded `value`, so a cache check can load it again to compare */
+	load: () => Promise<unknown>
+}
+
+const cache = new Map<string, CacheEntry>()
+
+/** A loaded, unexpired entry; null if there isn't one */
+function getLoadedCacheEntry(
+	key: string,
+): (CacheEntry & {loadedAt: number}) | null {
+	const entry = cache.get(key)
+	if (!entry?.loadedAt || entry.expiresAt <= Date.now()) {
+		return null
+	}
+	return entry as CacheEntry & {loadedAt: number}
+}
+
+/** When a loaded, unexpired entry was cached; null if there isn't one */
+function getCacheInfo(
+	key: string,
+): {cachedAt: string; expiresAt: string} | null {
+	const entry = getLoadedCacheEntry(key)
+	if (!entry) {
+		return null
+	}
+	return {
+		cachedAt: new Date(entry.loadedAt).toISOString(),
+		expiresAt: new Date(entry.expiresAt).toISOString(),
+	}
+}
+
+/** Drops an entry, so the next `cached(key, ...)` loads it again */
+function invalidateCache(key: string) {
+	cache.delete(key)
+}
 
 /**
  * Memoizes `load` for `ttlMs`. Concurrent callers share one in-flight request,
@@ -1937,16 +2390,22 @@ function cached<T>(
 		return hit.value as Promise<T>
 	}
 	const value = load()
-	const entry = {expiresAt: Date.now() + ttlMs, value}
-	cache.set(key, entry)
-	if (getTtlMs) {
-		void value.then(
-			(loaded) => {
-				entry.expiresAt = Date.now() + getTtlMs(loaded)
-			},
-			() => {},
-		)
+	const entry: CacheEntry = {
+		expiresAt: Date.now() + ttlMs,
+		loadedAt: null,
+		value,
+		load,
 	}
+	cache.set(key, entry)
+	void value.then(
+		(loaded) => {
+			entry.loadedAt = Date.now()
+			if (getTtlMs) {
+				entry.expiresAt = Date.now() + getTtlMs(loaded)
+			}
+		},
+		() => {},
+	)
 	value.catch(() => {
 		if (cache.get(key)?.value === value) {
 			cache.delete(key)

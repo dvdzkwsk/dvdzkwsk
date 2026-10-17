@@ -94,11 +94,7 @@ export async function searchKHLPlayers(
 	query: string,
 	seasonId?: string,
 ): Promise<KHLPlayerSearchResult[]> {
-	const url = new URL("/player-search/", URLS.KHL)
-	url.searchParams.set("s", query)
-	if (seasonId !== undefined) {
-		url.searchParams.set("season", seasonId)
-	}
+	const url = getKHLPlayerSearchUrl(query, seasonId)
 	const root = await fetchKHLPage(url)
 	return z
 		.array(KHLPlayerSearchResultSchema)
@@ -114,13 +110,31 @@ export async function getKHLPlayer(
 	teamId: string,
 	seasonId: string,
 ): Promise<KHLPlayer> {
-	const url = new URL(`/player/${playerId}/home/`, URLS.KHL)
-	url.searchParams.set("team", teamId)
-	url.searchParams.set("season", seasonId)
+	const url = getKHLPlayerUrl(playerId, teamId, seasonId)
 	const root = await fetchKHLPage(url)
 	return KHLPlayerSchema.parse(
 		parseKHLPlayer(root, url, {playerId, teamId, seasonId}),
 	)
+}
+
+export function getKHLPlayerSearchUrl(query: string, seasonId?: string): URL {
+	const url = new URL("/player-search/", URLS.KHL)
+	url.searchParams.set("s", query)
+	if (seasonId !== undefined) {
+		url.searchParams.set("season", seasonId)
+	}
+	return url
+}
+
+export function getKHLPlayerUrl(
+	playerId: string,
+	teamId: string,
+	seasonId: string,
+): URL {
+	const url = new URL(`/player/${playerId}/home/`, URLS.KHL)
+	url.searchParams.set("team", teamId)
+	url.searchParams.set("season", seasonId)
+	return url
 }
 
 export async function getKHLTeamSchedule(

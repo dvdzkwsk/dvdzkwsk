@@ -141,6 +141,25 @@ export const PlayerRegistrationSchema = z.object({
 	profile: KHLPlayerSchema.nullable(),
 }) satisfies z.ZodType<PlayerRegistration>
 
+/**
+ * Identifies a `PlayerRegistration`: one player on one team, under one KHL
+ * player id. The id alone isn't enough, because a player can keep one id
+ * across several teams (one player is on 8 teams under KHL player id 562354).
+ * Keyed by id alone:
+ *
+ * - The team picker would open whichever of the 8 teams is listed first, no
+ *   matter which team was chosen.
+ * - The integrity report loads each team's KHL player page and compares it
+ *   with what's stored for that team. It would keep only one of the 8 pages,
+ *   so it would flag correct data on the other 7 teams as wrong, and a resync
+ *   would overwrite it.
+ */
+export function getPlayerRegistrationKey(
+	r: Pick<PlayerRegistration, "khlPlayerId" | "teamId">,
+): string {
+	return `${r.khlPlayerId}-${r.teamId}`
+}
+
 /** A team's season whose KHL schedule page failed to load */
 export interface UnavailableSchedule {
 	teamId: string
@@ -470,7 +489,7 @@ export const GET_PLAYER_ENDPOINT = {
 	uri: "/api/players/:playerId",
 	name: "Get player details",
 	description:
-		"A player's profile and every game they've played, across all of their teams and seasons, plus upcoming games for their current teams. The KHL usually issues a new player id for every team registration (though one id can span several teams); `playerId` is KHL+'s own id for the person, from search results and rosters.",
+		"A player's profile and every game they've played, across all of their teams and seasons, plus upcoming games for their current teams. The KHL issues a new player id each time a player registers, and one id can carry on across several teams, so a person has many KHL ids; `playerId` is KHL+'s own id for the person, from search results and rosters.",
 	exampleRequest: {playerId: "1f4d54d9-8b87-4b49-8880-04cd9497ef92"},
 	requestSchema: GetPlayerRequestSchema,
 	responseSchema: PlayerResponseSchema,
@@ -531,6 +550,349 @@ export const GET_PLAYER_ACTIVITY_ENDPOINT = {
 	requestSchema: GetPlayerActivityRequestSchema,
 	responseSchema: ActivityResponseSchema,
 } satisfies ApiEndpoint<GetPlayerActivityRequest, ActivityResponse>
+
+/**
+ * The cached KHL resources behind a player's page. Each is keyed by what it
+ * is, not by who asked, so it's shared: a schedule serves every player on
+ * the team (and the team's own page), a player page every profile with that
+ * KHL id, and a search every profile with that name.
+ */
+export type IntegrityCacheKind = "search" | "profile" | "schedule"
+
+export const IntegrityCacheKindSchema = z.enum([
+	"search",
+	"profile",
+	"schedule",
+])
+
+/** A server cache entry behind a player's page */
+export interface IntegrityCacheEntry {
+	key: string
+	kind: IntegrityCacheKind
+	/** e.g. "Bullets · season 2143" */
+	label: string
+	/** Null if it wasn't cached (or was still loading) when the report began */
+	cachedAt: string | null
+	expiresAt: string | null
+}
+
+export const IntegrityCacheEntrySchema = z.object({
+	key: z.string(),
+	kind: IntegrityCacheKindSchema,
+	label: z.string(),
+	cachedAt: z.iso.datetime().nullable(),
+	expiresAt: z.iso.datetime().nullable(),
+}) satisfies z.ZodType<IntegrityCacheEntry>
+
+/** Which KHL page a registration was compared against */
+export type IntegritySource = "search" | "profile"
+
+export const IntegritySourceSchema = z.enum(["search", "profile"])
+
+/** One field where our stored registration disagrees with the KHL */
+export interface IntegrityMismatch {
+	source: IntegritySource
+	/** e.g. "name", "position", "seasons" */
+	field: string
+	ours: string | null
+	khl: string | null
+	/** e.g. "Missing from ours: 93" */
+	detail: string | null
+}
+
+export const IntegrityMismatchSchema = z.object({
+	source: IntegritySourceSchema,
+	field: z.string(),
+	ours: z.string().nullable(),
+	khl: z.string().nullable(),
+	detail: z.string().nullable(),
+}) satisfies z.ZodType<IntegrityMismatch>
+
+/** Any JSON, e.g. a cached KHL page as the scraper parsed it */
+export const JsonValueSchema = z.json()
+
+export type JsonValue = z.infer<typeof JsonValueSchema>
+
+/**
+ * One value that differs between our copy and the KHL's: a cached page and
+ * the KHL's page now, or a stored registration and what the KHL implies
+ */
+export interface JsonDifference {
+	/** e.g. "[3].startsAt", or "seasonIds (length)" for an array */
+	path: string
+	/** JSON, shortened; null if absent */
+	ours: string | null
+	khl: string | null
+}
+
+export const JsonDifferenceSchema = z.object({
+	path: z.string(),
+	ours: z.string().nullable(),
+	khl: z.string().nullable(),
+}) satisfies z.ZodType<JsonDifference>
+
+/** A registration's fields, as we store them or as the KHL implies them */
+export const IntegrityRecordSchema = z.object({
+	name: z.string(),
+	position: z.string().nullable(),
+	teamId: z.string(),
+	teamName: z.string(),
+	teamLogoUrl: z.url().nullable(),
+	/** Oldest first */
+	seasonIds: z.array(z.string()),
+})
+
+// A type alias (not an interface), so it's assignable to JsonValue
+export type IntegrityRecord = z.infer<typeof IntegrityRecordSchema>
+
+/** One KHL player id attached to the profile, as stored and as the KHL has it */
+export interface IntegrityRegistration {
+	khlPlayerId: string
+	name: string
+	position: string | null
+	teamId: string
+	teamName: string
+	teamLogoUrl: string | null
+	/** Oldest first */
+	seasonIds: string[]
+	/** When we last recorded it */
+	updatedAt: string
+	/** The KHL page it was compared against; null with no seasons recorded */
+	profileUrl: string | null
+	/** Null if the KHL page failed; see `profileError` */
+	profile: KHLPlayer | null
+	profileError: string | null
+	/** This id's rows in the KHL's all-seasons search for the player's name */
+	searchResults: KHLPlayerSearchResult[]
+	/** Where each KHL page disagrees with what's stored, field by field */
+	mismatches: IntegrityMismatch[]
+	/** What's stored, in the same shape as `expected` */
+	stored: IntegrityRecord
+	/**
+	 * What the KHL's pages imply, and so what applying the resync stores.
+	 * Where the pages disagree it keeps what's stored; see `reconcileRegistration`.
+	 */
+	expected: IntegrityRecord
+	/** `stored` against `expected`; empty when they match */
+	differences: JsonDifference[]
+	/** The `cache` entries the player's page loads for it */
+	cacheKeys: IntegrityRegistrationCacheKeys
+}
+
+export interface IntegrityRegistrationCacheKeys {
+	/** Its KHL player page for the latest season; null with no seasons */
+	profile: string | null
+	/** Its team's schedule for each of its seasons, oldest first */
+	schedules: string[]
+}
+
+export const IntegrityRegistrationCacheKeysSchema = z.object({
+	profile: z.string().nullable(),
+	schedules: z.array(z.string()),
+}) satisfies z.ZodType<IntegrityRegistrationCacheKeys>
+
+export const IntegrityRegistrationSchema = z.object({
+	khlPlayerId: z.string(),
+	name: z.string(),
+	position: z.string().nullable(),
+	teamId: z.string(),
+	teamName: z.string(),
+	teamLogoUrl: z.url().nullable(),
+	seasonIds: z.array(z.string()),
+	updatedAt: z.iso.datetime(),
+	profileUrl: z.url().nullable(),
+	profile: KHLPlayerSchema.nullable(),
+	profileError: z.string().nullable(),
+	searchResults: z.array(KHLPlayerSearchResultSchema),
+	mismatches: z.array(IntegrityMismatchSchema),
+	stored: IntegrityRecordSchema,
+	expected: IntegrityRecordSchema,
+	differences: z.array(JsonDifferenceSchema),
+	cacheKeys: IntegrityRegistrationCacheKeysSchema,
+}) satisfies z.ZodType<IntegrityRegistration>
+
+/**
+ * A KHL player id with the profile's name that isn't attached to it: a
+ * namesake split off by hand, or one we've never recorded.
+ */
+export interface IntegrityUnlinked {
+	khlPlayerId: string
+	name: string
+	teamId: string
+	teamName: string
+	/** Oldest first */
+	seasonIds: string[]
+	/** The other profile it's attached to; null if we haven't recorded it */
+	playerId: string | null
+	/** Its KHL player page, as of its latest season */
+	khlUrl: string
+}
+
+export const IntegrityUnlinkedSchema = z.object({
+	khlPlayerId: z.string(),
+	name: z.string(),
+	teamId: z.string(),
+	teamName: z.string(),
+	seasonIds: z.array(z.string()),
+	playerId: z.uuid().nullable(),
+	khlUrl: z.url(),
+}) satisfies z.ZodType<IntegrityUnlinked>
+
+/** How our stored profile compares with the KHL's pages for it */
+export interface PlayerIntegrityResponse {
+	playerId: string
+	name: string
+	/** When the profile was first recorded */
+	createdAt: string
+	checkedAt: string
+	/** The cache entries behind the player's page, as of `checkedAt` */
+	cache: IntegrityCacheEntry[]
+	/** Every KHL player id attached to the profile, most recently active first */
+	registrations: IntegrityRegistration[]
+	unlinked: IntegrityUnlinked[]
+	/** KHL search URL for the player's name across all seasons */
+	searchUrl: string
+	/** Set if the KHL search failed, so nothing was compared against it */
+	searchError: string | null
+}
+
+export const PlayerIntegrityResponseSchema = z.object({
+	playerId: z.uuid(),
+	name: z.string(),
+	createdAt: z.iso.datetime(),
+	checkedAt: z.iso.datetime(),
+	cache: z.array(IntegrityCacheEntrySchema),
+	registrations: z.array(IntegrityRegistrationSchema),
+	unlinked: z.array(IntegrityUnlinkedSchema),
+	searchUrl: z.url(),
+	searchError: z.string().nullable(),
+}) satisfies z.ZodType<PlayerIntegrityResponse>
+
+/** Compares the stored profile with the KHL's pages; at /players/:id?integrity */
+export const GET_PLAYER_INTEGRITY_ENDPOINT = {
+	method: "GET",
+	uri: "/api/players/:playerId/integrity",
+	name: "Check a player's integrity",
+	description:
+		"Compares what KHL+ has stored for a player with the KHL's search and player pages, and lists the cached pages behind it. Read-only.",
+	exampleRequest: GET_PLAYER_ENDPOINT.exampleRequest,
+	requestSchema: GetPlayerRequestSchema,
+	responseSchema: PlayerIntegrityResponseSchema,
+} satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
+
+export interface CheckCacheRequest {
+	/** An IntegrityCacheEntry key */
+	key: string
+}
+
+export const CheckCacheRequestSchema = z.object({
+	key: z
+		.string()
+		.min(1)
+		.describe("A cache key from a player's integrity report"),
+}) satisfies z.ZodType<CheckCacheRequest>
+
+/**
+ * Whether a cache entry still matches the KHL: `match`, `differs`,
+ * `not-cached` (nothing to compare), or `failed` (the KHL page didn't load)
+ */
+export type CacheCheckStatus = "match" | "differs" | "not-cached" | "failed"
+
+export interface CacheCheckResponse {
+	key: string
+	status: CacheCheckStatus
+	checkedAt: string
+	/** The first differences, up to LIMITS.CACHE_CHECK_DIFFERENCES */
+	differences: JsonDifference[]
+	differenceCount: number
+	/** The KHL's page now, parsed; null unless it loaded */
+	khl: JsonValue | null
+	error: string | null
+}
+
+export const CacheCheckResponseSchema = z.object({
+	key: z.string(),
+	status: z.enum(["match", "differs", "not-cached", "failed"]),
+	checkedAt: z.iso.datetime(),
+	differences: z.array(JsonDifferenceSchema),
+	differenceCount: z.number().int().nonnegative(),
+	khl: JsonValueSchema.nullable(),
+	error: z.string().nullable(),
+}) satisfies z.ZodType<CacheCheckResponse>
+
+/** What a cache entry holds, for inspecting it */
+export interface CacheEntryResponse {
+	key: string
+	/** Null if it isn't cached (or is still loading) */
+	cachedAt: string | null
+	expiresAt: string | null
+	value: JsonValue | null
+}
+
+export const CacheEntryResponseSchema = z.object({
+	key: z.string(),
+	cachedAt: z.iso.datetime().nullable(),
+	expiresAt: z.iso.datetime().nullable(),
+	value: JsonValueSchema.nullable(),
+}) satisfies z.ZodType<CacheEntryResponse>
+
+/** A cache entry's contents; only for the kinds an integrity report lists */
+export const GET_CACHE_ENTRY_ENDPOINT = {
+	method: "GET",
+	uri: "/api/cache/entry",
+	name: "Get a cache entry",
+	description:
+		"What one cached KHL page holds, by the key an integrity report lists.",
+	exampleRequest: {key: "history:brandon smith"},
+	requestSchema: CheckCacheRequestSchema,
+	responseSchema: CacheEntryResponseSchema,
+} satisfies ApiEndpoint<CheckCacheRequest, CacheEntryResponse>
+
+/**
+ * Loads a cached page from the KHL again and compares it with the cached
+ * copy, which it leaves in place
+ */
+export const CHECK_CACHE_ENDPOINT = {
+	method: "POST",
+	uri: "/api/cache/check",
+	name: "Check a cache entry",
+	description:
+		"Loads a cached KHL page again and compares it with the cached copy, which it leaves in place.",
+	exampleRequest: {key: "history:brandon smith"},
+	requestSchema: CheckCacheRequestSchema,
+	responseSchema: CacheCheckResponseSchema,
+} satisfies ApiEndpoint<CheckCacheRequest, CacheCheckResponse>
+
+/**
+ * Drops the cached KHL search and player pages behind the report, then
+ * reports again. Like the report, it changes nothing we've stored.
+ */
+export const RELOAD_PLAYER_INTEGRITY_ENDPOINT = {
+	method: "POST",
+	uri: "/api/players/:playerId/integrity/reload",
+	name: "Reload a player's integrity check",
+	description:
+		"Drops the cached KHL pages behind a player's integrity report, then reports again.",
+	exampleRequest: GET_PLAYER_ENDPOINT.exampleRequest,
+	requestSchema: GetPlayerRequestSchema,
+	responseSchema: PlayerIntegrityResponseSchema,
+} satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
+
+/**
+ * Applies the report's pending changes: records new KHL ids and seasons from
+ * the search, then stores each registration as the KHL has it. Returns the
+ * report afterward.
+ */
+export const RESYNC_PLAYER_ENDPOINT = {
+	method: "POST",
+	uri: "/api/players/:playerId/resync",
+	name: "Resync a player",
+	description:
+		"Stores a player's registrations as the KHL has them, then returns the integrity report.",
+	exampleRequest: GET_PLAYER_ENDPOINT.exampleRequest,
+	requestSchema: GetPlayerRequestSchema,
+	responseSchema: PlayerIntegrityResponseSchema,
+} satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
 
 export interface GetTeamRequest {
 	teamId: string
@@ -1406,9 +1768,8 @@ export interface ApiDocsSection {
 }
 
 /**
- * The /api page, in order. Every endpoint is listed except the ones only this
- * site's own pages use (LOG_ENDPOINT and RUN_BENCHMARK_ENDPOINT);
- * ApiJson.test.ts checks that none is forgotten.
+ * The /api page, in order. Endpoints are internal (left off the page) unless
+ * listed here, so a new endpoint is only public once it's added.
  */
 export const API_DOCS_SECTIONS: ApiDocsSection[] = [
 	{title: "Search", endpoints: [SEARCH_ENDPOINT]},

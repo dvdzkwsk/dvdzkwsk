@@ -806,6 +806,70 @@ const SimplePicker = ({
 	)
 }
 
+interface MultiPickerProps {
+	items: PickerItem[]
+	/** The selected values; empty for none */
+	values: string[]
+	onChange: (values: string[]) => void
+	/** The trigger's text, e.g. "All types" or "2 types" */
+	triggerLabel: React.ReactNode
+	/** For the trigger, which is a FilterPill */
+	className?: string
+	title?: string
+}
+
+/** A dropdown for picking any number of items, e.g. filters. */
+export const MultiPicker = ({
+	items,
+	values,
+	onChange,
+	triggerLabel,
+	className,
+	title,
+}: MultiPickerProps) => {
+	return (
+		<Select.Root
+			multiple
+			items={items.map((i) => ({value: i.value, label: i.label}))}
+			value={values}
+			onValueChange={(next) => onChange(next as string[])}
+		>
+			<Hint label={title}>
+				<Select.Trigger
+					className={cx("FilterPill", "Picker-trigger", className)}
+				>
+					<span className="Picker-value">{triggerLabel}</span>
+					<Select.Icon>
+						<ChevronIcon />
+					</Select.Icon>
+				</Select.Trigger>
+			</Hint>
+			<Select.Portal>
+				<Select.Positioner
+					className="Positioner"
+					sideOffset={6}
+					alignItemWithTrigger={false}
+				>
+					<Select.Popup className="SelectPopup">
+						<Select.List>
+							{items.map((item) => (
+								<Select.Item
+									key={item.value}
+									value={item.value}
+									disabled={item.disabled}
+									className="SelectOption"
+								>
+									<PickerItemContent item={item} />
+								</Select.Item>
+							))}
+						</Select.List>
+					</Select.Popup>
+				</Select.Positioner>
+			</Select.Portal>
+		</Select.Root>
+	)
+}
+
 const SearchablePicker = ({
 	groups,
 	value,

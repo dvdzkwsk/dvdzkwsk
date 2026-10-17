@@ -118,7 +118,49 @@ The two external sites share no ids. `Arenas.ts` is the join table. It records t
 
 ### 4. Scraped ids ↔ stable people: `Database.ts`
 
-The KHL usually issues a new player id for every team registration, but some ids span several teams, so a registration is a (KHL player id, team) pair. Search results, rosters, and box scores all pass through `db.recordRegistrations(...)`, which matches each KHL id to a person-level UUID by normalized name (`normalizePlayerName`). `/players/:playerId` uses that UUID and fans out to all of the person's registrations. The database lives on a Fly volume (`KHL_DB_PATH`), so those UUIDs survive deploys. Migrations in `MIGRATIONS` are append-only, and their order is tracked with `PRAGMA user_version`.
+The KHL issues a new player id each time a player registers, so one person has many ids, including several on one team when they re-register with it. A player can also keep one id across several teams, so a registration is a (KHL player id, team) pair, keyed by `getPlayerRegistrationKey`. Search results, rosters, and box scores all pass through `db.recordRegistrations(...)`, which matches each KHL id to a person-level UUID by normalized name (`normalizePlayerName`). `/players/:playerId` uses that UUID and fans out to all of the person's registrations. The database lives on a Fly volume (`KHL_DB_PATH`), so those UUIDs survive deploys. Migrations in `MIGRATIONS` are append-only, and their order is tracked with `PRAGMA user_version`.
+
+#### Building a player profile
+
+A player gets a UUID the first time any page shows them, and their profile page then rebuilds everything from the KHL by name:
+
+```mermaid
+flowchart LR
+    Search["/api/search<br/>current-season search"] --> Record["db.recordRegistrations<br/>KHL id → UUID by name"]
+    Roster["team rosters"] --> Record
+    Box["box scores"] --> Record
+    Record --> UUID[("players + registrations<br/>SQLite")]
+    UUID -- "/players/:uuid" --> Profile["GET /api/players/:playerId"]
+```
+
+`GET /api/players/:playerId` fetches in this order. Each step needs the one before it: the search finds the registrations, and the registrations name the player pages and schedules to load.
+
+```mermaid
+sequenceDiagram
+    participant H as GET /api/players/:playerId
+    participant DB as Database
+    participant KHL as krakenhockeyleague.com
+    participant LB as LiveBarn
+    H->>DB: getPlayer(uuid) → name (404 if unknown)
+    H->>KHL: all-seasons search by name (history:, 1h)
+    H->>DB: recordRegistrations(search rows)<br/>picks up new ids, teams, and seasons
+    H->>DB: getRegistrations(uuid)<br/>one per (KHL id, team), latest first
+    H->>KHL: current teams page (teams:current, 1h) → current season
+    par one per registration
+        H->>KHL: player page for (KHL id, team, latest season)<br/>(player:, 10m) → profile, or null on failure
+    and one per team per season
+        H->>KHL: team schedule (schedule:, 10m current / 24h past)<br/>→ games, or listed in unavailableSchedules
+    end
+    loop each arena in those games
+        H->>KHL: arena page (arena:, 24h)
+        H->>LB: venues → verified surfaces → replay links
+    end
+    opt on a current-season team
+        H->>KHL: league schedule (league-schedule, 5m) → upcoming games
+    end
+```
+
+Opponent logos come from the teams page already loaded, not a page per season, to stay under the KHL site's 403 threshold. The page also requests `GET /api/players/:playerId/activity` separately, since it's slower. That request repeats the first steps (from cache), then reads each recent final game's stats page, to see whether the player dressed, and its box score for their goals, assists, and penalties. The integrity report (`/players/:playerId?integrity`) draws this graph for one player, from the name search to each registration's player page and schedules. Each node's color says whether it matches the KHL and its glyph says whether it's cached, and the report lists the problems and shows any node's details.
 
 ### 5. League time: `LeagueTime.ts`
 

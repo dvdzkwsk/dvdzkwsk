@@ -61,6 +61,8 @@ export const LEAGUE = {
 }
 
 export const LIMITS = {
+	/** How many differences a cache check lists (it counts them all) */
+	CACHE_CHECK_DIFFERENCES: 50,
 	/**
 	 * Some teams go back dozens of seasons, and each season is a page fetch, so
 	 * only the most recent seasons both teams played are searched.

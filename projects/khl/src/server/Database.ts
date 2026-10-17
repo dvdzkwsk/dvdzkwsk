@@ -16,6 +16,7 @@ const logger = new Logger("Database")
 export interface Player {
 	id: string
 	name: string
+	createdAt: string
 }
 
 /** One KHL player id on one team. */
@@ -29,6 +30,8 @@ export interface Registration {
 	teamLogoUrl: string | null
 	/** Seasons the registration has appeared in, oldest first */
 	seasonIds: string[]
+	/** When it was last recorded */
+	updatedAt: string
 }
 
 /** Schema changes, applied in order. Append only; never edit a shipped one. */
@@ -142,6 +145,7 @@ interface RegistrationRow {
 	team_id: string
 	team_name: string
 	team_logo_url: string | null
+	updated_at: string
 	season_ids: string | null
 }
 
@@ -160,7 +164,7 @@ export class KHLDatabase {
 		return (
 			this.db
 				.query<Player, {id: string}>(
-					"SELECT id, name FROM players WHERE id = $id",
+					"SELECT id, name, created_at AS createdAt FROM players WHERE id = $id",
 				)
 				.get({id}) ?? null
 		)
@@ -228,6 +232,64 @@ export class KHLDatabase {
 			}
 		})()
 		return playerIds
+	}
+
+	/**
+	 * Overwrites a registration's fields and seasons with a complete view of
+	 * it. Unlike `recordRegistrations`, which only adds what one page shows,
+	 * this removes seasons that aren't in `seasonIds`. The KHL player id and
+	 * team identify the registration, so neither changes.
+	 */
+	reconcileRegistration(
+		registration: Pick<
+			Registration,
+			| "khlPlayerId"
+			| "teamId"
+			| "name"
+			| "position"
+			| "teamName"
+			| "teamLogoUrl"
+			| "seasonIds"
+		>,
+	): void {
+		const key = {
+			khlPlayerId: registration.khlPlayerId,
+			teamId: registration.teamId,
+		}
+		this.db.transaction(() => {
+			this.db
+				.query(
+					`UPDATE registrations SET
+						name = $name,
+						position = $position,
+						team_name = $teamName,
+						team_logo_url = $teamLogoUrl,
+						updated_at = $now
+					WHERE khl_player_id = $khlPlayerId AND team_id = $teamId`,
+				)
+				.run({
+					...key,
+					name: registration.name,
+					position: registration.position,
+					teamName: registration.teamName,
+					teamLogoUrl: registration.teamLogoUrl,
+					now: new Date().toISOString(),
+				})
+			this.db
+				.query(
+					`DELETE FROM registration_seasons
+					WHERE khl_player_id = $khlPlayerId AND team_id = $teamId`,
+				)
+				.run(key)
+			for (const seasonId of registration.seasonIds) {
+				this.db
+					.query(
+						`INSERT INTO registration_seasons (khl_player_id, team_id, season_id)
+						VALUES ($khlPlayerId, $teamId, $seasonId)`,
+					)
+					.run({...key, seasonId})
+			}
+		})()
 	}
 
 	/** A database round trip, for the status checker */
@@ -308,7 +370,8 @@ export class KHLDatabase {
 		this.db.query("DELETE FROM status_checks WHERE day < $day").run({day})
 	}
 
-	private findPlayerIdForRegistration(khlPlayerId: string): string | null {
+	/** The player a KHL player id is attached to, if we've recorded it */
+	findPlayerIdForRegistration(khlPlayerId: string): string | null {
 		const row = this.db
 			.query<{player_id: string}, {khlPlayerId: string}>(
 				"SELECT player_id FROM registrations WHERE khl_player_id = $khlPlayerId",
@@ -362,5 +425,6 @@ function toRegistration(row: RegistrationRow): Registration {
 		seasonIds: (row.season_ids?.split(",") ?? []).sort(
 			(a, b) => Number(a) - Number(b),
 		),
+		updatedAt: row.updated_at,
 	}
 }

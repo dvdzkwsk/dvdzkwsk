@@ -191,7 +191,9 @@ const relativeFormat = new Intl.RelativeTimeFormat("en-US", {numeric: "auto"})
 export function formatRelative(target: string, now: Date): string {
 	const diffMinutes = (Date.parse(target) - now.getTime()) / MINUTE_MS
 	if (Math.abs(diffMinutes) < 60) {
-		return relativeFormat.format(Math.round(diffMinutes), "minute")
+		// At least a minute either way: "1 minute ago", never "this minute"
+		const minutes = Math.round(diffMinutes) || (diffMinutes > 0 ? 1 : -1)
+		return relativeFormat.format(minutes, "minute")
 	}
 	if (Math.abs(diffMinutes) < 24 * 60) {
 		return relativeFormat.format(Math.round(diffMinutes / 60), "hour")

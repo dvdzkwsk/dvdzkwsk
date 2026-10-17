@@ -597,6 +597,378 @@ table {
 	color: var(--muted-fg);
 }
 
+/* === Integrity report (/players/:id?integrity) === */
+
+.Integrity-header {
+	justify-content: space-between;
+	align-items: flex-start;
+}
+
+.Integrity-heading {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 1.5);
+	min-width: 0;
+}
+
+.Integrity-heading p {
+	margin: 0;
+}
+
+.Integrity-name {
+	margin: 0;
+	font-size: var(--text-4xl);
+	font-weight: var(--weight-heavy);
+	letter-spacing: -0.02em;
+}
+
+.Integrity-meta,
+.Integrity-note,
+.Integrity-muted {
+	color: var(--muted-fg);
+}
+
+.Integrity-meta code,
+.Integrity-muted code {
+	font-size: var(--text-xs);
+	overflow-wrap: anywhere;
+}
+
+.Integrity-note {
+	margin: 0 0 calc(var(--spacing) * 3);
+}
+
+.Integrity-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 4);
+	margin: 0;
+	font-weight: var(--weight-medium);
+}
+
+.Integrity-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 3);
+	margin-bottom: calc(var(--spacing) * 2);
+}
+
+.Integrity-panel-header .Detail-panel-title {
+	margin-bottom: 0;
+}
+
+.Integrity-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: calc(var(--spacing) * 2);
+}
+
+/* The one button that writes, so it's the filled one */
+.Integrity-apply {
+	appearance: none;
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 4);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius-pill);
+	background: var(--accent);
+	color: var(--accent-fg);
+	font: inherit;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.Integrity-apply:focus-visible,
+.Integrity-expander:focus-visible,
+.Integrity-text-button:focus-visible {
+	outline: 2px solid var(--link);
+	outline-offset: 1px;
+}
+
+.Integrity-apply:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.Integrity-text-button {
+	appearance: none;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--link);
+	font: inherit;
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+}
+
+.Integrity-error {
+	margin: 0 0 calc(var(--spacing) * 3);
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+	border: 1px solid var(--warn-border);
+	border-radius: var(--radius-md);
+	background: var(--warn-bg);
+	color: var(--warn-fg);
+	overflow-wrap: anywhere;
+}
+
+.Integrity-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+	border-radius: var(--radius-pill);
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
+	white-space: nowrap;
+}
+
+.Integrity-badge--ok {
+	background: var(--win-bg);
+	color: var(--status-ok);
+}
+
+.Integrity-badge--warn {
+	background: var(--warn-bg);
+	color: var(--warn-fg);
+}
+
+.Integrity-badge--error {
+	background: var(--loss-bg);
+	color: var(--loss);
+}
+
+.Integrity-badge--muted {
+	background: var(--chip-bg);
+	color: var(--muted-fg);
+}
+
+.Integrity-visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.Integrity-scroll {
+	overflow-x: auto;
+}
+
+/* The cache and KHL players tables: groups of rows that open in place */
+.Integrity-table {
+	width: 100%;
+	min-width: calc(var(--spacing) * 150);
+	border-collapse: collapse;
+	font-size: var(--text-sm);
+}
+
+.Integrity-table th,
+.Integrity-table td {
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2);
+	border-bottom: 1px solid var(--panel-border);
+	text-align: left;
+	vertical-align: middle;
+}
+
+.Integrity-table thead th {
+	color: var(--muted-fg);
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
+	white-space: nowrap;
+}
+
+.Integrity-table tbody th {
+	font-weight: var(--weight-regular);
+}
+
+.Integrity-group th {
+	padding-top: calc(var(--spacing) * 5);
+	color: var(--site-fg);
+	font-size: var(--text-sm);
+	font-weight: var(--weight-semibold);
+}
+
+.Integrity-group-meta {
+	margin-left: calc(var(--spacing) * 2);
+	color: var(--muted-fg);
+	font-weight: var(--weight-regular);
+}
+
+.Integrity-row {
+	cursor: pointer;
+}
+
+.Integrity-row:hover,
+.Integrity-row--expanded {
+	background: var(--subtle-bg);
+}
+
+.Integrity-expander {
+	appearance: none;
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 1.5);
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.Integrity-expander svg {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	color: var(--muted-fg);
+	transform: rotate(-90deg);
+	transition: transform 120ms;
+}
+
+.Integrity-expander[aria-expanded="true"] svg {
+	transform: none;
+}
+
+/* Resource type badges, colored like the search results' kind chips */
+.Integrity-type {
+	display: inline-flex;
+	padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 2);
+	border-radius: var(--radius-pill);
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
+	white-space: nowrap;
+}
+
+.Integrity-type--search {
+	background: var(--kind-rink-bg);
+	color: var(--kind-rink-fg);
+}
+
+.Integrity-type--profile {
+	background: var(--kind-player-bg);
+	color: var(--kind-player-fg);
+}
+
+.Integrity-type--schedule {
+	background: var(--kind-team-bg);
+	color: var(--kind-team-fg);
+}
+
+.Integrity-team {
+	display: inline-flex;
+	align-items: center;
+	gap: calc(var(--spacing) * 2);
+}
+
+.Integrity-detail > td {
+	padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4)
+		calc(var(--spacing) * 5);
+	background: var(--subtle-bg);
+}
+
+.Integrity-detail-body {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 3);
+	min-width: 0;
+}
+
+.Integrity-detail-body > p {
+	margin: 0;
+}
+
+/* What differs, inside an opened row */
+.Integrity-differences {
+	width: 100%;
+	border-collapse: collapse;
+	background: var(--panel-bg);
+	border-radius: var(--radius-md);
+	font-size: var(--text-sm);
+}
+
+.Integrity-differences th,
+.Integrity-differences td {
+	padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2.5);
+	border-bottom: 1px solid var(--panel-border);
+	text-align: left;
+	vertical-align: top;
+	/* Keeps a doubled space visible, since values are compared exactly */
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.Integrity-differences thead th {
+	color: var(--muted-fg);
+	font-size: var(--text-xs);
+	font-weight: var(--weight-semibold);
+}
+
+.Integrity-differences tbody th {
+	color: var(--muted-fg);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+}
+
+.Integrity-differences-khl {
+	color: var(--warn-fg);
+	font-weight: var(--weight-semibold);
+}
+
+.Integrity-changes {
+	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+	border: 1px solid var(--info-border);
+	border-radius: var(--radius-md);
+	background: var(--info-bg);
+	font-size: var(--text-sm);
+}
+
+.Integrity-changes p {
+	margin: 0 0 calc(var(--spacing) * 1);
+	color: var(--info-fg);
+}
+
+.Integrity-changes ul {
+	margin: 0;
+	padding-left: calc(var(--spacing) * 5);
+	overflow-wrap: anywhere;
+}
+
+/* A cached page beside the KHL's page now */
+.Integrity-json-panes {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: calc(var(--spacing) * 3);
+}
+
+@media (max-width: 720px) {
+	.Integrity-json-panes {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+.Integrity-json {
+	min-width: 0;
+	margin: 0;
+}
+
+.Integrity-json figcaption {
+	margin-bottom: calc(var(--spacing) * 1.5);
+}
+
+.Integrity-json pre {
+	max-height: calc(var(--spacing) * 100);
+	margin: 0;
+	padding: calc(var(--spacing) * 3);
+	overflow: auto;
+	border: 1px solid var(--panel-border);
+	border-radius: var(--radius-md);
+	background: var(--panel-bg);
+	font-size: var(--text-xs);
+	line-height: 1.5;
+}
+
 /* === Links === */
 
 /* A link whose hit area covers its game row or card (the nearest positioned

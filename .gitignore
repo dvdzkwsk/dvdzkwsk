@@ -7,6 +7,7 @@ node_modules
 .netlify
 secrets
 .claude/*.local.json
+config/claude/skills/synced
 
 # generated files
 .cache
@@ -14,6 +15,7 @@ dist
 tsconfig.tsbuildinfo
 _generated
 **/static/assets/
+
 # local databases
 *.sqlite
 *.sqlite-shm

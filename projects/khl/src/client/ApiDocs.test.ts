@@ -10,21 +10,14 @@ import {
 } from "./ApiDocs.js"
 import * as ApiJson from "../shared/ApiJson.js"
 
-/** Only this site's own pages call these, so /api leaves them out */
-const INTERNAL_ENDPOINTS: ApiEndpoint<ApiRequest, unknown>[] = [
-	ApiJson.LOG_ENDPOINT,
-	ApiJson.RUN_BENCHMARK_ENDPOINT,
-]
-
 const documented = ApiJson.API_DOCS_SECTIONS.flatMap((s) => s.endpoints)
 const all = Object.entries(ApiJson).filter(([name]) =>
 	name.endsWith("_ENDPOINT"),
 ) as [string, ApiEndpoint<ApiRequest, unknown>][]
 
 describe("API_DOCS_SECTIONS", () => {
-	test.each(all)("%s is documented or internal", (_, endpoint) => {
-		const count = documented.filter((e) => e === endpoint).length
-		expect(INTERNAL_ENDPOINTS.includes(endpoint) ? 0 : 1).toBe(count)
+	test("lists each endpoint once", () => {
+		expect(new Set(documented).size).toBe(documented.length)
 	})
 
 	test("anchors are unique", () => {

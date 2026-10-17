@@ -5,6 +5,7 @@ import * as React from "react"
 import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
+	getPlayerRegistrationKey,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
@@ -40,6 +41,7 @@ import {
 	PastGames,
 	SkippedGames,
 } from "../Games.js"
+import {PlayerIntegrityReport} from "../Integrity.js"
 import {
 	AppContext,
 	getBadgesHref,
@@ -53,7 +55,22 @@ import {
 const MAX_UPCOMING_GAMES = 3
 const MAX_PAST_GAMES = 20
 
-const PlayerPage = ({params, query}: RouteProps) => {
+const PlayerPage = (props: RouteProps) => {
+	// ?integrity swaps the profile for a report comparing it with the KHL
+	if (props.query.has("integrity")) {
+		return (
+			<PageShell>
+				<PlayerIntegrityReport
+					key={props.params.playerId}
+					playerId={props.params.playerId!}
+				/>
+			</PageShell>
+		)
+	}
+	return <PlayerProfile {...props} />
+}
+
+const PlayerProfile = ({params, query}: RouteProps) => {
 	const {history} = React.useContext(AppContext)
 	const playerId = params.playerId!
 	const state = useAsync(
@@ -103,7 +120,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 				{(player) => {
 					const selected =
 						player.registrations.find(
-							(r) => getRegistrationKey(r) === selectedTeam,
+							(r) => getPlayerRegistrationKey(r) === selectedTeam,
 						) ?? null
 					const games = selected
 						? player.games.filter(({game}) => {
@@ -180,7 +197,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 									// Reset the list's scroll position when switching teams
 									key={
 										selected
-											? getRegistrationKey(selected)
+											? getPlayerRegistrationKey(selected)
 											: "all"
 									}
 									games={games}
@@ -312,7 +329,7 @@ const PlayerTeamPicker = ({
 				{label: "Current", items: current.map(toTeamItem)},
 				{label: "Past", items: past.map(toTeamItem)},
 			].filter((group) => group.items.length > 0)}
-			value={selected ? getRegistrationKey(selected) : ALL_TEAMS}
+			value={selected ? getPlayerRegistrationKey(selected) : ALL_TEAMS}
 			onChange={(value) =>
 				onSelectTeam(value === ALL_TEAMS ? null : value)
 			}
@@ -365,7 +382,7 @@ const PlayerHeader = ({
 								.join(" · ")
 							return (
 								<span
-									key={getRegistrationKey(r)}
+									key={getPlayerRegistrationKey(r)}
 									className="PlayerHero-team"
 								>
 									<TeamAvatar
@@ -465,14 +482,6 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 
 const ALL_TEAMS = "all"
 
-/**
- * One KHL player id can span several teams, and a team can issue the player
- * more than one id, so a registration takes both to identify.
- */
-function getRegistrationKey(r: PlayerRegistration): string {
-	return `${r.khlPlayerId}-${r.teamId}`
-}
-
 /** "Division 5B", from the profile's "Stingers - Division 5B" line. */
 function getDivision(registration: PlayerRegistration): string {
 	return registration.profile?.teamLine?.split(" - ").at(-1) ?? ""
@@ -481,7 +490,7 @@ function getDivision(registration: PlayerRegistration): string {
 function toTeamItem(r: PlayerRegistration): PickerItem {
 	const seasons = `${r.seasonIds.length} ${r.seasonIds.length === 1 ? "season" : "seasons"}`
 	return {
-		value: getRegistrationKey(r),
+		value: getPlayerRegistrationKey(r),
 		label: r.teamName,
 		icon: (
 			<TeamAvatar name={r.teamName} logoUrl={r.teamLogoUrl} size={20} />
@@ -671,7 +680,8 @@ const StatsByTeam = ({
 			rowKey={(row) =>
 				matchField(row, "kind", {
 					total: () => "total",
-					registration: (r) => getRegistrationKey(r.registration),
+					registration: (r) =>
+						getPlayerRegistrationKey(r.registration),
 				})
 			}
 			rowClassName={(row) =>

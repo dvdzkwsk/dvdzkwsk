@@ -916,6 +916,16 @@ table {
 	font-weight: var(--weight-semibold);
 }
 
+/* Moving a KHL id, below a registration's comparison */
+.Integrity-move {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 2);
+	margin-top: calc(var(--spacing) * 4);
+	padding-top: calc(var(--spacing) * 4);
+	border-top: 1px solid var(--panel-border);
+}
+
 .Integrity-changes {
 	padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
 	border: 1px solid var(--info-border);

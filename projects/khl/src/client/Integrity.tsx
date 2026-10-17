@@ -13,9 +13,11 @@ import {
 	Link,
 	MultiPicker,
 	PageTitle,
+	Picker,
 	TeamAvatar,
 } from "./Components.js"
 import {
+	AppContext,
 	formatFullGameDate,
 	formatGameTime,
 	formatRelative,
@@ -35,6 +37,7 @@ import {
 	IntegritySource,
 	IntegrityUnlinked,
 	JsonDifference,
+	MOVE_KHL_PLAYER_ID_ENDPOINT,
 	PlayerIntegrityResponse,
 	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
 	RESYNC_PLAYER_ENDPOINT,
@@ -49,35 +52,40 @@ const SOURCE_LABELS: Record<IntegritySource, string> = {
 	profile: "KHL profile",
 }
 
-type IntegrityAction = "reload" | "apply"
+type IntegrityAction = "reload" | "apply" | "move"
 
-const ACTIONS: Record<
-	IntegrityAction,
-	{
-		/** Both take the player and return a report */
-		endpoint: typeof RESYNC_PLAYER_ENDPOINT
-		running: string
-		failed: string
-	}
-> = {
+/** The resync panel's actions, which take the player and return a report */
+type ResyncAction = Exclude<IntegrityAction, "move">
+
+const RESYNC_ENDPOINTS: Record<ResyncAction, typeof RESYNC_PLAYER_ENDPOINT> = {
+	reload: RELOAD_PLAYER_INTEGRITY_ENDPOINT,
+	apply: RESYNC_PLAYER_ENDPOINT,
+}
+
+const ACTIONS: Record<IntegrityAction, {running: string; failed: string}> = {
 	reload: {
-		endpoint: RELOAD_PLAYER_INTEGRITY_ENDPOINT,
 		running: "Reloading the KHL's pages…",
 		failed: "Couldn't reload the KHL's pages",
 	},
 	apply: {
-		endpoint: RESYNC_PLAYER_ENDPOINT,
 		running: "Applying the resync…",
 		failed: "Couldn't apply the resync",
+	},
+	move: {
+		running: "Moving the KHL id…",
+		failed: "Couldn't move the KHL id",
 	},
 }
 
 interface ActionState {
 	running: IntegrityAction | null
-	failed: {error: Error; action: IntegrityAction} | null
+	failed: {error: Error; action: IntegrityAction; retry: () => void} | null
 	/** The latest action's report, which replaces the first load's */
 	report: PlayerIntegrityResponse | null
 }
+
+/** Moves a KHL id, with all its teams, to a profile (null for a new one) */
+type MoveHandler = (khlPlayerId: string, toPlayerId: string | null) => void
 
 /** Our stored profile compared with the KHL's search and player pages */
 export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
@@ -90,18 +98,50 @@ export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
 		failed: null,
 		report: null,
 	})
-	const run = (next: IntegrityAction) => {
+	const {history} = React.useContext(AppContext)
+	/** `load` returns the report to show, or null to keep the current one */
+	const run = (
+		next: IntegrityAction,
+		load: () => Promise<PlayerIntegrityResponse | null>,
+	) => {
 		setAction((prev) => ({...prev, running: next, failed: null}))
-		doRequest(ACTIONS[next].endpoint, {playerId}).then(
-			(report) => setAction({running: null, failed: null, report}),
+		load().then(
+			(report) => {
+				setAction((prev) => ({
+					running: null,
+					failed: null,
+					report: report ?? prev.report,
+				}))
+			},
 			(error) => {
 				setAction((prev) => ({
 					...prev,
 					running: null,
-					failed: {error: toError(error), action: next},
+					failed: {
+						error: toError(error),
+						action: next,
+						retry: () => run(next, load),
+					},
 				}))
 			},
 		)
+	}
+	const runResync = (next: ResyncAction) => {
+		run(next, () => doRequest(RESYNC_ENDPOINTS[next], {playerId}))
+	}
+	const move: MoveHandler = (khlPlayerId, toPlayerId) => {
+		run("move", async () => {
+			const result = await doRequest(MOVE_KHL_PLAYER_ID_ENDPOINT, {
+				khlPlayerId,
+				toPlayerId,
+			})
+			if (result.deletedPlayerId === playerId) {
+				// This profile is gone, so follow the id to where it went
+				history.replace(`${getPlayerHref(result.toPlayerId)}?integrity`)
+				return null
+			}
+			return doRequest(GET_PLAYER_INTEGRITY_ENDPOINT, {playerId})
+		})
 	}
 	return (
 		<AsyncContent
@@ -110,7 +150,12 @@ export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
 			slowNote="Still working. The report loads the KHL's name search and the KHL player page for each of the profile's registrations."
 		>
 			{(initial) => {
-				const report = action.report ?? initial
+				// An action's report is for the player it ran on, which a
+				// move can navigate away from
+				const report =
+					action.report?.playerId === initial.playerId
+						? action.report
+						: initial
 				return (
 					<div className="Detail">
 						<PageTitle>{`${report.name} integrity`}</PageTitle>
@@ -118,14 +163,18 @@ export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
 						<ResyncPanel
 							report={report}
 							action={action}
-							onRun={run}
+							onRun={runResync}
 						/>
 						{/* Keyed so checks from an older report don't linger */}
 						<IntegrityCache
 							key={report.checkedAt}
 							cache={report.cache}
 						/>
-						<IntegrityPlayers report={report} />
+						<IntegrityPlayers
+							report={report}
+							action={action}
+							onMove={move}
+						/>
 					</div>
 				)
 			}}
@@ -176,7 +225,7 @@ const ResyncPanel = ({
 }: {
 	report: PlayerIntegrityResponse
 	action: ActionState
-	onRun: (action: IntegrityAction) => void
+	onRun: (action: ResyncAction) => void
 }) => {
 	const unrecorded = report.unlinked.filter((u) => !u.playerId).length
 	const pending = countDifferences(report) + unrecorded
@@ -212,21 +261,43 @@ const ResyncPanel = ({
 					</button>
 				</Hint>
 			</div>
-			{action.running && (
+			<ActionStatus
+				action={action}
+				only={["reload", "apply"]}
+				slowNote="Still working. Each KHL page is fetched again."
+			/>
+		</section>
+	)
+}
+
+/** Progress and failures for the given actions */
+const ActionStatus = ({
+	action,
+	only,
+	slowNote,
+}: {
+	action: ActionState
+	only: IntegrityAction[]
+	slowNote: string
+}) => {
+	const {running, failed} = action
+	return (
+		<>
+			{running && only.includes(running) && (
 				<InlineLoader
-					label={ACTIONS[action.running].running}
-					slowNote="Still working. Each KHL page is fetched again."
+					label={ACTIONS[running].running}
+					slowNote={slowNote}
 				/>
 			)}
-			{action.failed && (
+			{failed && only.includes(failed.action) && (
 				<ErrorState
-					title={ACTIONS[action.failed.action].failed}
-					error={action.failed.error}
-					onRetry={() => onRun(action.failed!.action)}
+					title={ACTIONS[failed.action].failed}
+					error={failed.error}
+					onRetry={failed.retry}
 					size="inline"
 				/>
 			)}
-		</section>
+		</>
 	)
 }
 
@@ -826,8 +897,17 @@ const JsonPane = ({
  * Every KHL registration on the KHL+ profile, plus same-name registrations
  * on other KHL+ profiles
  */
-const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
+const IntegrityPlayers = ({
+	report,
+	action,
+	onMove,
+}: {
+	report: PlayerIntegrityResponse
+	action: ActionState
+	onMove: MoveHandler
+}) => {
 	const {isExpanded, toggle} = useExpanded()
+	const busy = !!action.running
 	return (
 		<section className="Detail-panel">
 			<h2 className="SectionLabel Detail-panel-title">
@@ -838,8 +918,14 @@ const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
 				issues a new player id, with its own player page, each time a
 				person registers on a team. Each registration we've stored is
 				compared with the KHL's name search and its KHL player page.
-				Open a row to see what differs.
+				Open a row to see what differs, or to move a KHL id that belongs
+				to a different person with the same name.
 			</p>
+			<ActionStatus
+				action={action}
+				only={["move"]}
+				slowNote="Still working. The report loads again after the move."
+			/>
 			{report.searchError && (
 				<p className="Integrity-error">
 					The KHL search failed, so nothing was compared with it:{" "}
@@ -894,7 +980,16 @@ const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
 									<TimeAgo at={r.updatedAt} />,
 									<RegistrationBadge registration={r} />,
 								]}
-								detail={<RegistrationDetail registration={r} />}
+								detail={
+									<RegistrationDetail registration={r}>
+										<MoveControl
+											registration={r}
+											report={report}
+											busy={busy}
+											onMove={onMove}
+										/>
+									</RegistrationDetail>
+								}
 							/>
 						))}
 					</tbody>
@@ -942,7 +1037,14 @@ const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
 											</IntegrityBadge>
 										),
 									]}
-									detail={<UnlinkedDetail unlinked={u} />}
+									detail={
+										<UnlinkedDetail
+											unlinked={u}
+											report={report}
+											busy={busy}
+											onMove={onMove}
+										/>
+									}
 								/>
 							))}
 						</tbody>
@@ -1016,8 +1118,10 @@ const MISMATCH_RECORD_FIELDS: Record<string, string> = {
  */
 const RegistrationDetail = ({
 	registration: r,
+	children,
 }: {
 	registration: IntegrityRegistration
+	children?: React.ReactNode
 }) => {
 	const differingFields = new Set(
 		r.differences.map((d) => d.path.split(/[.[ ]/)[0]),
@@ -1075,6 +1179,85 @@ const RegistrationDetail = ({
 					</div>
 				)}
 			</Comparison>
+			{children}
+		</div>
+	)
+}
+
+const NEW_PROFILE = "new"
+
+/** Moves a registration's KHL id to another profile with the same name */
+const MoveControl = ({
+	registration: r,
+	report,
+	busy,
+	onMove,
+}: {
+	registration: IntegrityRegistration
+	report: PlayerIntegrityResponse
+	busy: boolean
+	onMove: MoveHandler
+}) => {
+	const [target, setTarget] = React.useState<string | null>(null)
+	const teams = report.registrations
+		.filter((other) => other.khlPlayerId === r.khlPlayerId)
+		.map((other) => other.teamName)
+	const isOnlyId = report.registrations.every(
+		(other) => other.khlPlayerId === r.khlPlayerId,
+	)
+	return (
+		<div className="Integrity-move">
+			<p className="Integrity-note">
+				A different {report.name}? Move KHL id{" "}
+				<code>{r.khlPlayerId}</code>
+				{teams.length > 1 &&
+					` and all ${teams.length} of its teams (${teams.join(", ")})`}{" "}
+				to another KHL+ profile. Later searches leave it there.
+				{isOnlyId &&
+					" It's this profile's only KHL id, so the profile is removed and its link stops working."}
+			</p>
+			<div className="Integrity-actions">
+				<Picker
+					groups={[
+						{
+							label: "",
+							items: [
+								{
+									value: NEW_PROFILE,
+									label: "A new KHL+ profile",
+								},
+								...report.namesakes.map((n) => ({
+									value: n.playerId,
+									label:
+										n.teamNames.join(", ") ||
+										"No teams yet",
+									hint: plural(
+										n.registrationCount,
+										"registration",
+										"registrations",
+									),
+								})),
+							],
+						},
+					]}
+					value={target}
+					onChange={setTarget}
+					placeholder="Move to…"
+				/>
+				<button
+					type="button"
+					className="FilterPill"
+					disabled={busy || !target}
+					onClick={() => {
+						onMove(
+							r.khlPlayerId,
+							target === NEW_PROFILE ? null : target,
+						)
+					}}
+				>
+					Move
+				</button>
+			</div>
 		</div>
 	)
 }
@@ -1087,7 +1270,17 @@ function countDifferences(report: PlayerIntegrityResponse): number {
 	)
 }
 
-const UnlinkedDetail = ({unlinked: u}: {unlinked: IntegrityUnlinked}) => {
+const UnlinkedDetail = ({
+	unlinked: u,
+	report,
+	busy,
+	onMove,
+}: {
+	unlinked: IntegrityUnlinked
+	report: PlayerIntegrityResponse
+	busy: boolean
+	onMove: MoveHandler
+}) => {
 	return (
 		<div className="Integrity-detail-body">
 			<p className="Integrity-note">
@@ -1109,6 +1302,28 @@ const UnlinkedDetail = ({unlinked: u}: {unlinked: IntegrityUnlinked}) => {
 			<p className="Integrity-note">
 				Seasons: {formatSeasonIds(u.seasonIds) ?? "none"}
 			</p>
+			{u.playerId && (
+				<div className="Integrity-move">
+					<p className="Integrity-note">
+						The same person as {report.name}? Move KHL id{" "}
+						<code>{u.khlPlayerId}</code>, with every team it's on,
+						to {report.name}'s KHL+ profile. Later searches leave it
+						there.
+					</p>
+					<div className="Integrity-actions">
+						<button
+							type="button"
+							className="FilterPill"
+							disabled={busy}
+							onClick={() =>
+								onMove(u.khlPlayerId, report.playerId)
+							}
+						>
+							Move to this profile
+						</button>
+					</div>
+				</div>
+			)}
 		</div>
 	)
 }

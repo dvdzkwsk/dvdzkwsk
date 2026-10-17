@@ -70,6 +70,7 @@ import {
 	GET_PLAYER_INTEGRITY_ENDPOINT,
 	JsonValue,
 	JsonValueSchema,
+	MOVE_KHL_PLAYER_ID_ENDPOINT,
 	IntegrityCacheEntry,
 	IntegrityRegistration,
 	IntegrityUnlinked,
@@ -343,6 +344,32 @@ registerEndpoint(app, RELOAD_PLAYER_INTEGRITY_ENDPOINT, async ({playerId}) => {
 registerEndpoint(app, RESYNC_PLAYER_ENDPOINT, async ({playerId}) => {
 	return getPlayerIntegrity(getStoredPlayer(playerId), {apply: true})
 })
+
+registerEndpoint(
+	app,
+	MOVE_KHL_PLAYER_ID_ENDPOINT,
+	async ({khlPlayerId, toPlayerId}) => {
+		const fromPlayerId = db.findPlayerIdForRegistration(khlPlayerId)
+		if (!fromPlayerId) {
+			throw new ApiError(
+				404,
+				`KHL player id ${khlPlayerId} isn't recorded`,
+			)
+		}
+		if (toPlayerId !== null) {
+			getStoredPlayer(toPlayerId)
+			if (toPlayerId === fromPlayerId) {
+				throw new ApiError(
+					400,
+					`KHL player id ${khlPlayerId} is already on player ${toPlayerId}`,
+				)
+			}
+		}
+		const move = db.moveKHLPlayerId(khlPlayerId, toPlayerId)
+		logger.info("moveKHLPlayerId", "moved a KHL player id", {...move})
+		return move
+	},
+)
 
 /**
  * Cache keys an integrity report lists. Their loaders only fetch and parse,
@@ -652,6 +679,7 @@ async function getPlayerIntegrity(
 		cache: [...cache.values()],
 		registrations: integrityRegistrations,
 		unlinked: [...unlinked.values()],
+		namesakes: db.getNamesakes(player.id),
 		searchUrl: getKHLPlayerSearchUrl(
 			player.name,
 			KHL_ALL_SEASONS,

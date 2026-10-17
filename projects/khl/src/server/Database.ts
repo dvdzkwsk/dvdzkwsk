@@ -149,6 +149,30 @@ interface RegistrationRow {
 	season_ids: string | null
 }
 
+/** Another player with the same name, as `getNamesakes` lists them */
+export interface Namesake {
+	playerId: string
+	createdAt: string
+	registrationCount: number
+	teamNames: string[]
+}
+
+interface NamesakeRow {
+	id: string
+	created_at: string
+	team_names: string | null
+	registration_count: number
+}
+
+/** What `moveKHLPlayerId` changed */
+export interface PlayerMove {
+	khlPlayerId: string
+	fromPlayerId: string
+	toPlayerId: string
+	/** The player the move emptied, which is deleted */
+	deletedPlayerId: string | null
+}
+
 interface StatusCheckRow {
 	component: string
 	checked_at: string
@@ -292,6 +316,81 @@ export class KHLDatabase {
 		})()
 	}
 
+	/**
+	 * Other players with the same normalized name: namesakes split off by
+	 * hand, or registrations that arrived while the name was ambiguous
+	 */
+	getNamesakes(playerId: string): Namesake[] {
+		const rows = this.db
+			.query<NamesakeRow, {playerId: string}>(
+				`SELECT p.id, p.created_at, group_concat(DISTINCT r.team_name) AS team_names,
+					count(DISTINCT r.khl_player_id || ':' || r.team_id) AS registration_count
+				FROM players p
+				JOIN players self ON self.id = $playerId AND self.name_key = p.name_key
+				LEFT JOIN registrations r ON r.player_id = p.id
+				WHERE p.id != $playerId
+				GROUP BY p.id
+				ORDER BY p.created_at`,
+			)
+			.all({playerId})
+		return rows.map((row) => ({
+			playerId: row.id,
+			createdAt: row.created_at,
+			registrationCount: row.registration_count,
+			teamNames: row.team_names?.split(",") ?? [],
+		}))
+	}
+
+	/**
+	 * Moves a KHL player id, with every team it's registered on, to another
+	 * player (or a new one when `toPlayerId` is null). Teams under one id are
+	 * one person, so they move together. Searches never reassign a recorded
+	 * id, so the move sticks. A player left with no registrations is deleted.
+	 */
+	moveKHLPlayerId(
+		khlPlayerId: string,
+		toPlayerId: string | null,
+	): PlayerMove {
+		return this.db.transaction((): PlayerMove => {
+			const fromPlayerId = this.findPlayerIdForRegistration(khlPlayerId)
+			if (!fromPlayerId) {
+				throw logger.newError(
+					"moveKHLPlayerId",
+					"KHL id isn't recorded",
+					{
+						khlPlayerId,
+					},
+				)
+			}
+			const now = new Date().toISOString()
+			const targetId =
+				toPlayerId ??
+				this.createPlayer(this.getRegistrationName(khlPlayerId), now)
+			this.db
+				.query(
+					`UPDATE registrations SET player_id = $targetId
+					WHERE khl_player_id = $khlPlayerId`,
+				)
+				.run({targetId, khlPlayerId})
+			const remaining = this.db
+				.query<{count: number}, {fromPlayerId: string}>(
+					"SELECT count(*) AS count FROM registrations WHERE player_id = $fromPlayerId",
+				)
+				.get({fromPlayerId})!.count
+			if (remaining === 0) {
+				this.db
+					.query("DELETE FROM players WHERE id = $fromPlayerId")
+					.run({fromPlayerId})
+			}
+			return {
+				khlPlayerId,
+				fromPlayerId,
+				toPlayerId: targetId,
+				deletedPlayerId: remaining === 0 ? fromPlayerId : null,
+			}
+		})()
+	}
+
 	/** A database round trip, for the status checker */
 	ping(): void {
 		this.db.query("SELECT 1").get()
@@ -380,6 +479,14 @@ export class KHLDatabase {
 		return row?.player_id ?? null
 	}
 
+	private getRegistrationName(khlPlayerId: string): string {
+		return this.db
+			.query<{name: string}, {khlPlayerId: string}>(
+				"SELECT name FROM registrations WHERE khl_player_id = $khlPlayerId",
+			)
+			.get({khlPlayerId})!.name
+	}
+
 	private assignPlayer(name: string, now: string): string {
 		const nameKey = normalizePlayerName(name)
 		const candidates = this.db
@@ -402,13 +509,17 @@ export class KHLDatabase {
 				},
 			)
 		}
+		return this.createPlayer(name, now)
+	}
+
+	private createPlayer(name: string, now: string): string {
 		const id = crypto.randomUUID()
 		this.db
 			.query(
 				`INSERT INTO players (id, name, name_key, created_at)
 				VALUES ($id, $name, $nameKey, $now)`,
 			)
-			.run({id, name, nameKey, now})
+			.run({id, name, nameKey: normalizePlayerName(name), now})
 		return id
 	}
 }

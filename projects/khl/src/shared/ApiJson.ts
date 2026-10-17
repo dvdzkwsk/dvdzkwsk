@@ -715,6 +715,21 @@ export const IntegrityUnlinkedSchema = z.object({
 }) satisfies z.ZodType<IntegrityUnlinked>
 
 /** How our stored profile compares with the KHL's pages for it */
+/** Another KHL+ profile with the same name, which a KHL id can move to */
+export interface IntegrityNamesake {
+	playerId: string
+	createdAt: string
+	registrationCount: number
+	teamNames: string[]
+}
+
+export const IntegrityNamesakeSchema = z.object({
+	playerId: z.uuid(),
+	createdAt: z.iso.datetime(),
+	registrationCount: z.number().int().nonnegative(),
+	teamNames: z.array(z.string()),
+}) satisfies z.ZodType<IntegrityNamesake>
+
 export interface PlayerIntegrityResponse {
 	playerId: string
 	name: string
@@ -726,6 +741,8 @@ export interface PlayerIntegrityResponse {
 	/** Every KHL player id attached to the profile, most recently active first */
 	registrations: IntegrityRegistration[]
 	unlinked: IntegrityUnlinked[]
+	/** Other profiles with the same name, oldest first */
+	namesakes: IntegrityNamesake[]
 	/** KHL search URL for the player's name across all seasons */
 	searchUrl: string
 	/** Set if the KHL search failed, so nothing was compared against it */
@@ -740,6 +757,7 @@ export const PlayerIntegrityResponseSchema = z.object({
 	cache: z.array(IntegrityCacheEntrySchema),
 	registrations: z.array(IntegrityRegistrationSchema),
 	unlinked: z.array(IntegrityUnlinkedSchema),
+	namesakes: z.array(IntegrityNamesakeSchema),
 	searchUrl: z.url(),
 	searchError: z.string().nullable(),
 }) satisfies z.ZodType<PlayerIntegrityResponse>
@@ -869,6 +887,46 @@ export const RESYNC_PLAYER_ENDPOINT = {
 	requestSchema: GetPlayerRequestSchema,
 	responseSchema: PlayerIntegrityResponseSchema,
 } satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
+
+export interface MoveKHLPlayerIdRequest {
+	khlPlayerId: string
+	/** Null moves it to a new profile */
+	toPlayerId: string | null
+}
+
+export const MoveKHLPlayerIdRequestSchema = z.object({
+	khlPlayerId: z.string().min(1).describe("The KHL player id to move"),
+	toPlayerId: z
+		.uuid()
+		.nullable()
+		.describe("The KHL+ profile to move it to; null for a new one"),
+}) satisfies z.ZodType<MoveKHLPlayerIdRequest>
+
+export interface MoveKHLPlayerIdResponse {
+	khlPlayerId: string
+	fromPlayerId: string
+	toPlayerId: string
+	/** The profile the move emptied, which no longer exists */
+	deletedPlayerId: string | null
+}
+
+export const MoveKHLPlayerIdResponseSchema = z.object({
+	khlPlayerId: z.string(),
+	fromPlayerId: z.uuid(),
+	toPlayerId: z.uuid(),
+	deletedPlayerId: z.uuid().nullable(),
+}) satisfies z.ZodType<MoveKHLPlayerIdResponse>
+
+export const MOVE_KHL_PLAYER_ID_ENDPOINT = {
+	method: "POST",
+	uri: "/api/registrations/move",
+	name: "Move a KHL player id",
+	description:
+		"Moves a KHL player id, with every team it's registered on, to another KHL+ profile or a new one. Later searches leave it there.",
+	exampleRequest: {khlPlayerId: "428254", toPlayerId: null},
+	requestSchema: MoveKHLPlayerIdRequestSchema,
+	responseSchema: MoveKHLPlayerIdResponseSchema,
+} satisfies ApiEndpoint<MoveKHLPlayerIdRequest, MoveKHLPlayerIdResponse>
 
 export interface GetTeamRequest {
 	teamId: string

@@ -113,6 +113,16 @@ const MIGRATIONS = [
 			REFERENCES registrations (khl_player_id, team_id)
 	);
 	`,
+	`
+	-- Loaded KHL and LiveBarn data (see KHLCache), so it survives restarts
+	CREATE TABLE cache_entries (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		loaded_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
+	CREATE INDEX cache_entries_expires_at ON cache_entries (expires_at);
+	`,
 ]
 
 export function openDatabase(filepath: string) {
@@ -147,6 +157,14 @@ interface RegistrationRow {
 	team_logo_url: string | null
 	updated_at: string
 	season_ids: string | null
+}
+
+/** A cached value as JSON; times are epoch milliseconds */
+export interface StoredCacheEntry {
+	key: string
+	value: string
+	loadedAt: number
+	expiresAt: number
 }
 
 interface StatusCheckRow {
@@ -368,6 +386,38 @@ export class KHLDatabase {
 	/** Drops checks from before `day`, which the status page no longer shows */
 	pruneStatusChecks(day: string): void {
 		this.db.query("DELETE FROM status_checks WHERE day < $day").run({day})
+	}
+
+	/** An unexpired cache entry, if there is one */
+	getCacheEntry(key: string, now: number): StoredCacheEntry | null {
+		return this.db
+			.query<StoredCacheEntry, {key: string; now: number}>(
+				`SELECT key, value, loaded_at AS loadedAt, expires_at AS expiresAt
+				FROM cache_entries WHERE key = $key AND expires_at > $now`,
+			)
+			.get({key, now})
+	}
+
+	setCacheEntry(entry: StoredCacheEntry): void {
+		this.db
+			.query(
+				`INSERT INTO cache_entries (key, value, loaded_at, expires_at)
+				VALUES ($key, $value, $loadedAt, $expiresAt)
+				ON CONFLICT (key) DO UPDATE SET value = excluded.value,
+					loaded_at = excluded.loaded_at, expires_at = excluded.expires_at`,
+			)
+			.run({...entry})
+	}
+
+	deleteCacheEntry(key: string): void {
+		this.db.query("DELETE FROM cache_entries WHERE key = $key").run({key})
+	}
+
+	/** Drops entries that expired before `now` */
+	pruneCacheEntries(now: number): void {
+		this.db
+			.query("DELETE FROM cache_entries WHERE expires_at <= $now")
+			.run({now})
 	}
 
 	/** The player a KHL player id is attached to, if we've recorded it */

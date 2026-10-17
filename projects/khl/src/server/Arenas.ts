@@ -1,3 +1,4 @@
+import {z} from "zod"
 import {CityId} from "../shared/Cities.js"
 import {KHLArenaRef} from "../shared/KHLJson.js"
 
@@ -28,6 +29,12 @@ export interface LiveBarnSurfaceMapping {
 	venueName: string
 	surfaceName: string
 }
+
+export const LiveBarnSurfaceMappingSchema = z.object({
+	surfaceId: z.number(),
+	venueName: z.string(),
+	surfaceName: z.string(),
+}) satisfies z.ZodType<LiveBarnSurfaceMapping>
 
 const KCI = "Kraken Community Iceplex"
 const OLYMPICVIEW = "Olympicview Arena"

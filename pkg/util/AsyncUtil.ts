@@ -11,6 +11,10 @@ export async function mapAsync<T, R>(
 	return Promise.all(items.map((item) => mapFn(item)))
 }
 
+export function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 /**
  * Returns a function that runs tasks with at most `concurrency` in flight,
  * queueing the rest in order.

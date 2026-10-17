@@ -1,6 +1,6 @@
 # KHL+ architecture
 
-KHL+ is a faster, friendlier front end for [krakenhockeyleague.com](https://krakenhockeyleague.com). The league has no API, so a Bun/Express server scrapes its HTML pages, caches them in memory, joins them with LiveBarn's venue data and a small SQLite database, and serves typed JSON to a React single-page app.
+KHL+ is a faster, friendlier front end for [krakenhockeyleague.com](https://krakenhockeyleague.com). The league has no API, so a Bun/Express server scrapes its HTML pages, caches them in memory and SQLite, joins them with LiveBarn's venue data and a small SQLite database, and serves typed JSON to a React single-page app.
 
 ```mermaid
 flowchart LR
@@ -21,7 +21,8 @@ flowchart LR
 
     subgraph Server["Server process (Bun)"]
         Express["Server.ts<br/>registerEndpoint handlers"]
-        Cache[("cached()<br/>in-memory Map")]
+        Cache[("Cache.ts · KHLCache<br/>memory, written through to SQLite")]
+        Syncer["KHLSyncer.ts<br/>background player lists"]
         KHL["KHL.ts<br/>getKHL* → fetchKHLPage → parseKHL*"]
         LB["LiveBarn.ts"]
         Arenas["Arenas.ts<br/>hand-kept arena ↔ surface map"]
@@ -37,6 +38,8 @@ flowchart LR
     ApiJson -- "HTTP /api/*" --> Express
     ClientLog -- "POST /api/logs" --> Express
     Express --> Cache
+    Syncer --> Cache
+    Cache --> DB
     Cache --> KHL
     Cache --> LB
     Express --> Arenas
@@ -56,8 +59,10 @@ flowchart LR
 | Scraper | `src/server/KHL.ts` | One `getKHL*` per league page. Each fetches through `fetchKHLPage` (a 2-request concurrency limiter around `doFetch`) and hands the DOM to a pure `parseKHL*` that returns a `KHLJson` shape or throws `newParseError`. Knows nothing about caching or the API. |
 | LiveBarn client | `src/server/LiveBarn.ts` | Fetches the venues list (validated by `LiveBarnJson.ts`). The live/VOD watch URLs are built by `src/shared/LiveBarn.ts`, so the client can link scoresheet events to their moment in a replay. |
 | Arena mapping | `src/server/Arenas.ts` | Hand-maintained map from KHL arena id to LiveBarn surfaces, display name, and city. The two sites disagree on names and addresses, so nothing here is inferred. |
-| API server | `src/server/Server.ts` | Express app. Owns the `cached()` layer and TTLs, composes scraped pages into API responses, enriches them (LiveBarn links, logos, preview stats, rosters), serves the built SPA, and maps errors to status codes. |
-| Database | `src/server/Database.ts` | `bun:sqlite` with append-only migrations. Stores the person-level player identity the KHL lacks, plus status-check history. |
+| Cache | `src/server/Cache.ts` | `KHLCache`: memoizes loaded KHL and LiveBarn data by key and TTL, sharing in-flight loads, and writes each value through to SQLite so it survives restarts. A stored value is read back through the caller's zod schema; one that no longer matches is loaded again. |
+| Background sync | `src/server/KHLSyncer.ts` | Keeps every season's player list (`players:<season>`) cached, one season at a time, current season first, refreshing each halfway through its TTL. A list reads every team's stats page, so `/api/players` only ever reads the cache. |
+| API server | `src/server/Server.ts` | Express app. Picks each page's TTL and schema, composes scraped pages into API responses, enriches them (LiveBarn links, logos, preview stats, rosters), serves the built SPA, and maps errors to status codes. |
+| Database | `src/server/Database.ts` | `bun:sqlite` with append-only migrations. Stores the person-level player identity the KHL lacks, status-check history, and the cache's entries. |
 | Status monitor | `src/server/Status.ts` | On boot and every 5 minutes, checks the app/DB, the KHL site, and LiveBarn, records results, and prunes to 90 days. Serves `/api/status` and `DEPLOY_INFO` (git commit). |
 | Shared contracts | `src/shared/*` | `ApiJson.ts` defines every endpoint (`uri`, `method`, and request and response zod schemas). `KHLJson.ts` is the scraper's output vocabulary. `KHLConfig.ts` holds strings, URLs, league settings, and limits. `LeagueTime.ts` is the only place that knows the league's time zone, and it estimates when a scoresheet event happened from its period and clock (`getGameEventClockTime`). `LiveBarn.ts` builds watch URLs. |
 | Client shell | `src/client/App.tsx`, `Util.ts` | Hand-rolled router over `history` (a `ROUTES` table and `matchRoute`), `AppContext`, per-route `ErrorBoundary`, React root error hooks, and client logging. |
@@ -90,17 +95,18 @@ Both sides import the same `*_ENDPOINT` object, so a route, its parameters, and 
 
 In dev, Vite serves the client on `:3000` and proxies `/api` to the server on `:3001`. In production, one process serves both: `express.static(dist/website)` with an `index.html` fallback for client routes.
 
-### 2. Scraper ↔ server: `KHLJson.ts` and `cached()`
+### 2. Scraper ↔ server: `KHLJson.ts` and `KHLCache`
 
-`KHL.ts` turns HTML into `KHLJson` types and does nothing else. `Server.ts` never touches the DOM, and `KHL.ts` never caches or builds API responses. Every scraper call goes through `cached(key, ttl, load)`. That function:
+`KHL.ts` turns HTML into `KHLJson` types and does nothing else. `Server.ts` never touches the DOM, and `KHL.ts` never caches or builds API responses. Every scraper call goes through `cache.cached(key, ttl, schema, load)`. That method:
 
 - shares one in-flight promise between concurrent callers,
 - drops failures so the next request retries,
-- takes a TTL per key: `getSeasonTtl(isCurrentSeason)` caches the current season for 10 minutes and past seasons for 24 hours. An optional `getTtlMs` can also set the TTL from the loaded value.
+- takes a TTL per key: `getSeasonTtl(isCurrentSeason)` caches the current season for 10 minutes and past seasons for 24 hours. An optional `getTtlMs` can also set the TTL from the loaded value,
+- writes each loaded value to SQLite (`cache_entries`), and on a memory miss reads an unexpired one back through `schema`, so a deploy doesn't start from a cold cache.
 
 When the league changes its markup, the fix belongs in the matching `parseKHL*`. When a response needs new data, add a field to `KHLJson.ts` and then use it from `Server.ts`.
 
-The cache is in-process memory. That is why `fly.toml` keeps exactly one machine always running: a cold start loses the cache, and the KHL site starts returning 403s when it gets bursts of requests.
+The KHL site starts returning 403s at a few requests a second, so anything that reads many pages runs in the background instead of in a request. `KHLSyncer` builds each season's player list from about 175 team pages, one team a second, and refreshes it halfway through its TTL (12 hours for the current season, 14 days for past ones), so a failed refresh still leaves the last list in place. `/api/players` serves the cached list or a 503 while the first sync runs, and never fetches itself.
 
 ### 3. KHL ↔ LiveBarn: `Arenas.ts` with runtime verification
 
@@ -160,7 +166,7 @@ sequenceDiagram
     end
 ```
 
-Opponent logos come from the teams page already loaded, not a page per season, to stay under the KHL site's 403 threshold. The page also requests `GET /api/players/:playerId/activity` separately, since it's slower. That request repeats the first steps (from cache), then reads each recent final game's stats page, to see whether the player dressed, and its box score for their goals, assists, and penalties. The integrity report (`/players/:playerId?integrity`) draws this graph for one player, from the name search to each registration's player page and schedules. Each node's color says whether it matches the KHL and its glyph says whether it's cached, and the report lists the problems and shows any node's details.
+Opponent logos come from the teams page already loaded, not a page per season, to stay under the KHL site's 403 threshold. The page also requests `GET /api/players/:playerId/activity` once, separately, since it's slower. That one response feeds the activity feed, the games the player sat out, and the badges' penalty trend. That request repeats the first steps (from cache), then reads each recent final game's stats page, to see whether the player dressed, and its box score for their goals, assists, and penalties. The integrity report (`/players/:playerId?integrity`) draws this graph for one player, from the name search to each registration's player page and schedules. Each node's color says whether it matches the KHL and its glyph says whether it's cached, and the report lists the problems and shows any node's details.
 
 ### 5. League time: `LeagueTime.ts`
 

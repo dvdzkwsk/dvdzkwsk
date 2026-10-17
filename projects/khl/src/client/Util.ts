@@ -629,6 +629,9 @@ export function describeError(error: Error): string {
 		if (error.status === 404) {
 			return "We couldn't find that. It may have been moved or removed."
 		}
+		if (error.status === 503) {
+			return "This is still loading for the first time. Try again in a few minutes."
+		}
 		if (error.status >= 500) {
 			return `The server ran into a problem (${error.status}). This is usually temporary.`
 		}

@@ -1,6 +1,6 @@
 import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
-import {ActivityOptions, ActivityResponse} from "../shared/ApiJson.js"
+import {ActivityEvent, ActivityResponse} from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {normalizePlayerName} from "../shared/KHLJson.js"
 
@@ -12,23 +12,26 @@ export interface RecentPenalties {
 }
 
 /**
- * The activity to request for the trend badges: every game the player dressed
- * for in the window, with its penalties
+ * Counts the penalties in an activity response that has every game the player
+ * dressed for in LIMITS.BADGE_TREND_LOOKBACK_DAYS ("played"), with penalties
  */
-export const RECENT_PENALTIES_ACTIVITY: ActivityOptions = {
-	kinds: ["penalty", "played"],
-	days: LIMITS.BADGE_TREND_LOOKBACK_DAYS,
-	limit: LIMITS.ACTIVITY_MAX_EVENTS,
-}
-
-/** Counts a RECENT_PENALTIES_ACTIVITY response */
 export function toRecentPenalties(activity: ActivityResponse): RecentPenalties {
 	const played = activity.games.filter((g) =>
 		matchValue(g.attendance, {played: true, skipped: false}),
 	)
+	const isPenalty = (event: ActivityEvent) => {
+		return matchValue(event.kind, {
+			goal: false,
+			assist: false,
+			penalty: true,
+		})
+	}
 	return {
 		games: played.length,
-		penalties: played.reduce((total, g) => total + g.events.length, 0),
+		penalties: played.reduce(
+			(total, g) => total + g.events.filter(isPenalty).length,
+			0,
+		),
 	}
 }
 

@@ -1,7 +1,7 @@
 import "./Styles.css"
 import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
-import {matchObj} from "@dvdzkwsk/util/MatchUtil"
+import {matchField} from "@dvdzkwsk/util/MatchUtil"
 import {Action, createBrowserHistory, History, Location} from "history"
 import * as React from "react"
 import {createRoot} from "react-dom/client"
@@ -164,7 +164,7 @@ function useScrollRestoration(history: History) {
 		if (!scroll) {
 			return
 		}
-		return matchObj(scroll, "kind", {
+		return matchField(scroll, "kind", {
 			open: () => {
 				const id = safeDecodeURIComponent(window.location.hash.slice(1))
 				if (id) {

@@ -7,7 +7,7 @@ import {Cloudflare} from "./Cloudflare.js"
 import {Logger} from "../pkg/logger/Logger.js"
 import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
 import {getGitRevision} from "../pkg/util/GitUtil.js"
-import {matchFn, matchObj} from "../pkg/util/MatchUtil.js"
+import {matchFn, matchField} from "../pkg/util/MatchUtil.js"
 
 const logger = new Logger("Build")
 
@@ -140,7 +140,7 @@ function buildWebApp(project: Project): string {
 }
 
 function deployWebApp(project: Project) {
-	return matchObj(project.deploy, "type", {
+	return matchField(project.deploy, "type", {
 		netlify: (deploy) => deployToNetlify(project, deploy.siteIdEnvVar),
 		fly: (deploy) => deployToFly(project, deploy.domain),
 	})

@@ -1,6 +1,6 @@
 import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {matchFn, matchObj} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	GET_PLAYER_ACTIVITY_ENDPOINT,
@@ -74,7 +74,7 @@ const PlayerPage = ({params, query}: RouteProps) => {
 			kinds: ["skipped"],
 		})
 	}, [playerId])
-	const skipped: SkippedGames = matchObj(skippedState, "status", {
+	const skipped: SkippedGames = matchField(skippedState, "status", {
 		loading: () => "loading" as const,
 		error: () => new Set<string>(),
 		success: (s) => new Set(s.data.games.map((g) => g.gameId)),
@@ -427,7 +427,7 @@ const PlayerBadges = ({player}: {player: PlayerResponse}) => {
 	const badges = getBadges({
 		name: player.name,
 		gamesPlayed: sumStat(player.registrations, "Games Played", "career"),
-		recentPenalties: matchObj(recent, "status", {
+		recentPenalties: matchField(recent, "status", {
 			loading: () => null,
 			error: () => null,
 			success: (s) => s.data,
@@ -627,7 +627,7 @@ const StatsByTeam = ({
 			header: "Team",
 			isLabel: true,
 			render: (row) =>
-				matchObj(row, "kind", {
+				matchField(row, "kind", {
 					total: () => "Total",
 					registration: ({registration}) => (
 						<span className="StatsTable-team">
@@ -651,7 +651,7 @@ const StatsByTeam = ({
 			header: "Division",
 			isLabel: true,
 			render: (row) =>
-				matchObj(row, "kind", {
+				matchField(row, "kind", {
 					total: () => "",
 					registration: (r) => getDivision(r.registration),
 				}),
@@ -659,7 +659,7 @@ const StatsByTeam = ({
 		...STAT_COLUMNS.map(([label, header]) => ({
 			header,
 			render: (row: StatsRow) =>
-				matchObj(row, "kind", {
+				matchField(row, "kind", {
 					total: () => getTotal(label),
 					registration: (r) => getStat(r.registration, label, scope),
 				}),
@@ -669,13 +669,13 @@ const StatsByTeam = ({
 		<StatsTable
 			rows={rows}
 			rowKey={(row) =>
-				matchObj(row, "kind", {
+				matchField(row, "kind", {
 					total: () => "total",
 					registration: (r) => getRegistrationKey(r.registration),
 				})
 			}
 			rowClassName={(row) =>
-				matchObj(row, "kind", {
+				matchField(row, "kind", {
 					total: () => "StatsTable-total",
 					registration: () => undefined,
 				})

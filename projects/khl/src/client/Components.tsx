@@ -14,7 +14,7 @@ import {Tooltip} from "@base-ui/react/tooltip"
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
-import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {Helmet} from "react-helmet"
@@ -939,7 +939,7 @@ export function AsyncContent<T>({
 	size?: "inline" | "page"
 	children: (data: T) => React.ReactNode
 }) {
-	return matchObj(state, "status", {
+	return matchField(state, "status", {
 		loading: () =>
 			matchFn(size ?? "page", {
 				inline: () => (
@@ -2003,7 +2003,7 @@ const SiteSearch = () => {
 		}
 	}
 
-	const message = matchObj(status, "kind", {
+	const message = matchField(status, "kind", {
 		idle: () => null,
 		searching: () => (suggestions.length === 0 ? "Searching…" : null),
 		done: (s) =>
@@ -2012,7 +2012,7 @@ const SiteSearch = () => {
 				: null,
 		error: () => null,
 	})
-	const errorState = matchObj(status, "kind", {
+	const errorState = matchField(status, "kind", {
 		idle: () => null,
 		searching: () => null,
 		done: () => null,
@@ -2025,7 +2025,7 @@ const SiteSearch = () => {
 			/>
 		),
 	})
-	const seeAllLink = matchObj(status, "kind", {
+	const seeAllLink = matchField(status, "kind", {
 		idle: () => null,
 		searching: () => null,
 		done: (s) =>

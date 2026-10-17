@@ -1,7 +1,7 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
-import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	BENCHMARK_SITE_LABELS,
@@ -303,7 +303,7 @@ const BenchmarkRunner = () => {
 			(error) => setState({kind: "error", error: toError(error)}),
 		)
 	}
-	const outcome = matchObj(state, "kind", {
+	const outcome = matchField(state, "kind", {
 		idle: () => null,
 		running: () => (
 			<div className="Admin-preview">

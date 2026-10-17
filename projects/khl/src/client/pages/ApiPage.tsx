@@ -2,7 +2,7 @@ import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
-import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {z} from "zod"
@@ -697,7 +697,7 @@ const LiveResponse = ({
 		return {json, bytes: new TextEncoder().encode(json).length, ms}
 	}, [docs.endpoint, sendCount])
 
-	return matchObj(state, "status", {
+	return matchField(state, "status", {
 		loading: () => (
 			<p className="CodePanel-status" role="status">
 				<span className="CodePanel-spinner" aria-hidden />

@@ -1,4 +1,4 @@
-import {matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
@@ -147,7 +147,7 @@ const ActivityEventItem = ({
 	now: Date
 }) => {
 	const {team, opponent} = game
-	const at = matchObj(event, "kind", {
+	const at = matchField(event, "kind", {
 		goal: (e) => e.goal,
 		assist: (e) => e.goal,
 		penalty: (e) => e.penalty,
@@ -219,7 +219,7 @@ const ActivityEventBody = ({
 	subject: ActivitySubject
 	playerIds: Record<string, string>
 }) => {
-	return matchObj(event, "kind", {
+	return matchField(event, "kind", {
 		penalty: ({penalty}) => (
 			<>
 				{matchValue(subject, {

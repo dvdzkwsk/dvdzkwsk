@@ -3,7 +3,7 @@ import * as path from "path"
 import {ConsoleTransport, Logger, setLoggerTransports} from "@dvdzkwsk/logger"
 import {ApiError, registerEndpoint} from "@dvdzkwsk/util/ApiServerUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
-import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import compression from "compression"
 import express from "express"
 import {
@@ -494,7 +494,7 @@ async function getActivity(
  * dressed for a game. A player can have a KHL player id per team they were on.
  */
 function getActivitySubject(subject: ActivitySubject): Promise<ActivitySource> {
-	return matchObj(subject, "kind", {
+	return matchField(subject, "kind", {
 		team: (s) => getTeamActivitySource(s.teamId, s.season),
 		player: (s) => getPlayerActivitySource(s.playerId),
 	})
@@ -618,7 +618,7 @@ async function toActivityResponse(
 
 /** When an activity event happened on the scoresheet */
 function getEventAt(event: ActivityEvent) {
-	return matchObj(event, "kind", {
+	return matchField(event, "kind", {
 		goal: (e) => e.goal,
 		assist: (e) => e.goal,
 		penalty: (e) => e.penalty,

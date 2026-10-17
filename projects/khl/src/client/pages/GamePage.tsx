@@ -1,5 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
@@ -505,7 +505,7 @@ const Timeline = ({game}: {game: GameResponse}) => {
 						</h3>
 						<ol className="Timeline-list">
 							{events.map((event, i) => {
-								const teamId = matchObj(event, "kind", {
+								const teamId = matchField(event, "kind", {
 									goal: (e) => e.goal.teamId,
 									penalty: (e) => e.penalty.teamId,
 								})
@@ -560,7 +560,7 @@ const TimelineItem = ({
 			estimated={replay.estimated}
 		/>
 	))
-	return matchObj(event, "kind", {
+	return matchField(event, "kind", {
 		penalty: ({penalty}) => (
 			<li
 				className={cx(
@@ -669,7 +669,7 @@ const TimelineItem = ({
 
 /** When a timeline event happened on the scoresheet */
 function getEventAt(event: TimelineEvent): {period: string; time: string} {
-	return matchObj(event, "kind", {
+	return matchField(event, "kind", {
 		goal: (e) => e.goal,
 		penalty: (e) => e.penalty,
 	})

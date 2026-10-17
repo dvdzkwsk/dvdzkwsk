@@ -1,5 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {matchObj} from "@dvdzkwsk/util/MatchUtil"
+import {matchField} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {LIST_GAMES_ENDPOINT, LIST_RINKS_ENDPOINT} from "../../shared/ApiJson.js"
 import {getLeagueDayKey} from "../../shared/LeagueTime.js"
@@ -51,7 +51,7 @@ const HomePage = ({query}: RouteProps) => {
 	// The schedule drops today's games once they're final, so today's come
 	// from the scoreboard too. Refetch as each one ends to pick up its score.
 	const today = includesToday(filters.day, now) ? getLeagueDayKey(now) : null
-	const endedToday = matchObj(state, "status", {
+	const endedToday = matchField(state, "status", {
 		loading: () => 0,
 		error: () => 0,
 		success: (s) => countEndedToday(s.data.rinks, now),
@@ -65,7 +65,7 @@ const HomePage = ({query}: RouteProps) => {
 	}, [today, endedToday])
 	// Keep showing the last scoreboard while a refetch loads
 	const todayGames = React.useRef<ScheduledGame[]>([])
-	matchObj(todayState, "status", {
+	matchField(todayState, "status", {
 		loading: () => {},
 		error: () => {},
 		success: (s) => {
@@ -88,7 +88,7 @@ const HomePage = ({query}: RouteProps) => {
 					loadingLabel="Loading the schedule…"
 				>
 					{({rinks, season}) => {
-						const pastGames = matchObj(pastState, "status", {
+						const pastGames = matchField(pastState, "status", {
 							loading: () => [],
 							error: () => [],
 							success: (s) => s.data,

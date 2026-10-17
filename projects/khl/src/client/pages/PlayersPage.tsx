@@ -1,5 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {matchFn, matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	LeaguePlayer,
@@ -102,7 +102,7 @@ const PlayersPage = ({query}: RouteProps) => {
 	const [toolbarData, setToolbarData] =
 		React.useState<PlayersResponse | null>(null)
 	React.useEffect(() => {
-		matchObj(state, "status", {
+		matchField(state, "status", {
 			loading: () => {},
 			error: () => {},
 			success: (s) => setToolbarData(s.data),

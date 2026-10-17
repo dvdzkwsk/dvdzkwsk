@@ -1,7 +1,7 @@
 import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
-import {matchObj, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {z} from "zod"
@@ -351,7 +351,7 @@ function useTeamSeasons(team: KHLTeam | null): KHLSeason[] | null {
 
 /** The state's data once loaded; null while loading or after an error */
 function getLoadedData<T>(state: AsyncState<T>): T | null {
-	return matchObj(state, "status", {
+	return matchField(state, "status", {
 		loading: () => null,
 		error: () => null,
 		success: (s) => s.data,
@@ -457,7 +457,7 @@ const MatchupSide = ({
 	onTeamChange: (teamId: string) => void
 	onSeasonChange: (seasonId: string | null) => void
 }) => {
-	const error = matchObj(teams, "status", {
+	const error = matchField(teams, "status", {
 		loading: () => null,
 		error: (t) => t.error,
 		success: () => null,

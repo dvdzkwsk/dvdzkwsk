@@ -1,42 +1,13 @@
+import type {
+	Exhaustive,
+	MatchKey,
+	MemberForKey,
+	TagMember,
+	Variant,
+} from "./TypeUtil.js"
 import {Logger} from "../logger/Logger.js"
 
 const logger = new Logger("MatchUtil")
-
-/** Values that can be matched on: members of a string or number literal union. */
-export type MatchKey = string | number
-
-/**
- * Resolves to `never` for wide `string` / `number`, so a call site can't silently lose
- * exhaustiveness by matching on a non-literal type.
- */
-type Exhaustive<T extends MatchKey> = string extends T
-	? never
-	: number extends T
-		? never
-		: T
-
-/**
- * The member of `T` that object key `K` names. Numeric literal keys can surface as their
- * string form (`1` as `"1"`), so both spellings map back to the union member.
- */
-type MemberForKey<T extends MatchKey, K> = T extends MatchKey
-	? K extends T | `${T}`
-		? T
-		: never
-	: never
-
-/** The variant of tagged union `T` whose `Tag` field is `V`. */
-type Variant<T, Tag extends keyof T, V> = T extends unknown
-	? V extends T[Tag]
-		? T
-		: never
-	: never
-
-/** The value of `T[Tag]` that object key `K` names. */
-type TagMember<T, Tag extends keyof T, K> = MemberForKey<
-	Extract<T[Tag], MatchKey>,
-	K
->
 
 /**
  * Exhaustive match that invokes the handler for `value` and returns its result. Every
@@ -100,13 +71,13 @@ export function matchValue<T extends MatchKey, M extends {[K in T]: unknown}>(
  * narrowed to that variant, so each case can read the variant's own fields. Same
  * guarantees as `matchFn` for the tag's values.
  *
- *     const data = matchObj(state, "status", {
+ *     const data = matchField(state, "status", {
  *         loading: () => null,
  *         error: () => null,
  *         success: (s) => s.data,
  *     })
  */
-export function matchObj<
+export function matchField<
 	T extends object,
 	Tag extends keyof T,
 	R extends {[K in Extract<T[Tag], MatchKey>]: unknown},
@@ -121,7 +92,7 @@ export function matchObj<
 ): R[Extract<T[Tag], MatchKey>] {
 	const value = obj[tag] as MatchKey
 	if (!Object.hasOwn(handlers, value)) {
-		throw logger.newError("matchObj", "no handler for tag value", {
+		throw logger.newError("matchField", "no handler for tag value", {
 			tag: String(tag),
 			value,
 			handlers: Object.keys(handlers),

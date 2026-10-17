@@ -1,5 +1,5 @@
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {matchFn, matchObj} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	GET_STANDINGS_ENDPOINT,
@@ -62,7 +62,7 @@ const TeamsPage = ({query}: RouteProps) => {
 	const [toolbarData, setToolbarData] =
 		React.useState<StandingsResponse | null>(null)
 	React.useEffect(() => {
-		matchObj(state, "status", {
+		matchField(state, "status", {
 			loading: () => {},
 			error: () => {},
 			success: (s) => setToolbarData(s.data),

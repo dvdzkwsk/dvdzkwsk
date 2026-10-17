@@ -24,7 +24,7 @@ Branch on a union with the helpers in `@dvdzkwsk/util/MatchUtil`, not `switch`, 
 
 - `matchFn(value, {a: () => ..., b: (v) => ..., c: () => ...})` calls the handler for a string or number literal `value` and returns its result. Each handler receives `value` narrowed to its key.
 - `matchValue(value, {a: "x", b: "y", c: "z"})` returns the entry for `value`. Use it when every case is a plain value rather than a computation.
-- `matchObj(obj, "kind", {goal: (e) => e.goal.time, penalty: (e) => e.penalty.time})` matches a tagged union on its tag field and passes each handler `obj` narrowed to that variant, so the case can read the variant's own fields.
+- `matchField(obj, "kind", {goal: (e) => e.goal.time, penalty: (e) => e.penalty.time})` matches a tagged union on its tag field and passes each handler `obj` narrowed to that variant, so the case can read the variant's own fields.
 - All three require a case for every member of the union and reject cases outside it, so adding or removing a member breaks the typecheck at every call site. A `switch` without an exhaustive `default`, or an `else` (or ternary's second branch) that absorbs "everything else", silently mishandles a new member at runtime.
 - Don't widen the value to `string` or `number` to get around a missing case (that's a type error by design). Handle the new member.
 - Plain conditions are still right for booleans, `null`/`undefined` checks, and strings that aren't a closed union (`process.env.NODE_ENV`, DOM values, user input before it's parsed).

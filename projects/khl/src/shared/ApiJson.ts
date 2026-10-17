@@ -675,7 +675,21 @@ export interface IntegrityRegistration {
 	expected: IntegrityRecord
 	/** `stored` against `expected`; empty when they match */
 	differences: JsonDifference[]
+	/** The `cache` entries the player's page loads for it */
+	cacheKeys: IntegrityRegistrationCacheKeys
 }
+
+export interface IntegrityRegistrationCacheKeys {
+	/** Its KHL player page for the latest season; null with no seasons */
+	profile: string | null
+	/** Its team's schedule for each of its seasons, oldest first */
+	schedules: string[]
+}
+
+export const IntegrityRegistrationCacheKeysSchema = z.object({
+	profile: z.string().nullable(),
+	schedules: z.array(z.string()),
+}) satisfies z.ZodType<IntegrityRegistrationCacheKeys>
 
 export const IntegrityRegistrationSchema = z.object({
 	khlPlayerId: z.string(),
@@ -694,6 +708,7 @@ export const IntegrityRegistrationSchema = z.object({
 	stored: IntegrityRecordSchema,
 	expected: IntegrityRecordSchema,
 	differences: z.array(JsonDifferenceSchema),
+	cacheKeys: IntegrityRegistrationCacheKeysSchema,
 }) satisfies z.ZodType<IntegrityRegistration>
 
 /**

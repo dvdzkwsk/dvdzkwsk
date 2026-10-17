@@ -2,16 +2,15 @@ import {Logger} from "@dvdzkwsk/logger"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {createConcurrencyLimiter} from "@dvdzkwsk/util/AsyncUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
+import {matchField} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
 	AsyncContent,
-	ChevronIcon,
 	ErrorState,
 	Hint,
 	InlineLoader,
 	Link,
-	MultiPicker,
 	PageTitle,
 	TeamAvatar,
 } from "./Components.js"
@@ -41,6 +40,11 @@ import {
 } from "../shared/ApiJson.js"
 
 // --- /players/:playerId?integrity: our stored profile against the KHL's pages
+//
+// For triaging a profile's data: the header says whether anything is wrong
+// and holds the fixes that apply to the whole profile; the graph shows every
+// KHL page the profile is built from, colored by integrity and marked by cache
+// state; the inspector lists the problems, and shows any node's details.
 
 const logger = new Logger("Integrity")
 
@@ -90,6 +94,8 @@ export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
 		failed: null,
 		report: null,
 	})
+	// Kept across reports, so a reload leaves the same node open
+	const [selection, setSelection] = React.useState<Selection | null>(null)
 	const run = (next: IntegrityAction) => {
 		setAction((prev) => ({...prev, running: next, failed: null}))
 		doRequest(ACTIONS[next].endpoint, {playerId}).then(
@@ -114,18 +120,18 @@ export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
 				return (
 					<div className="Detail">
 						<PageTitle>{`${report.name} integrity`}</PageTitle>
-						<IntegrityHeader report={report} />
-						<ResyncPanel
+						<IntegrityHeader
 							report={report}
 							action={action}
 							onRun={run}
 						/>
 						{/* Keyed so checks from an older report don't linger */}
-						<IntegrityCache
+						<IntegrityExplorer
 							key={report.checkedAt}
-							cache={report.cache}
+							report={report}
+							selection={selection}
+							onSelect={setSelection}
 						/>
-						<IntegrityPlayers report={report} />
 					</div>
 				)
 			}}
@@ -133,43 +139,8 @@ export const PlayerIntegrityReport = ({playerId}: {playerId: string}) => {
 	)
 }
 
-const IntegrityHeader = ({report}: {report: PlayerIntegrityResponse}) => {
-	const differences = countDifferences(report)
-	return (
-		<header className="Detail-header Integrity-header">
-			<div className="Integrity-heading">
-				<p className="SectionLabel">Integrity report</p>
-				<h1 className="Integrity-name">{report.name}</h1>
-				<p className="Integrity-meta">
-					Profile recorded <TimeAgo at={report.createdAt} />
-					{" · "}checked <TimeAgo at={report.checkedAt} />
-					{" · "}
-					<code>{report.playerId}</code>
-				</p>
-				<p className="Integrity-links">
-					<Link
-						className="InlineLink"
-						href={getPlayerHref(report.playerId)}
-					>
-						View profile
-					</Link>
-					<Link className="InlineLink" href={report.searchUrl}>
-						KHL search
-					</Link>
-				</p>
-			</div>
-			{differences === 0 ? (
-				<IntegrityBadge tone="ok">Matches the KHL</IntegrityBadge>
-			) : (
-				<IntegrityBadge tone="warn">
-					{plural(differences, "difference", "differences")}
-				</IntegrityBadge>
-			)}
-		</header>
-	)
-}
-
-const ResyncPanel = ({
+/** Who the profile is, whether it matches the KHL, and the profile-wide fixes */
+const IntegrityHeader = ({
 	report,
 	action,
 	onRun,
@@ -178,29 +149,39 @@ const ResyncPanel = ({
 	action: ActionState
 	onRun: (action: IntegrityAction) => void
 }) => {
+	const differences = countDifferences(report)
 	const unrecorded = report.unlinked.filter((u) => !u.playerId).length
-	const pending = countDifferences(report) + unrecorded
+	const pending = differences + unrecorded
 	return (
-		<section className="Detail-panel">
-			<h2 className="SectionLabel Detail-panel-title">Resync</h2>
-			<p className="Integrity-note">
-				{pending === 0
-					? "What we've stored matches the KHL's pages; there's nothing to resync."
-					: `Applying the resync stores ${plural(pending, "change", "changes")} to the KHL players below${
-							unrecorded > 0
-								? `, including ${plural(unrecorded, "unrecorded registration", "unrecorded registrations")}`
-								: ""
-						}. Nothing is stored until then.`}
-			</p>
+		<header className="Detail-header Integrity-header">
+			<div className="Integrity-heading">
+				<p className="SectionLabel">Integrity report</p>
+				<div className="Integrity-title">
+					<h1 className="Integrity-name">{report.name}</h1>
+					{differences === 0 ? (
+						<IntegrityBadge tone="ok">
+							Matches the KHL
+						</IntegrityBadge>
+					) : (
+						<IntegrityBadge tone="warn">
+							{plural(differences, "difference", "differences")}
+						</IntegrityBadge>
+					)}
+				</div>
+				<FactList
+					layout="inline"
+					facts={[
+						["KHL+ id", <code>{report.playerId}</code>],
+						["Recorded", <TimeAgo at={report.createdAt} />],
+						["Checked", <TimeAgo at={report.checkedAt} />],
+					]}
+				/>
+			</div>
 			<div className="Integrity-actions">
-				<button
-					type="button"
-					className="Integrity-apply"
-					disabled={!!action.running || pending === 0}
-					onClick={() => onRun("apply")}
-				>
-					Apply resync
-				</button>
+				<ActionLink href={getPlayerHref(report.playerId)}>
+					View profile
+				</ActionLink>
+				<ActionLink href={report.searchUrl}>KHL search ↗</ActionLink>
 				<Hint label="Drops the cached KHL search and player pages and compares again. Stores nothing.">
 					<button
 						type="button"
@@ -211,26 +192,43 @@ const ResyncPanel = ({
 						Reload from KHL
 					</button>
 				</Hint>
+				{pending > 0 && (
+					<Hint label="Stores what the KHL's pages say for every registration below, and records registrations we've never seen.">
+						<button
+							type="button"
+							className="Integrity-apply"
+							disabled={!!action.running}
+							onClick={() => onRun("apply")}
+						>
+							Apply resync ({plural(pending, "change", "changes")}
+							)
+						</button>
+					</Hint>
+				)}
 			</div>
-			{action.running && (
-				<InlineLoader
-					label={ACTIONS[action.running].running}
-					slowNote="Still working. Each KHL page is fetched again."
-				/>
+			{(action.running || action.failed) && (
+				<div className="Integrity-status">
+					{action.running && (
+						<InlineLoader
+							label={ACTIONS[action.running].running}
+							slowNote="Still working. Each KHL page is fetched again."
+						/>
+					)}
+					{action.failed && (
+						<ErrorState
+							title={ACTIONS[action.failed.action].failed}
+							error={action.failed.error}
+							onRetry={() => onRun(action.failed!.action)}
+							size="inline"
+						/>
+					)}
+				</div>
 			)}
-			{action.failed && (
-				<ErrorState
-					title={ACTIONS[action.failed.action].failed}
-					error={action.failed.error}
-					onRetry={() => onRun(action.failed!.action)}
-					size="inline"
-				/>
-			)}
-		</section>
+		</header>
 	)
 }
 
-// --- Shared pieces of the two tables
+// --- Shared pieces
 
 type BadgeTone = "ok" | "warn" | "error" | "muted"
 
@@ -256,94 +254,6 @@ const TimeAgo = ({at}: {at: string}) => {
 			<time dateTime={at}>{formatRelative(at, now)}</time>
 		</Hint>
 	)
-}
-
-/** A table group's heading row, e.g. "Jackie Uniza's KHL+ profile" */
-const GroupRow = ({
-	label,
-	meta,
-	colSpan,
-}: {
-	label: React.ReactNode
-	meta: React.ReactNode
-	colSpan: number
-}) => {
-	return (
-		<tr className="Integrity-group">
-			<th scope="colgroup" colSpan={colSpan}>
-				{label}
-				<span className="Integrity-group-meta">{meta}</span>
-			</th>
-		</tr>
-	)
-}
-
-/**
- * A row that opens to show `detail` beneath it. The whole row toggles it;
- * buttons and links inside the row keep their own clicks.
- */
-const ExpandableRow = ({
-	expanded,
-	onToggle,
-	label,
-	cells,
-	detail,
-}: {
-	expanded: boolean
-	onToggle: () => void
-	label: React.ReactNode
-	cells: React.ReactNode[]
-	detail: React.ReactNode
-}) => {
-	return (
-		<>
-			<tr
-				className={cx(
-					"Integrity-row",
-					expanded && "Integrity-row--expanded",
-				)}
-				onClick={(e) => {
-					if (!(e.target as HTMLElement).closest("a, button")) {
-						onToggle()
-					}
-				}}
-			>
-				<th scope="row">
-					<button
-						type="button"
-						className="Integrity-expander"
-						aria-expanded={expanded}
-						onClick={onToggle}
-					>
-						<ChevronIcon />
-						{label}
-					</button>
-				</th>
-				{cells.map((cell, i) => (
-					<td key={i}>{cell}</td>
-				))}
-			</tr>
-			{expanded && (
-				<tr className="Integrity-detail">
-					<td colSpan={cells.length + 1}>{detail}</td>
-				</tr>
-			)}
-		</>
-	)
-}
-
-function useExpanded() {
-	const [expanded, setExpanded] = React.useState<Set<string>>(new Set())
-	const toggle = (key: string) => {
-		setExpanded((prev) => {
-			const next = new Set(prev)
-			if (!next.delete(key)) {
-				next.add(key)
-			}
-			return next
-		})
-	}
-	return {isExpanded: (key: string) => expanded.has(key), toggle}
 }
 
 /**
@@ -431,28 +341,240 @@ const DifferenceTable = ({
 	)
 }
 
-// --- Server cache
+const JsonPane = ({
+	title,
+	value,
+	placeholder,
+}: {
+	title: React.ReactNode
+	/** Shown as JSON; null shows `placeholder` */
+	value: unknown
+	placeholder?: string
+}) => {
+	return (
+		<figure className="Integrity-json">
+			<figcaption className="SectionLabel">{title}</figcaption>
+			{value === null ? (
+				<p className="Integrity-note">{placeholder}</p>
+			) : (
+				<pre>{JSON.stringify(value, null, 2)}</pre>
+			)}
+		</figure>
+	)
+}
 
-const CACHE_KINDS: Record<
-	IntegrityCacheKind,
-	{label: string; plural: string; shared: string}
-> = {
+/** A labeled value: ids, times, and counts go here, not into sentences */
+type Fact = [label: string, value: React.ReactNode]
+
+/** Labels beside their values (grid), or pairs in a wrapping row (inline) */
+const FactList = ({
+	facts,
+	layout,
+}: {
+	facts: Fact[]
+	layout: "grid" | "inline"
+}) => {
+	return (
+		<dl className={cx("Integrity-facts", `Integrity-facts--${layout}`)}>
+			{facts.map(([label, value]) => (
+				<div key={label}>
+					<dt>{label}</dt>
+					<dd>{value}</dd>
+				</div>
+			))}
+		</dl>
+	)
+}
+
+/** What failed and what that means, with the error message labeled below */
+const ErrorNote = ({summary, error}: {summary: string; error: string}) => {
+	return (
+		<div className="Integrity-error">
+			<p>{summary}</p>
+			<FactList facts={[["Error", error]]} layout="inline" />
+		</div>
+	)
+}
+
+// --- What each node is, and its state
+
+const CACHE_KINDS: Record<IntegrityCacheKind, {label: string; shared: string}> =
+	{
+		search: {
+			label: "Name search",
+			shared: "The KHL's all-seasons search for a name. Shared by every KHL+ profile with that name.",
+		},
+		profile: {
+			label: "Player page",
+			shared: "A KHL registration's player page. Shared by every KHL+ profile with that registration.",
+		},
+		schedule: {
+			label: "Schedule",
+			shared: "A team's schedule for a season. Shared by every player on the team and the team's own page.",
+		},
+	}
+
+/** A node's kind, as its chip shows it */
+type NodeKind = IntegrityCacheKind | "registration" | "unlinked"
+
+/** Each kind's chip, and what it is, in the order the graph hangs them */
+const NODE_KINDS: Record<NodeKind, {label: string; description: string}> = {
 	search: {
-		label: "Search",
-		plural: "Name searches",
-		shared: "The KHL's all-seasons search for a name. Shared by every KHL+ profile with that name.",
+		label: CACHE_KINDS.search.label,
+		description:
+			"The KHL's all-seasons search for the profile's name. It lists every registration under that name, so it's where the profile's registrations are found.",
+	},
+	registration: {
+		label: "Registration",
+		description:
+			"One KHL player id on one team, as we've stored it. It's compared with its rows in the name search and with its player page.",
 	},
 	profile: {
-		label: "Registration",
-		plural: "Registration pages",
-		shared: "A KHL registration's player page. Shared by every KHL+ profile with that registration.",
+		label: CACHE_KINDS.profile.label,
+		description:
+			"A registration's page on the KHL, for its latest season: the name, position, and team the KHL has for it.",
 	},
 	schedule: {
-		label: "Schedule",
-		plural: "Team schedules",
-		shared: "A team's schedule for a season. Shared by every player on the team and the team's own page.",
+		label: CACHE_KINDS.schedule.label,
+		description:
+			"A team's games for one season. The profile's game list is built from one per season the player was on the team.",
+	},
+	unlinked: {
+		label: "Same name",
+		description:
+			"A registration in the name search that isn't on this profile: it's on another KHL+ profile, or we've never recorded it.",
 	},
 }
+
+/** A node's kind, with what it is on hover */
+const KindChip = ({kind}: {kind: NodeKind}) => {
+	return (
+		<Hint label={NODE_KINDS[kind].description}>
+			<span className={cx("Integrity-kind", `Integrity-kind--${kind}`)}>
+				{NODE_KINDS[kind].label}
+			</span>
+		</Hint>
+	)
+}
+
+/** Whether we hold a page, as of when the report began */
+type CacheState = "cached" | "expired" | "not-cached" | "failed"
+
+const CACHE_STATES: Record<CacheState, {label: string; detail: string}> = {
+	cached: {label: "Cached", detail: "We hold a copy of the KHL's page."},
+	expired: {
+		label: "Cache expired",
+		detail: "Our copy expired; the next view loads the page again.",
+	},
+	"not-cached": {
+		label: "Not cached",
+		detail: "We hold no copy; the next view loads the page.",
+	},
+	failed: {label: "Didn't load", detail: "The KHL's page failed to load."},
+}
+
+function getCacheState(
+	entry: IntegrityCacheEntry | undefined,
+	error: string | null,
+	checkedAt: string,
+	check: CacheCheckState | undefined,
+): CacheState {
+	if (error) {
+		return "failed"
+	}
+	if (!entry?.cachedAt || check?.status === "not-cached") {
+		return "not-cached"
+	}
+	return entry.expiresAt && entry.expiresAt <= checkedAt
+		? "expired"
+		: "cached"
+}
+
+/** ● cached, ◐ expired, ○ not cached, ✕ didn't load */
+const CacheGlyph = ({state}: {state: CacheState}) => {
+	return (
+		<span
+			className={cx("Integrity-cache", `Integrity-cache--${state}`)}
+			aria-hidden
+		>
+			{state === "failed" ? "✕" : null}
+		</span>
+	)
+}
+
+/** Whether a node agrees with the KHL, as far as anything has compared it */
+type Integrity = "matches" | "differs" | "failed" | "unchecked" | "checking"
+
+interface IntegrityStatus {
+	integrity: Integrity
+	label: string
+	/** Beside a season: ✓, the number of differences, or ! */
+	mark: string | null
+}
+
+const INTEGRITY_TONES: Record<Integrity, BadgeTone> = {
+	matches: "ok",
+	differs: "warn",
+	failed: "error",
+	unchecked: "muted",
+	checking: "muted",
+}
+
+function getPageIntegrity(check: CacheCheckState | undefined): IntegrityStatus {
+	if (!check) {
+		return {integrity: "unchecked", label: "Not checked", mark: null}
+	}
+	return matchField(check, "status", {
+		checking: (): IntegrityStatus => {
+			return {integrity: "checking", label: "Checking…", mark: "…"}
+		},
+		error: (): IntegrityStatus => {
+			return {integrity: "failed", label: "Check failed", mark: "!"}
+		},
+		failed: (): IntegrityStatus => {
+			return {integrity: "failed", label: "KHL page failed", mark: "!"}
+		},
+		"not-cached": (): IntegrityStatus => {
+			return {
+				integrity: "unchecked",
+				label: "Nothing cached to check",
+				mark: null,
+			}
+		},
+		match: (): IntegrityStatus => {
+			return {integrity: "matches", label: "Matches the KHL", mark: "✓"}
+		},
+		differs: (c): IntegrityStatus => {
+			return {
+				integrity: "differs",
+				label: `Stale: ${plural(c.differenceCount, "difference", "differences")}`,
+				mark: String(c.differenceCount),
+			}
+		},
+	})
+}
+
+function getRegistrationIntegrity(r: IntegrityRegistration): IntegrityStatus {
+	if (r.differences.length > 0) {
+		return {
+			integrity: "differs",
+			label: plural(r.differences.length, "difference", "differences"),
+			mark: null,
+		}
+	}
+	if (r.profileError) {
+		return {integrity: "failed", label: "Player page failed", mark: null}
+	}
+	return {integrity: "matches", label: "Matches the KHL", mark: null}
+}
+
+function getUnlinkedIntegrity(u: IntegrityUnlinked): IntegrityStatus {
+	return u.playerId
+		? {integrity: "unchecked", label: "On another profile", mark: null}
+		: {integrity: "differs", label: "Not recorded", mark: null}
+}
+
+// --- Cache checks
 
 type CacheCheckState =
 	{status: "checking"} | {status: "error"; error: Error} | CacheCheckResponse
@@ -460,14 +582,16 @@ type CacheCheckState =
 /** At most this many checks at once, so "Check all" doesn't burst the KHL */
 const limitChecks = createConcurrencyLimiter(2)
 
-/** What the server had cached for the player's page when the report began */
-const IntegrityCache = ({cache}: {cache: IntegrityCacheEntry[]}) => {
+interface CacheChecks {
+	checks: Map<string, CacheCheckState>
+	check: (key: string) => Promise<void>
+}
+
+/** Cache checks run from the graph or the inspector, shared by both */
+function useCacheChecks(): CacheChecks {
 	const [checks, setChecks] = React.useState<Map<string, CacheCheckState>>(
 		new Map(),
 	)
-	// Empty shows every type
-	const [kinds, setKinds] = React.useState<IntegrityCacheKind[]>([])
-	const {isExpanded, toggle} = useExpanded()
 	const setCheck = (key: string, check: CacheCheckState) => {
 		setChecks((prev) => new Map(prev).set(key, check))
 	}
@@ -482,185 +606,1297 @@ const IntegrityCache = ({cache}: {cache: IntegrityCacheEntry[]}) => {
 			},
 		)
 	}
-	const presentKinds = (
-		Object.keys(CACHE_KINDS) as IntegrityCacheKind[]
-	).filter((kind) => cache.some((e) => e.kind === kind))
-	// Grouped by type in CACHE_KINDS order, then by name ("season 2121" before
-	// "season 2127")
-	const kindOrder = Object.keys(CACHE_KINDS)
-	const shown = cache
-		.filter((e) => kinds.length === 0 || kinds.includes(e.kind))
-		.sort((a, b) => {
-			return (
-				kindOrder.indexOf(a.kind) - kindOrder.indexOf(b.kind) ||
-				a.label.localeCompare(b.label, "en-US", {numeric: true})
-			)
+	return {checks, check}
+}
+
+// --- The report's nodes, flattened for lookups
+
+/** One KHL page under a registration */
+interface PageNode {
+	kind: "profile" | "schedule"
+	key: string
+	entry: IntegrityCacheEntry | undefined
+	seasonId: string
+	registration: IntegrityRegistration
+	/** The page failed when the report loaded it */
+	error: string | null
+}
+
+function getPageNodes(
+	r: IntegrityRegistration,
+	entries: Map<string, IntegrityCacheEntry>,
+): PageNode[] {
+	const profile: PageNode[] = r.cacheKeys.profile
+		? [
+				{
+					kind: "profile",
+					key: r.cacheKeys.profile,
+					entry: entries.get(r.cacheKeys.profile),
+					seasonId: r.seasonIds.at(-1)!,
+					registration: r,
+					error: r.profileError,
+				},
+			]
+		: []
+	const schedules = r.cacheKeys.schedules.map((key, i): PageNode => {
+		return {
+			kind: "schedule",
+			key,
+			entry: entries.get(key),
+			seasonId: r.seasonIds[i]!,
+			registration: r,
+			error: null,
+		}
+	})
+	return [...profile, ...schedules]
+}
+
+/** What the inspector shows; null shows the triage list */
+type Selection =
+	| {kind: "search"}
+	| {kind: "registration"; key: string}
+	| {kind: "page"; key: string}
+	| {kind: "unlinked"; key: string}
+
+function getSelectionId(s: Selection): string {
+	return matchField(s, "kind", {
+		search: () => "search",
+		registration: (r) => `registration:${r.key}`,
+		page: (p) => `page:${p.key}`,
+		unlinked: (u) => `unlinked:${u.key}`,
+	})
+}
+
+/** Everything the graph and inspector read, derived once per render */
+interface ReportModel {
+	report: PlayerIntegrityResponse
+	checks: CacheChecks
+	search: IntegrityCacheEntry | undefined
+	pages: Map<string, PageNode>
+	pagesByRegistration: Map<string, PageNode[]>
+}
+
+function useReportModel(
+	report: PlayerIntegrityResponse,
+	checks: CacheChecks,
+): ReportModel {
+	const entries = new Map(report.cache.map((e) => [e.key, e]))
+	const pagesByRegistration = new Map(
+		report.registrations.map((r) => {
+			return [getPlayerRegistrationKey(r), getPageNodes(r, entries)]
+		}),
+	)
+	return {
+		report,
+		checks,
+		search: report.cache.find((e) => e.kind === "search"),
+		pages: new Map(
+			[...pagesByRegistration.values()].flat().map((p) => [p.key, p]),
+		),
+		pagesByRegistration,
+	}
+}
+
+function getPageStatus(model: ReportModel, page: PageNode) {
+	const check = model.checks.checks.get(page.key)
+	return {
+		cache: getCacheState(
+			page.entry,
+			page.error,
+			model.report.checkedAt,
+			check,
+		),
+		integrity: getPageIntegrity(check),
+	}
+}
+
+function getSearchStatus(model: ReportModel, search: IntegrityCacheEntry) {
+	const check = model.checks.checks.get(search.key)
+	return {
+		cache: getCacheState(
+			search,
+			model.report.searchError,
+			model.report.checkedAt,
+			check,
+		),
+		integrity: getPageIntegrity(check),
+	}
+}
+
+// --- Triage: what's wrong, worst first
+
+type Severity = "error" | "warn" | "info"
+
+interface Problem {
+	id: string
+	severity: Severity
+	/** What's wrong, in words; what it's about goes in `facts` */
+	title: string
+	facts: Fact[]
+	/** The KHL's or the check's error message */
+	error: string | null
+	/** What fixes it */
+	fix: string
+	selection: Selection
+}
+
+const SEVERITY_ORDER: Severity[] = ["error", "warn", "info"]
+
+function getRegistrationFacts(
+	r: Pick<IntegrityRegistration, "teamName" | "khlPlayerId">,
+): Fact[] {
+	return [
+		["Team", r.teamName],
+		["KHL id", <code>{r.khlPlayerId}</code>],
+	]
+}
+
+function getProblems(model: ReportModel): Problem[] {
+	const {report} = model
+	const problems: Problem[] = []
+	if (report.searchError) {
+		problems.push({
+			id: "search",
+			severity: "error",
+			title: "The KHL name search failed",
+			facts: [["Search", model.search?.label ?? report.name]],
+			error: report.searchError,
+			fix: "Nothing was compared with the search. Reload from KHL to retry.",
+			selection: {kind: "search"},
 		})
-	const shownCached = shown.filter((entry) => entry.cachedAt)
-	const isChecking = [...checks.values()].some((c) => c.status === "checking")
+	}
+	for (const r of report.registrations) {
+		const key = getPlayerRegistrationKey(r)
+		if (r.differences.length > 0) {
+			const fields = [
+				...new Set(
+					r.differences.map((d) => {
+						const field = d.path.split(/[.[ ]/)[0]!
+						return RECORD_FIELD_LABELS[field] ?? field
+					}),
+				),
+			]
+			const list = fields.join(", ")
+			problems.push({
+				id: `differs:${key}`,
+				severity: "warn",
+				title: `${list[0]!.toUpperCase()}${list.slice(1)} ${fields.length === 1 ? "differs" : "differ"} from the KHL`,
+				facts: [
+					...getRegistrationFacts(r),
+					["Differences", r.differences.length],
+				],
+				error: null,
+				fix: "Applying the resync stores what the KHL's pages say.",
+				selection: {kind: "registration", key},
+			})
+		}
+		if (r.profileError && r.cacheKeys.profile) {
+			problems.push({
+				id: `profile:${key}`,
+				severity: "error",
+				title: "Player page didn't load",
+				facts: [
+					...getRegistrationFacts(r),
+					["Season", r.seasonIds.at(-1)],
+				],
+				error: r.profileError,
+				fix: "Nothing was compared with it. Reload from KHL to retry; old KHL pages often fail for good.",
+				selection: {kind: "page", key: r.cacheKeys.profile},
+			})
+		}
+	}
+	for (const u of report.unlinked) {
+		const key = getPlayerRegistrationKey(u)
+		const facts: Fact[] = [
+			...getRegistrationFacts(u),
+			["Seasons", formatSeasonIds(u.seasonIds) ?? "none"],
+		]
+		problems.push(
+			u.playerId
+				? {
+						id: `unlinked:${key}`,
+						severity: "info",
+						title: "Same name, on another KHL+ profile",
+						facts,
+						error: null,
+						fix: "A namesake split off by hand, or the same person split in two. If it's this person, the profiles need merging by hand.",
+						selection: {kind: "unlinked", key},
+					}
+				: {
+						id: `unlinked:${key}`,
+						severity: "warn",
+						title: "In the KHL's search, never recorded",
+						facts,
+						error: null,
+						fix: "Applying the resync records it on a profile matched by name.",
+						selection: {kind: "unlinked", key},
+					},
+		)
+	}
+	const pages: {key: string; selection: Selection; facts: Fact[]}[] = [
+		...(model.search
+			? [
+					{
+						key: model.search.key,
+						selection: {kind: "search"} as const,
+						facts: [
+							["Page", CACHE_KINDS.search.label],
+						] satisfies Fact[],
+					},
+				]
+			: []),
+		...[...model.pages.values()].map((p) => {
+			return {
+				key: p.key,
+				selection: {kind: "page", key: p.key} as const,
+				facts: [
+					["Page", CACHE_KINDS[p.kind].label],
+					["Team", p.registration.teamName],
+					["Season", p.seasonId],
+				] satisfies Fact[],
+			}
+		}),
+	]
+	for (const {key, selection, facts} of pages) {
+		const check = model.checks.checks.get(key)
+		const failed = (error: string): Problem => ({
+			id: `check:${key}`,
+			severity: "error",
+			title: "Check failed",
+			facts,
+			error,
+			fix: "Check it again.",
+			selection,
+		})
+		const problem =
+			check &&
+			matchField(check, "status", {
+				checking: () => null,
+				"not-cached": () => null,
+				match: () => null,
+				differs: (c): Problem => ({
+					id: `stale:${key}`,
+					severity: "warn",
+					title: "Cached copy is stale",
+					facts: [...facts, ["Differences", c.differenceCount]],
+					error: null,
+					fix: "Our copy differs from the KHL's page now. Reload from KHL to drop it, or wait for it to expire.",
+					selection,
+				}),
+				failed: (c) => failed(c.error ?? "The KHL's page didn't load."),
+				error: (c) => failed(c.error.message),
+			})
+		if (problem) {
+			problems.push(problem)
+		}
+	}
+	return problems.sort((a, b) => {
+		return (
+			SEVERITY_ORDER.indexOf(a.severity) -
+			SEVERITY_ORDER.indexOf(b.severity)
+		)
+	})
+}
+
+// --- The graph and the inspector
+
+const IntegrityExplorer = ({
+	report,
+	selection,
+	onSelect,
+}: {
+	report: PlayerIntegrityResponse
+	selection: Selection | null
+	onSelect: (selection: Selection | null) => void
+}) => {
+	const checks = useCacheChecks()
+	const model = useReportModel(report, checks)
+	const problems = getProblems(model)
+	const inspectorRef = React.useRef<HTMLElement>(null)
+	const select = (next: Selection | null) => {
+		onSelect(next)
+		// Stacked below the graph on narrow screens, so bring it into view
+		if (window.matchMedia("(max-width: 1000px)").matches) {
+			inspectorRef.current?.scrollIntoView({block: "start"})
+		}
+	}
 	return (
-		<section className="Detail-panel">
+		<div className="IntegrityExplorer">
+			<IntegrityGraph
+				model={model}
+				problems={problems}
+				selection={selection}
+				onSelect={select}
+			/>
+			<aside
+				ref={inspectorRef}
+				className="Detail-panel IntegrityInspector"
+			>
+				<IntegrityInspector
+					model={model}
+					problems={problems}
+					selection={selection}
+					onSelect={select}
+				/>
+			</aside>
+		</div>
+	)
+}
+
+const IntegrityGraph = ({
+	model,
+	problems,
+	selection,
+	onSelect,
+}: {
+	model: ReportModel
+	problems: Problem[]
+	selection: Selection | null
+	onSelect: (selection: Selection) => void
+}) => {
+	const {report, checks, search} = model
+	const [problemsOnly, setProblemsOnly] = React.useState(false)
+	const [highlight, setHighlight] = React.useState<Highlight>({
+		integrity: [],
+		cache: [],
+	})
+	const selectedId = selection && getSelectionId(selection)
+	const nodeProps = (s: Selection) => ({
+		selected: selectedId === getSelectionId(s),
+		onSelect: () => onSelect(s),
+		highlight,
+	})
+	const problemIds = new Set(problems.map((p) => getSelectionId(p.selection)))
+	const hasProblem = (r: IntegrityRegistration) => {
+		const key = getPlayerRegistrationKey(r)
+		return (
+			problemIds.has(getSelectionId({kind: "registration", key})) ||
+			model.pagesByRegistration
+				.get(key)!
+				.some((p) =>
+					problemIds.has(getSelectionId({kind: "page", key: p.key})),
+				)
+		)
+	}
+	const registrations = problemsOnly
+		? report.registrations.filter(hasProblem)
+		: report.registrations
+	const hidden = report.registrations.length - registrations.length
+	const checkable = [search, ...[...model.pages.values()].map((p) => p.entry)]
+		.filter((e): e is IntegrityCacheEntry => !!e?.cachedAt)
+		.filter((e) => checks.checks.get(e.key)?.status !== "checking")
+	return (
+		<section className="Detail-panel IntegrityGraph">
 			<div className="Integrity-panel-header">
 				<h2 className="SectionLabel Detail-panel-title">
-					Server cache
+					KHL pages behind this profile
 				</h2>
 				<div className="Integrity-actions">
-					<MultiPicker
-						title="Filter by resource type"
-						items={presentKinds.map((kind) => ({
-							value: kind,
-							label: CACHE_KINDS[kind].plural,
-							hint: String(
-								cache.filter((e) => e.kind === kind).length,
-							),
-						}))}
-						values={kinds}
-						onChange={(next) =>
-							setKinds(next as IntegrityCacheKind[])
-						}
-						triggerLabel={
-							kinds.length === 0
-								? "All types"
-								: kinds.length === 1
-									? CACHE_KINDS[kinds[0]!].plural
-									: `${kinds.length} types`
-						}
-					/>
-					<button
-						type="button"
-						className="FilterPill"
-						disabled={isChecking || shownCached.length === 0}
-						onClick={() => {
-							for (const entry of shownCached) {
-								void check(entry.key)
-							}
-						}}
-					>
-						Check all
-					</button>
+					<label className="IntegrityGraph-toggle">
+						<input
+							type="checkbox"
+							checked={problemsOnly}
+							onChange={(e) => setProblemsOnly(e.target.checked)}
+						/>
+						Problems only
+					</label>
+					<Hint label="Loads each cached page from the KHL again and compares it with our copy. Stores nothing.">
+						<button
+							type="button"
+							className="FilterPill"
+							disabled={checkable.length === 0}
+							onClick={() => {
+								for (const entry of checkable) {
+									void checks.check(entry.key)
+								}
+							}}
+						>
+							Check all cached pages
+						</button>
+					</Hint>
 				</div>
 			</div>
-			<p className="Integrity-note">
-				{shownCached.length} of {shown.length} resources
-				{kinds.length > 0 ? " shown " : " "}were cached when the report
-				began. Checking one loads it from the KHL again and compares;
-				the cached copy stays as it is. Open a row to see what's cached.
-			</p>
-			<div className="Integrity-scroll">
-				<table className="Integrity-table">
-					<thead>
-						<tr>
-							<th scope="col">Type</th>
-							<th scope="col">Resource</th>
-							<th scope="col">Cached</th>
-							<th scope="col">Expires</th>
-							<th scope="col">Integrity</th>
-							<th scope="col">
-								<span className="Integrity-visually-hidden">
-									Actions
-								</span>
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{shown.map((entry) => (
-							<ExpandableRow
-								key={entry.key}
-								expanded={isExpanded(entry.key)}
-								onToggle={() => toggle(entry.key)}
-								label={
-									<Hint
-										label={CACHE_KINDS[entry.kind].shared}
-									>
-										<span
-											className={cx(
-												"Integrity-type",
-												`Integrity-type--${entry.kind}`,
-											)}
+			<IntegrityLegend
+				nodes={getNodeStates(model)}
+				highlight={highlight}
+				onChange={setHighlight}
+			/>
+			<div className="IntegrityGraph-scroll">
+				{search && (
+					<SearchNode
+						model={model}
+						search={search}
+						{...nodeProps({kind: "search"})}
+					/>
+				)}
+				<ul className="IntegrityGraph-tree">
+					{registrations.map((r) => {
+						const key = getPlayerRegistrationKey(r)
+						const pages = model.pagesByRegistration.get(key)!
+						const profile = pages.find((p) => p.kind === "profile")
+						const schedules = pages.filter(
+							(p) => p.kind === "schedule",
+						)
+						return (
+							<li
+								key={key}
+								className="IntegrityGraph-item IntegrityGraph-item--card"
+							>
+								<GraphCard
+									kind="registration"
+									title={
+										<TeamLabel
+											name={r.teamName}
+											logoUrl={r.teamLogoUrl}
+										/>
+									}
+									meta={`KHL id ${r.khlPlayerId} · ${plural(r.seasonIds.length, "season", "seasons")}`}
+									status={getRegistrationIntegrity(r)}
+									cache={null}
+									{...nodeProps({kind: "registration", key})}
+								/>
+								<ul className="IntegrityGraph-tree">
+									{profile && (
+										<li className="IntegrityGraph-item IntegrityGraph-item--tile">
+											<PageTile
+												model={model}
+												page={profile}
+												label={`Player page · season ${profile.seasonId}`}
+												{...nodeProps({
+													kind: "page",
+													key: profile.key,
+												})}
+											/>
+										</li>
+									)}
+									{schedules.length > 0 && (
+										<li className="IntegrityGraph-item IntegrityGraph-item--tile">
+											<div className="IntegrityGraph-seasons">
+												<span className="IntegrityGraph-seasons-label">
+													Schedules
+												</span>
+												{schedules.map((p) => (
+													<PageTile
+														key={p.key}
+														model={model}
+														page={p}
+														label={p.seasonId}
+														{...nodeProps({
+															kind: "page",
+															key: p.key,
+														})}
+													/>
+												))}
+											</div>
+										</li>
+									)}
+								</ul>
+							</li>
+						)
+					})}
+					{hidden > 0 && (
+						<li className="IntegrityGraph-item IntegrityGraph-item--tile">
+							<button
+								type="button"
+								className="Integrity-text-button"
+								onClick={() => setProblemsOnly(false)}
+							>
+								{plural(
+									hidden,
+									"registration",
+									"registrations",
+								)}{" "}
+								with no problems hidden
+							</button>
+						</li>
+					)}
+					{!report.searchError && report.unlinked.length > 0 && (
+						<li className="IntegrityGraph-item IntegrityGraph-item--card">
+							<p className="IntegrityGraph-group">
+								Also in the search, not on this profile
+							</p>
+							<ul className="IntegrityGraph-tree">
+								{report.unlinked.map((u) => {
+									const key = getPlayerRegistrationKey(u)
+									return (
+										<li
+											key={key}
+											className="IntegrityGraph-item IntegrityGraph-item--card"
 										>
-											{CACHE_KINDS[entry.kind].label}
-										</span>
-									</Hint>
-								}
-								cells={[
-									entry.label,
-									entry.cachedAt ? (
-										<TimeAgo at={entry.cachedAt} />
-									) : (
-										<span className="Integrity-muted">
-											Not cached
-										</span>
-									),
-									entry.expiresAt ? (
-										<TimeAgo at={entry.expiresAt} />
-									) : (
-										"–"
-									),
-									<CacheCheckBadge
-										check={checks.get(entry.key)}
-									/>,
-									<button
-										type="button"
-										className="FilterPill"
-										disabled={
-											!entry.cachedAt ||
-											checks.get(entry.key)?.status ===
-												"checking"
-										}
-										onClick={() => void check(entry.key)}
-									>
-										Check
-									</button>,
-								]}
-								detail={
-									<CacheEntryDetail
-										entry={entry}
-										check={checks.get(entry.key)}
-										onCheck={() => void check(entry.key)}
-									/>
-								}
-							/>
-						))}
-					</tbody>
-				</table>
+											<GraphCard
+												kind="unlinked"
+												title={
+													<TeamLabel
+														name={u.teamName}
+														logoUrl={null}
+													/>
+												}
+												meta={`KHL id ${u.khlPlayerId} · ${plural(u.seasonIds.length, "season", "seasons")}`}
+												status={getUnlinkedIntegrity(u)}
+												cache={null}
+												{...nodeProps({
+													kind: "unlinked",
+													key,
+												})}
+											/>
+										</li>
+									)
+								})}
+							</ul>
+						</li>
+					)}
+				</ul>
 			</div>
 		</section>
 	)
 }
 
-const CacheCheckBadge = ({check}: {check: CacheCheckState | undefined}) => {
-	if (!check) {
-		return <span className="Integrity-muted">Not checked</span>
+const LEGEND_INTEGRITY: [Integrity, string][] = [
+	["matches", "Matches the KHL"],
+	["differs", "Differs"],
+	["failed", "Failed"],
+	["unchecked", "Not checked"],
+]
+
+const LEGEND_CACHE: CacheState[] = ["cached", "expired", "not-cached", "failed"]
+
+/** Legend values picked to highlight the nodes that have them */
+interface Highlight {
+	integrity: Integrity[]
+	cache: CacheState[]
+}
+
+/** A node's two states; null cache for what isn't a cached page */
+interface NodeState {
+	integrity: Integrity
+	cache: CacheState | null
+}
+
+/** Every node in the graph, filtered or not, for the legend's counts */
+function getNodeStates(model: ReportModel): NodeState[] {
+	const search = model.search && getSearchStatus(model, model.search)
+	return [
+		...(search
+			? [{integrity: search.integrity.integrity, cache: search.cache}]
+			: []),
+		...model.report.registrations.map((r): NodeState => {
+			return {
+				integrity: getRegistrationIntegrity(r).integrity,
+				cache: null,
+			}
+		}),
+		...[...model.pages.values()].map((p): NodeState => {
+			const status = getPageStatus(model, p)
+			return {integrity: status.integrity.integrity, cache: status.cache}
+		}),
+		...model.report.unlinked.map((u): NodeState => {
+			return {integrity: getUnlinkedIntegrity(u).integrity, cache: null}
+		}),
+	]
+}
+
+/**
+ * Whether a node has the highlighted values: any picked value in a row, and
+ * every row with a pick. A node with no cache state has none to pick.
+ */
+function isHighlighted(highlight: Highlight, node: NodeState): boolean {
+	// A check in flight still counts as not checked
+	const integrity =
+		node.integrity === "checking" ? "unchecked" : node.integrity
+	return (
+		(highlight.integrity.length === 0 ||
+			highlight.integrity.includes(integrity)) &&
+		(highlight.cache.length === 0 ||
+			(node.cache !== null && highlight.cache.includes(node.cache)))
+	)
+}
+
+/** `values` with `value` added, or removed if it was there */
+function toggleValue<T>(values: T[], value: T): T[] {
+	return values.includes(value)
+		? values.filter((v) => v !== value)
+		: [...values, value]
+}
+
+/** Dimmed when something is highlighted and the node isn't it */
+function isDimmed(highlight: Highlight, node: NodeState): boolean {
+	const active = highlight.integrity.length + highlight.cache.length > 0
+	return active && !isHighlighted(highlight, node)
+}
+
+/**
+ * The two encodings, integrity as a node's color and cache as its glyph.
+ * Each value is a toggle that highlights the nodes with it.
+ */
+const IntegrityLegend = ({
+	nodes,
+	highlight,
+	onChange,
+}: {
+	nodes: NodeState[]
+	highlight: Highlight
+	onChange: (highlight: Highlight) => void
+}) => {
+	const active = highlight.integrity.length + highlight.cache.length > 0
+	// How many nodes that value alone would highlight
+	const count = (only: Highlight) => {
+		return nodes.filter((n) => isHighlighted(only, n)).length
 	}
-	switch (check.status) {
-		case "checking":
-			return <span className="Integrity-muted">Checking…</span>
-		case "error":
-			return <IntegrityBadge tone="error">Check failed</IntegrityBadge>
-		case "failed":
-			return <IntegrityBadge tone="error">KHL page failed</IntegrityBadge>
-		case "not-cached":
-			return <span className="Integrity-muted">Not cached</span>
-		case "match":
-			return <IntegrityBadge tone="ok">Matches</IntegrityBadge>
-		case "differs":
-			return (
-				<IntegrityBadge tone="warn">
-					{plural(check.differenceCount, "difference", "differences")}
-				</IntegrityBadge>
-			)
+	return (
+		<div className="IntegrityLegend">
+			<div role="group" aria-label="Highlight by integrity">
+				<span className="IntegrityLegend-row">Integrity</span>
+				{LEGEND_INTEGRITY.map(([integrity, label]) => (
+					<LegendToggle
+						key={integrity}
+						pressed={highlight.integrity.includes(integrity)}
+						count={count({integrity: [integrity], cache: []})}
+						onToggle={() =>
+							onChange({
+								...highlight,
+								integrity: toggleValue(
+									highlight.integrity,
+									integrity,
+								),
+							})
+						}
+					>
+						<span
+							className={cx(
+								"IntegrityLegend-swatch",
+								`IntegrityLegend-swatch--${integrity}`,
+							)}
+						/>
+						{label}
+					</LegendToggle>
+				))}
+			</div>
+			<div role="group" aria-label="Highlight by cache">
+				<span className="IntegrityLegend-row">Cache</span>
+				{LEGEND_CACHE.map((state) => (
+					<LegendToggle
+						key={state}
+						pressed={highlight.cache.includes(state)}
+						count={count({integrity: [], cache: [state]})}
+						onToggle={() =>
+							onChange({
+								...highlight,
+								cache: toggleValue(highlight.cache, state),
+							})
+						}
+					>
+						<CacheGlyph state={state} />
+						{CACHE_STATES[state].label}
+					</LegendToggle>
+				))}
+			</div>
+			{active && (
+				<button
+					type="button"
+					className="Integrity-text-button IntegrityLegend-clear"
+					onClick={() => onChange({integrity: [], cache: []})}
+				>
+					Clear highlight
+				</button>
+			)}
+		</div>
+	)
+}
+
+const LegendToggle = ({
+	pressed,
+	count,
+	onToggle,
+	children,
+}: {
+	pressed: boolean
+	count: number
+	onToggle: () => void
+	children: React.ReactNode
+}) => {
+	return (
+		<button
+			type="button"
+			className="IntegrityLegend-toggle"
+			aria-pressed={pressed}
+			onClick={onToggle}
+		>
+			{children}
+			<span className="IntegrityLegend-count">{count}</span>
+		</button>
+	)
+}
+
+const SearchNode = ({
+	model,
+	search,
+	selected,
+	onSelect,
+	highlight,
+}: {
+	model: ReportModel
+	search: IntegrityCacheEntry
+	selected: boolean
+	onSelect: () => void
+	highlight: Highlight
+}) => {
+	const status = getSearchStatus(model, search)
+	return (
+		<GraphCard
+			kind="search"
+			title={search.label}
+			meta={`${plural(model.report.registrations.length, "registration", "registrations")} on this profile`}
+			status={status.integrity}
+			cache={status.cache}
+			selected={selected}
+			onSelect={onSelect}
+			highlight={highlight}
+		/>
+	)
+}
+
+/** The search, a registration, or a same-name registration */
+const GraphCard = ({
+	kind,
+	title,
+	meta,
+	status,
+	cache,
+	selected,
+	onSelect,
+	highlight,
+}: {
+	kind: NodeKind
+	title: React.ReactNode
+	meta: string
+	status: IntegrityStatus
+	/** Null for what isn't a cached page */
+	cache: CacheState | null
+	selected: boolean
+	onSelect: () => void
+	highlight: Highlight
+}) => {
+	return (
+		<button
+			type="button"
+			className={cx(
+				"IntegrityGraph-node",
+				"IntegrityGraph-card",
+				`IntegrityGraph-node--${status.integrity}`,
+				cache === "not-cached" && "IntegrityGraph-node--absent",
+				selected && "IntegrityGraph-node--selected",
+				isDimmed(highlight, {integrity: status.integrity, cache}) &&
+					"IntegrityGraph-node--dimmed",
+			)}
+			aria-pressed={selected}
+			onClick={onSelect}
+		>
+			<span className="IntegrityGraph-card-head">
+				<KindChip kind={kind} />
+				{cache && <CacheGlyph state={cache} />}
+				<span className="IntegrityGraph-card-title">{title}</span>
+			</span>
+			<span className="IntegrityGraph-card-meta">
+				{meta} ·{" "}
+				<span className="IntegrityGraph-card-status">
+					{status.label}
+				</span>
+			</span>
+		</button>
+	)
+}
+
+/** A player page or a season's schedule */
+const PageTile = ({
+	model,
+	page,
+	label,
+	selected,
+	onSelect,
+	highlight,
+}: {
+	model: ReportModel
+	page: PageNode
+	label: string
+	selected: boolean
+	onSelect: () => void
+	highlight: Highlight
+}) => {
+	const status = getPageStatus(model, page)
+	const description = `${page.registration.teamName} ${CACHE_KINDS[page.kind].label.toLowerCase()}, season ${page.seasonId}: ${CACHE_STATES[status.cache].label} · ${status.integrity.label}`
+	return (
+		<Hint label={description}>
+			<button
+				type="button"
+				className={cx(
+					"IntegrityGraph-node",
+					"IntegrityGraph-tile",
+					`IntegrityGraph-node--${status.integrity.integrity}`,
+					status.cache === "not-cached" &&
+						"IntegrityGraph-node--absent",
+					selected && "IntegrityGraph-node--selected",
+					isDimmed(highlight, {
+						integrity: status.integrity.integrity,
+						cache: status.cache,
+					}) && "IntegrityGraph-node--dimmed",
+				)}
+				aria-pressed={selected}
+				aria-label={description}
+				onClick={onSelect}
+			>
+				<CacheGlyph state={status.cache} />
+				{label}
+				{status.integrity.mark && (
+					<span className="IntegrityGraph-mark">
+						{status.integrity.mark}
+					</span>
+				)}
+			</button>
+		</Hint>
+	)
+}
+
+// --- The inspector: the triage list, or the selected node's details
+
+const IntegrityInspector = ({
+	model,
+	problems,
+	selection,
+	onSelect,
+}: {
+	model: ReportModel
+	problems: Problem[]
+	selection: Selection | null
+	onSelect: (selection: Selection | null) => void
+}) => {
+	const {report} = model
+	const detail =
+		selection &&
+		matchField(selection, "kind", {
+			search: () => {
+				return model.search ? (
+					<SearchInspector model={model} search={model.search} />
+				) : null
+			},
+			registration: (s) => {
+				const r = report.registrations.find((r) => {
+					return getPlayerRegistrationKey(r) === s.key
+				})
+				return r ? <RegistrationInspector registration={r} /> : null
+			},
+			page: (s) => {
+				const page = model.pages.get(s.key)
+				return page ? <PageInspector model={model} page={page} /> : null
+			},
+			unlinked: (s) => {
+				const u = report.unlinked.find((u) => {
+					return getPlayerRegistrationKey(u) === s.key
+				})
+				return u ? <UnlinkedInspector unlinked={u} /> : null
+			},
+		})
+	if (!detail) {
+		return (
+			<TriageList model={model} problems={problems} onSelect={onSelect} />
+		)
 	}
+	return (
+		<>
+			<button
+				type="button"
+				className="Integrity-text-button IntegrityInspector-back"
+				onClick={() => onSelect(null)}
+			>
+				←{" "}
+				{problems.length === 0
+					? "Overview"
+					: plural(problems.length, "problem", "problems")}
+			</button>
+			{detail}
+		</>
+	)
+}
+
+/** What's wrong with the profile, worst first, each opening its node */
+const TriageList = ({
+	model,
+	problems,
+	onSelect,
+}: {
+	model: ReportModel
+	problems: Problem[]
+	onSelect: (selection: Selection) => void
+}) => {
+	const pages = [...model.pages.values()]
+	const cached = pages.filter((p) => p.entry?.cachedAt).length
+	const checked = pages.filter((p) => {
+		const check = model.checks.checks.get(p.key)
+		return check && check.status !== "checking"
+	}).length
+	return (
+		<>
+			<h2 className="SectionLabel Detail-panel-title">
+				{problems.length === 0
+					? "No problems found"
+					: plural(problems.length, "problem", "problems")}
+			</h2>
+			<FactList
+				layout="grid"
+				facts={[
+					["Registrations", model.report.registrations.length],
+					["Pages cached", `${cached} of ${pages.length}`],
+					["Pages checked", `${checked} of ${pages.length}`],
+				]}
+			/>
+			<p className="Integrity-note">
+				Select a problem, or any node in the graph, to see its details.
+			</p>
+			{problems.length === 0 ? (
+				<p className="Integrity-note">
+					What we've stored matches the KHL's name search and player
+					pages. Cached pages can still be stale: check them to
+					compare our copies with the KHL's pages now.
+				</p>
+			) : (
+				<ol className="IntegrityTriage">
+					{problems.map((problem) => (
+						<li key={problem.id}>
+							<button
+								type="button"
+								className={cx(
+									"IntegrityTriage-problem",
+									`IntegrityTriage-problem--${problem.severity}`,
+								)}
+								onClick={() => onSelect(problem.selection)}
+							>
+								<span className="IntegrityTriage-title">
+									{problem.title}
+								</span>
+								<FactList
+									layout="inline"
+									facts={[
+										...problem.facts,
+										...(problem.error
+											? ([
+													["Error", problem.error],
+												] satisfies Fact[])
+											: []),
+									]}
+								/>
+								<span className="IntegrityTriage-fix">
+									{problem.fix}
+								</span>
+							</button>
+						</li>
+					))}
+				</ol>
+			)}
+			<p className="Integrity-note">
+				A KHL+ profile is one person. The KHL has no such thing: it
+				issues a new player id, with its own player page, each time a
+				person registers, and one id can carry on across teams. Each
+				registration we've stored is compared with the KHL's name search
+				and its player page.
+			</p>
+			<KindGlossary />
+		</>
+	)
+}
+
+/** What each kind of node in the graph is */
+const KindGlossary = () => {
+	return (
+		<section className="IntegrityGlossary">
+			<h3 className="SectionLabel">Resource types</h3>
+			<dl>
+				{(Object.keys(NODE_KINDS) as NodeKind[]).map((kind) => (
+					<div key={kind}>
+						<dt>
+							<KindChip kind={kind} />
+						</dt>
+						<dd>{NODE_KINDS[kind].description}</dd>
+					</div>
+				))}
+			</dl>
+		</section>
+	)
+}
+
+/** A node's header in the inspector: what it is, and its key facts */
+const InspectorHeader = ({
+	kind,
+	title,
+	status,
+	cache,
+	facts,
+	actions,
+}: {
+	kind: NodeKind
+	title: React.ReactNode
+	status: IntegrityStatus
+	cache: {state: CacheState; entry: IntegrityCacheEntry | undefined} | null
+	facts: Fact[]
+	/** What can be done to the node, shown first under its title */
+	actions: React.ReactNode
+}) => {
+	return (
+		<>
+			<div className="IntegrityInspector-head">
+				<KindChip kind={kind} />
+				<h2 className="IntegrityInspector-title">{title}</h2>
+			</div>
+			<div className="Integrity-actions">{actions}</div>
+			<FactList
+				layout="grid"
+				facts={[
+					[
+						"Integrity",
+						<IntegrityBadge
+							tone={INTEGRITY_TONES[status.integrity]}
+						>
+							{status.label}
+						</IntegrityBadge>,
+					],
+					...(cache ? getCacheFacts(cache.state, cache.entry) : []),
+					...facts,
+				]}
+			/>
+		</>
+	)
+}
+
+/** A page's cache state, when it was cached and expires, and its key */
+function getCacheFacts(
+	state: CacheState,
+	entry: IntegrityCacheEntry | undefined,
+): Fact[] {
+	return [
+		[
+			"Cache",
+			<span className="IntegrityInspector-cache">
+				<span>
+					<CacheGlyph state={state} /> {CACHE_STATES[state].label}
+				</span>
+				<span className="IntegrityInspector-fact-note">
+					{CACHE_STATES[state].detail}
+				</span>
+			</span>,
+		],
+		...(entry?.cachedAt
+			? ([["Cached", <TimeAgo at={entry.cachedAt} />]] satisfies Fact[])
+			: []),
+		...(entry?.expiresAt && state === "cached"
+			? ([["Expires", <TimeAgo at={entry.expiresAt} />]] satisfies Fact[])
+			: []),
+		...(entry
+			? ([["Cache key", <code>{entry.key}</code>]] satisfies Fact[])
+			: []),
+	]
+}
+
+/** Checks a cached page against the KHL's page now; disabled with no copy */
+const CheckButton = ({
+	entry,
+	checks,
+}: {
+	entry: IntegrityCacheEntry | undefined
+	checks: CacheChecks
+}) => {
+	const check = entry && checks.checks.get(entry.key)
+	const label = check
+		? matchField(check, "status", {
+				checking: () => "Checking…",
+				error: () => "Check again",
+				failed: () => "Check again",
+				"not-cached": () => "Check again",
+				match: () => "Check again",
+				differs: () => "Check again",
+			})
+		: "Check against the KHL"
+	return (
+		<Hint label="Loads the KHL's page now and compares it with our copy. Our copy stays as it is.">
+			<button
+				type="button"
+				className="FilterPill"
+				disabled={!entry?.cachedAt || check?.status === "checking"}
+				onClick={() => entry && void checks.check(entry.key)}
+			>
+				{label}
+			</button>
+		</Hint>
+	)
+}
+
+/** A link out, styled like the actions beside it */
+const ActionLink = ({
+	href,
+	children,
+}: {
+	href: string
+	children: React.ReactNode
+}) => {
+	return (
+		<Link className="FilterPill" href={href}>
+			{children}
+		</Link>
+	)
+}
+
+const SearchInspector = ({
+	model,
+	search,
+}: {
+	model: ReportModel
+	search: IntegrityCacheEntry
+}) => {
+	const status = getSearchStatus(model, search)
+	return (
+		<>
+			<InspectorHeader
+				kind="search"
+				title={search.label}
+				status={status.integrity}
+				cache={{state: status.cache, entry: search}}
+				facts={[["Shared", CACHE_KINDS.search.shared]]}
+				actions={
+					<>
+						<CheckButton entry={search} checks={model.checks} />
+						<ActionLink href={model.report.searchUrl}>
+							Open on the KHL ↗
+						</ActionLink>
+					</>
+				}
+			/>
+			{model.report.searchError && (
+				<ErrorNote
+					summary="The search failed, so no registration was compared with it."
+					error={model.report.searchError}
+				/>
+			)}
+			<CacheEntryDetail
+				entry={search}
+				check={model.checks.checks.get(search.key)}
+			/>
+		</>
+	)
+}
+
+const PageInspector = ({model, page}: {model: ReportModel; page: PageNode}) => {
+	const status = getPageStatus(model, page)
+	const r = page.registration
+	const url = page.kind === "profile" ? r.profileUrl : null
+	return (
+		<>
+			<InspectorHeader
+				kind={page.kind}
+				title={<TeamLabel name={r.teamName} logoUrl={r.teamLogoUrl} />}
+				status={status.integrity}
+				cache={{state: status.cache, entry: page.entry}}
+				facts={[
+					["Season", page.seasonId],
+					["KHL id", <code>{r.khlPlayerId}</code>],
+					["Shared", CACHE_KINDS[page.kind].shared],
+				]}
+				actions={
+					<>
+						<CheckButton entry={page.entry} checks={model.checks} />
+						{url && (
+							<ActionLink href={url}>
+								Open on the KHL ↗
+							</ActionLink>
+						)}
+					</>
+				}
+			/>
+			{page.error && (
+				<ErrorNote
+					summary="The KHL's page failed when the report loaded it."
+					error={page.error}
+				/>
+			)}
+			{page.entry ? (
+				<CacheEntryDetail
+					entry={page.entry}
+					check={model.checks.checks.get(page.key)}
+				/>
+			) : (
+				<p className="Integrity-note">
+					Nothing was cached for this page when the report began.
+				</p>
+			)}
+		</>
+	)
+}
+
+const RegistrationInspector = ({
+	registration: r,
+}: {
+	registration: IntegrityRegistration
+}) => {
+	return (
+		<>
+			<InspectorHeader
+				kind="registration"
+				title={<TeamLabel name={r.teamName} logoUrl={r.teamLogoUrl} />}
+				status={getRegistrationIntegrity(r)}
+				cache={null}
+				facts={[
+					["KHL id", <code>{r.khlPlayerId}</code>],
+					["Seasons", formatSeasonIds(r.seasonIds) ?? "none"],
+					["Recorded", <TimeAgo at={r.updatedAt} />],
+				]}
+				actions={
+					r.profileUrl && (
+						<ActionLink href={r.profileUrl}>
+							Open the player page on the KHL ↗
+						</ActionLink>
+					)
+				}
+			/>
+			<RegistrationDetail registration={r} />
+		</>
+	)
+}
+
+const UnlinkedInspector = ({unlinked: u}: {unlinked: IntegrityUnlinked}) => {
+	return (
+		<>
+			<InspectorHeader
+				kind="unlinked"
+				title={<TeamLabel name={u.teamName} logoUrl={null} />}
+				status={getUnlinkedIntegrity(u)}
+				cache={null}
+				facts={[
+					["KHL id", <code>{u.khlPlayerId}</code>],
+					["Seasons", formatSeasonIds(u.seasonIds) ?? "none"],
+				]}
+				actions={
+					<>
+						{u.playerId && (
+							<ActionLink
+								href={`${getPlayerHref(u.playerId)}?integrity`}
+							>
+								Open the other profile's report
+							</ActionLink>
+						)}
+						<ActionLink href={u.khlUrl}>
+							Open the player page on the KHL ↗
+						</ActionLink>
+					</>
+				}
+			/>
+			<UnlinkedDetail unlinked={u} />
+		</>
+	)
 }
 
 /** What's cached, and once checked, how it compares with the KHL's page */
 const CacheEntryDetail = ({
 	entry,
 	check,
-	onCheck,
 }: {
 	entry: IntegrityCacheEntry
 	check: CacheCheckState | undefined
-	onCheck: () => void
 }) => {
 	const state = useAsync(
 		() => doRequest(GET_CACHE_ENTRY_ENDPOINT, {key: entry.key}),
@@ -668,9 +1904,6 @@ const CacheEntryDetail = ({
 	)
 	return (
 		<div className="Integrity-detail-body">
-			<p className="Integrity-muted">
-				<code>{entry.key}</code>
-			</p>
 			<AsyncContent
 				state={state}
 				size="inline"
@@ -680,17 +1913,12 @@ const CacheEntryDetail = ({
 				{(cached) =>
 					cached.value === null ? (
 						<p className="Integrity-note">
-							Nothing is cached for this resource now. It loads
-							the next time a page needs it.
+							Nothing is cached for this page now. It loads the
+							next time a page needs it.
 						</p>
 					) : (
 						<Comparison
-							summary={
-								<CacheCheckSummary
-									check={check}
-									onCheck={onCheck}
-								/>
-							}
+							summary={<CacheCheckSummary check={check} />}
 							differences={
 								check?.status === "differs"
 									? check.differences
@@ -717,17 +1945,21 @@ const CacheEntryDetail = ({
 								)
 							}
 							khl={check && "khl" in check ? check.khl : null}
-							khlPlaceholder="Check the row to load the KHL's page."
+							khlPlaceholder="Check it to load the KHL's page."
 						>
 							{check?.status === "differs" &&
 								check.differenceCount >
 									check.differences.length && (
-									<p className="Integrity-note">
-										And{" "}
-										{check.differenceCount -
-											check.differences.length}{" "}
-										more.
-									</p>
+									<FactList
+										layout="inline"
+										facts={[
+											[
+												"Differences not shown",
+												check.differenceCount -
+													check.differences.length,
+											],
+										]}
+									/>
 								)}
 						</Comparison>
 					)
@@ -737,247 +1969,64 @@ const CacheEntryDetail = ({
 	)
 }
 
-/** A cache check's outcome in a line; the differences are a table below */
-const CacheCheckSummary = ({
-	check,
-	onCheck,
-}: {
-	check: CacheCheckState | undefined
-	onCheck: () => void
-}) => {
+/** A cache check's outcome; the Check button is in the inspector's header */
+const CacheCheckSummary = ({check}: {check: CacheCheckState | undefined}) => {
 	if (!check) {
 		return (
-			<p className="Integrity-note">
-				Not compared yet.{" "}
-				<button
-					type="button"
-					className="Integrity-text-button"
-					onClick={onCheck}
-				>
-					Compare with the KHL
-				</button>
-			</p>
+			<div className="IntegrityInspector-check">
+				<p className="Integrity-note">
+					Not checked. Checking loads the KHL's page now and compares
+					it with our copy; our copy stays as it is.
+				</p>
+			</div>
 		)
 	}
-	switch (check.status) {
-		case "checking":
-			return <InlineLoader label="Loading the KHL's page…" />
-		case "error":
-			return (
-				<p className="Integrity-error">
-					The check failed: {check.error.message}
-				</p>
-			)
-		case "failed":
-			return (
-				<p className="Integrity-error">
-					The KHL's page didn't load, so nothing was compared:{" "}
-					{check.error}
-				</p>
-			)
-		case "not-cached":
-			return (
-				<p className="Integrity-note">
-					It expired before the check, so there was nothing to
-					compare.
-				</p>
-			)
-		case "match":
-			return (
-				<p className="Integrity-note">
-					The cached copy matches the KHL's page.
-				</p>
-			)
-		case "differs":
-			return (
-				<p className="Integrity-note">
-					The cached copy differs from the KHL's page in{" "}
-					{plural(check.differenceCount, "place", "places")}.
-				</p>
-			)
-	}
-}
-
-const JsonPane = ({
-	title,
-	value,
-	placeholder,
-}: {
-	title: React.ReactNode
-	/** Shown as JSON; null shows `placeholder` */
-	value: unknown
-	placeholder?: string
-}) => {
-	return (
-		<figure className="Integrity-json">
-			<figcaption className="SectionLabel">{title}</figcaption>
-			{value === null ? (
-				<p className="Integrity-note">{placeholder}</p>
-			) : (
-				<pre>{JSON.stringify(value, null, 2)}</pre>
-			)}
-		</figure>
-	)
-}
-
-// --- KHL registrations
-
-/**
- * Every KHL registration on the KHL+ profile, plus same-name registrations
- * on other KHL+ profiles
- */
-const IntegrityPlayers = ({report}: {report: PlayerIntegrityResponse}) => {
-	const {isExpanded, toggle} = useExpanded()
-	return (
-		<section className="Detail-panel">
-			<h2 className="SectionLabel Detail-panel-title">
-				KHL registrations
-			</h2>
-			<p className="Integrity-note">
-				A KHL+ profile is one person. The KHL has no such thing: it
-				issues a new player id, with its own player page, each time a
-				person registers on a team. Each registration we've stored is
-				compared with the KHL's name search and its KHL player page.
-				Open a row to see what differs.
-			</p>
-			{report.searchError && (
-				<p className="Integrity-error">
-					The KHL search failed, so nothing was compared with it:{" "}
-					{report.searchError}
-				</p>
-			)}
-			<div className="Integrity-scroll">
-				<table className="Integrity-table">
-					<thead>
-						<tr>
-							<th scope="col">Team</th>
-							<th scope="col">KHL id</th>
-							<th scope="col">Seasons</th>
-							<th scope="col">Recorded</th>
-							<th scope="col">Integrity</th>
-						</tr>
-					</thead>
-					<tbody>
-						<GroupRow
-							label={
-								<Link
-									className="InlineLink"
-									href={getPlayerHref(report.playerId)}
-								>
-									{report.name}'s KHL+ profile
-								</Link>
-							}
-							colSpan={5}
-							meta={plural(
-								report.registrations.length,
-								"registration",
-								"registrations",
-							)}
-						/>
-						{report.registrations.map((r) => (
-							<ExpandableRow
-								key={getPlayerRegistrationKey(r)}
-								expanded={isExpanded(
-									getPlayerRegistrationKey(r),
-								)}
-								onToggle={() =>
-									toggle(getPlayerRegistrationKey(r))
-								}
-								label={
-									<TeamLabel
-										name={r.teamName}
-										logoUrl={r.teamLogoUrl}
-									/>
-								}
-								cells={[
-									<KHLIdLink
-										khlPlayerId={r.khlPlayerId}
-										url={r.profileUrl}
-									/>,
-									r.seasonIds.length,
-									<TimeAgo at={r.updatedAt} />,
-									<RegistrationBadge registration={r} />,
-								]}
-								detail={<RegistrationDetail registration={r} />}
-							/>
-						))}
-					</tbody>
-					{!report.searchError && report.unlinked.length > 0 && (
-						<tbody>
-							<GroupRow
-								label={`Other registrations named “${report.name}”`}
-								colSpan={5}
-								meta={plural(
-									report.unlinked.length,
-									"registration",
-									"registrations",
-								)}
-							/>
-							{report.unlinked.map((u) => (
-								<ExpandableRow
-									key={getPlayerRegistrationKey(u)}
-									expanded={isExpanded(
-										getPlayerRegistrationKey(u),
-									)}
-									onToggle={() =>
-										toggle(getPlayerRegistrationKey(u))
-									}
-									label={
-										<TeamLabel
-											name={u.teamName}
-											logoUrl={null}
-										/>
-									}
-									cells={[
-										<KHLIdLink
-											khlPlayerId={u.khlPlayerId}
-											url={u.khlUrl}
-										/>,
-										u.seasonIds.length,
-										"–",
-										u.playerId ? (
-											<Link
-												className="InlineLink"
-												href={`${getPlayerHref(u.playerId)}?integrity`}
-											>
-												Other KHL+ profile
-											</Link>
-										) : (
-											<IntegrityBadge tone="warn">
-												Not recorded
-											</IntegrityBadge>
-										),
-									]}
-									detail={<UnlinkedDetail unlinked={u} />}
-								/>
-							))}
-						</tbody>
-					)}
-				</table>
+	return matchField(check, "status", {
+		checking: () => <InlineLoader label="Loading the KHL's page…" />,
+		error: (c) => (
+			<div className="IntegrityInspector-check">
+				<ErrorNote
+					summary="The check failed."
+					error={c.error.message}
+				/>
 			</div>
-		</section>
-	)
+		),
+		failed: (c) => (
+			<div className="IntegrityInspector-check">
+				<ErrorNote
+					summary="The KHL's page didn't load, so nothing was compared."
+					error={c.error ?? "No message"}
+				/>
+			</div>
+		),
+		"not-cached": () => (
+			<p className="Integrity-note">
+				It expired before the check, so there was nothing to compare.
+			</p>
+		),
+		match: () => (
+			<div className="IntegrityInspector-check">
+				<p className="Integrity-note">
+					Our copy matches the KHL's page.
+				</p>
+			</div>
+		),
+		differs: (c) => (
+			<div className="IntegrityInspector-check">
+				<p className="Integrity-note">
+					Our copy is stale: it differs from the KHL's page. Reload
+					from KHL to replace it.
+				</p>
+				<FactList
+					layout="inline"
+					facts={[["Differences", c.differenceCount]]}
+				/>
+			</div>
+		),
+	})
 }
 
-/** A KHL player id, linking to its KHL player page */
-const KHLIdLink = ({
-	khlPlayerId,
-	url,
-}: {
-	khlPlayerId: string
-	url: string | null
-}) => {
-	const id = <code>{khlPlayerId}</code>
-	return url ? (
-		<Hint label="Open the KHL player page">
-			<Link className="InlineLink" href={url}>
-				{id} ↗
-			</Link>
-		</Hint>
-	) : (
-		id
-	)
-}
+// --- Registrations
 
 const TeamLabel = ({name, logoUrl}: {name: string; logoUrl: string | null}) => {
 	return (
@@ -988,24 +2037,6 @@ const TeamLabel = ({name, logoUrl}: {name: string; logoUrl: string | null}) => {
 	)
 }
 
-const RegistrationBadge = ({
-	registration: r,
-}: {
-	registration: IntegrityRegistration
-}) => {
-	if (r.differences.length > 0) {
-		return (
-			<IntegrityBadge tone="warn">
-				{plural(r.differences.length, "difference", "differences")}
-			</IntegrityBadge>
-		)
-	}
-	if (r.profileError) {
-		return <IntegrityBadge tone="error">KHL page failed</IntegrityBadge>
-	}
-	return <IntegrityBadge tone="ok">Matches</IntegrityBadge>
-}
-
 /** The record field each IntegrityMismatch field compares */
 const MISMATCH_RECORD_FIELDS: Record<string, string> = {
 	name: "name",
@@ -1014,6 +2045,13 @@ const MISMATCH_RECORD_FIELDS: Record<string, string> = {
 	"team logo": "teamLogoUrl",
 	seasons: "seasonIds",
 }
+
+/** "team logo" for "teamLogoUrl" */
+const RECORD_FIELD_LABELS: Record<string, string> = Object.fromEntries(
+	Object.entries(MISMATCH_RECORD_FIELDS).map(([label, field]) => {
+		return [field, label]
+	}),
+)
 
 /**
  * The stored record beside the record the KHL implies, which is what
@@ -1038,15 +2076,15 @@ const RegistrationDetail = ({
 				summary={
 					<>
 						{r.profileError && (
-							<p className="Integrity-error">
-								The KHL player page failed, so nothing was
-								compared with it: {r.profileError}
-							</p>
+							<ErrorNote
+								summary="The KHL player page failed, so nothing was compared with it."
+								error={r.profileError}
+							/>
 						)}
 						<p className="Integrity-note">
 							{r.differences.length === 0
 								? "The stored record matches what the KHL's name search and player page imply."
-								: `The stored record differs from the KHL in ${plural(r.differences.length, "place", "places")}. Applying the resync stores the KHL's.`}
+								: "The stored record differs from what the KHL's pages imply. Applying the resync stores the KHL's."}
 						</p>
 					</>
 				}
@@ -1068,13 +2106,27 @@ const RegistrationDetail = ({
 						<ul>
 							{notResynced.map((m) => (
 								<li key={`${m.source}:${m.field}`}>
-									{SOURCE_LABELS[m.source]} · {m.field}:{" "}
-									{m.detail ?? (
-										<>
-											stored <q>{m.ours ?? "none"}</q>,
-											KHL <q>{m.khl ?? "none"}</q>
-										</>
-									)}
+									<FactList
+										layout="inline"
+										facts={[
+											["Page", SOURCE_LABELS[m.source]],
+											["Field", m.field],
+											...(m.detail
+												? ([
+														["Detail", m.detail],
+													] satisfies Fact[])
+												: ([
+														[
+															"Stored",
+															m.ours ?? "none",
+														],
+														[
+															"KHL",
+															m.khl ?? "none",
+														],
+													] satisfies Fact[])),
+										]}
+									/>
 								</li>
 							))}
 						</ul>
@@ -1097,23 +2149,9 @@ const UnlinkedDetail = ({unlinked: u}: {unlinked: IntegrityUnlinked}) => {
 	return (
 		<div className="Integrity-detail-body">
 			<p className="Integrity-note">
-				{u.playerId ? (
-					<>
-						On another KHL+ profile with this name: a namesake split
-						off by hand, or the same person split in two.{" "}
-						<Link
-							className="InlineLink"
-							href={`${getPlayerHref(u.playerId)}?integrity`}
-						>
-							Open its report
-						</Link>
-					</>
-				) : (
-					"We've never recorded this registration. Applying the resync records it, on a KHL+ profile matched by name."
-				)}
-			</p>
-			<p className="Integrity-note">
-				Seasons: {formatSeasonIds(u.seasonIds) ?? "none"}
+				{u.playerId
+					? "On another KHL+ profile with this name: a namesake split off by hand, or the same person split in two. If it's this person, the profiles need merging by hand."
+					: "We've never recorded this registration. Applying the resync records it, on a KHL+ profile matched by name."}
 			</p>
 		</div>
 	)

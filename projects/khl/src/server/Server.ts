@@ -72,6 +72,7 @@ import {
 	JsonValueSchema,
 	IntegrityCacheEntry,
 	IntegrityRegistration,
+	IntegrityRegistrationCacheKeys,
 	IntegrityUnlinked,
 	PlayerIntegrityResponse,
 	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
@@ -518,21 +519,21 @@ async function getPlayerIntegrity(
 		.getRegistrations(player.id)
 		.sort(compareLatestSeasonFirst)
 	for (const r of registrations) {
-		const latestSeasonId = r.seasonIds.at(-1)
-		if (latestSeasonId) {
+		const keys = getRegistrationCacheKeys(r)
+		if (keys.profile) {
 			addCacheEntry(
 				"profile",
-				getPlayerCacheKey(r.khlPlayerId, r.teamId, latestSeasonId),
-				`${r.teamName} · KHL id ${r.khlPlayerId} · season ${latestSeasonId}`,
+				keys.profile,
+				`${r.teamName} · KHL id ${r.khlPlayerId} · season ${r.seasonIds.at(-1)}`,
 			)
 		}
-		for (const seasonId of r.seasonIds) {
+		r.seasonIds.forEach((seasonId, i) => {
 			addCacheEntry(
 				"schedule",
-				getScheduleCacheKey(r.teamId, seasonId),
+				keys.schedules[i]!,
 				`${r.teamName} · season ${seasonId}`,
 			)
-		}
+		})
 	}
 
 	const pages = new Map(
@@ -605,6 +606,7 @@ async function getPlayerIntegrity(
 				stored,
 				expected,
 				differences: diffJson(stored, expected),
+				cacheKeys: getRegistrationCacheKeys(r),
 			}
 		},
 	)
@@ -657,6 +659,25 @@ async function getPlayerIntegrity(
 			KHL_ALL_SEASONS,
 		).toString(),
 		searchError,
+	}
+}
+
+/**
+ * The cache keys of the KHL pages the player's page loads for a registration:
+ * its player page (see `loadIntegrityProfile`) and its schedules (see
+ * `getPlayerSchedules`)
+ */
+function getRegistrationCacheKeys(
+	r: Registration,
+): IntegrityRegistrationCacheKeys {
+	const latestSeasonId = r.seasonIds.at(-1)
+	return {
+		profile: latestSeasonId
+			? getPlayerCacheKey(r.khlPlayerId, r.teamId, latestSeasonId)
+			: null,
+		schedules: r.seasonIds.map((seasonId) => {
+			return getScheduleCacheKey(r.teamId, seasonId)
+		}),
 	}
 }
 

@@ -1,5 +1,4 @@
 import {describe, expect, test} from "bun:test"
-import {KHLPlayer, KHLPlayerSearchResult} from "../shared/KHLJson.js"
 import {Registration} from "./Database.js"
 import {
 	compareRegistration,
@@ -7,6 +6,7 @@ import {
 	reconcileRegistration,
 	toIntegrityRecord,
 } from "./Integrity.js"
+import {KHLPlayer, KHLPlayerSearchResult} from "../shared/KHLJson.js"
 
 const ours: Registration = {
 	khlPlayerId: "428254",

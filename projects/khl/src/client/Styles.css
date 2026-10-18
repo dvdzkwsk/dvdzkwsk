@@ -5482,7 +5482,9 @@ a.Compare-chip:hover {
    links, takes the rest. */
 .GameTable--scoreboard .GameTable-col--away,
 .GameTable--scoreboard .GameTable-col--home {
-	width: calc(28px + var(--spacing) * 7 + var(--GameTable-team-chars) * 1ch);
+	width: calc(
+		28px + var(--spacing) * 7 + var(--GameTable-team-chars) * 1ch
+	);
 }
 
 .GameTable--scoreboard .GameTable-col--rink,

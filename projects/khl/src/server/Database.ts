@@ -1,9 +1,25 @@
 import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
+import {matchField} from "@dvdzkwsk/util/MatchUtil"
 import {Database as SQLiteDatabase} from "bun:sqlite"
-import {StatusCheck, StatusDay, StatusLevel} from "../shared/ApiJson.js"
-import {KHLPlayerSearchResult, normalizePlayerName} from "../shared/KHLJson.js"
+import {
+	ActivityEvent,
+	parseRegistrationKey,
+	RegistrationKey,
+	StatusCheck,
+	StatusDay,
+	StatusLevel,
+	toRegistrationKey,
+} from "../shared/ApiJson.js"
+import {
+	KHLGoal,
+	KHLHomeAway,
+	KHLPenalty,
+	KHLPlayerRef,
+	KHLPlayerSearchResult,
+	normalizePlayerName,
+} from "../shared/KHLJson.js"
 
 const logger = new Logger("Database")
 
@@ -130,9 +146,85 @@ const MIGRATIONS = [
 	CREATE TABLE app_cache (
 		key TEXT PRIMARY KEY,
 		value BLOB NOT NULL,
-		computed_at INTEGER NOT NULL,
-		stale_at INTEGER NOT NULL
+		computed_at INTEGER NOT NULL
 	);
+	`,
+	`
+	-- Every team in every season, from the season's teams page, or from a box
+	-- score for a team no teams page lists (e.g. one that folded)
+	CREATE TABLE teams (
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		logo_url TEXT,
+		division_id TEXT,
+		PRIMARY KEY (team_id, season_id)
+	);
+	-- Finished games, from each game's box score and lineups (see
+	-- GameRecords.ts), so activity is a query instead of a page per game
+	CREATE TABLE games (
+		game_id TEXT PRIMARY KEY,
+		starts_at TEXT NOT NULL,
+		local_date TEXT NOT NULL,
+		local_time TEXT NOT NULL,
+		arena_id TEXT,
+		away_id TEXT NOT NULL,
+		away_season_id TEXT NOT NULL,
+		away_goals INTEGER,
+		home_id TEXT NOT NULL,
+		home_season_id TEXT NOT NULL,
+		home_goals INTEGER,
+		has_summary INTEGER NOT NULL,
+		away_lineup_posted INTEGER NOT NULL,
+		home_lineup_posted INTEGER NOT NULL,
+		processed_at INTEGER NOT NULL
+	);
+	-- Players are KHL player ids; their names come from registrations, by
+	-- (KHL player id, team). seq is the goal's order in the game.
+	CREATE TABLE game_goals (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		seq INTEGER NOT NULL,
+		team_id TEXT NOT NULL,
+		period TEXT NOT NULL,
+		time TEXT NOT NULL,
+		type TEXT,
+		scorer_khl_player_id TEXT NOT NULL,
+		scorer_season_goals INTEGER,
+		PRIMARY KEY (game_id, seq)
+	);
+	CREATE INDEX game_goals_scorer ON game_goals (scorer_khl_player_id);
+	CREATE TABLE game_goal_assists (
+		game_id TEXT NOT NULL,
+		seq INTEGER NOT NULL,
+		-- The assist's order on the goal
+		position INTEGER NOT NULL,
+		khl_player_id TEXT NOT NULL,
+		PRIMARY KEY (game_id, seq, position),
+		FOREIGN KEY (game_id, seq) REFERENCES game_goals (game_id, seq)
+			ON DELETE CASCADE
+	);
+	CREATE INDEX game_goal_assists_player ON game_goal_assists (khl_player_id);
+	CREATE TABLE game_penalties (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		seq INTEGER NOT NULL,
+		team_id TEXT NOT NULL,
+		period TEXT NOT NULL,
+		time TEXT NOT NULL,
+		-- Null for a bench penalty
+		khl_player_id TEXT,
+		infraction TEXT NOT NULL,
+		duration TEXT NOT NULL,
+		PRIMARY KEY (game_id, seq)
+	);
+	CREATE INDEX game_penalties_player ON game_penalties (khl_player_id);
+	-- Who dressed, by KHL player id
+	CREATE TABLE game_lineups (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		side TEXT NOT NULL,
+		khl_player_id TEXT NOT NULL,
+		PRIMARY KEY (game_id, side, khl_player_id)
+	);
+	CREATE INDEX game_lineups_khl_player_id ON game_lineups (khl_player_id);
 	`,
 ]
 
@@ -178,8 +270,87 @@ export interface StoredAppCacheEntry {
 	key: string
 	value: string
 	computedAt: number
-	/** When it's due to be computed again; it's still served until then */
-	staleAt: number
+}
+
+/** A team as of one season */
+export interface TeamRecord {
+	teamId: string
+	seasonId: string
+	name: string
+	logoUrl: string | null
+	/** Null for a team known only from a box score */
+	divisionId: string | null
+}
+
+/** A finished game's teams and scores, from its box score and lineups */
+export interface GameRecord {
+	gameId: string
+	startsAt: string
+	localDate: string
+	localTime: string
+	arenaId: string | null
+	away: GameRecordTeam
+	home: GameRecordTeam
+	/** False until the league posts the game's summary */
+	hasSummary: boolean
+	/** Epoch milliseconds */
+	processedAt: number
+}
+
+export interface GameRecordTeam {
+	id: string
+	/** The season the game's team links point at */
+	seasonId: string
+	/** Null until the summary is posted */
+	goals: number | null
+	/** False until the league posts who dressed */
+	lineupPosted: boolean
+}
+
+/** A game as read back, with each team's name and logo from `teams` */
+export type GameRecordWithTeams = GameRecord & {
+	away: GameRecordTeam & TeamDisplay
+	home: GameRecordTeam & TeamDisplay
+}
+
+interface TeamDisplay {
+	/** The team's id if no teams page or box score named it */
+	name: string
+	logoUrl: string | null
+}
+
+/** A goal or penalty in a game, with player names from registrations */
+export interface GameEventRecord {
+	gameId: string
+	event: ActivityEvent
+}
+
+export interface GameLineupRecord {
+	gameId: string
+	side: KHLHomeAway
+	khlPlayerId: string
+}
+
+interface GameRow {
+	game_id: string
+	starts_at: string
+	local_date: string
+	local_time: string
+	arena_id: string | null
+	away_id: string
+	away_season_id: string
+	away_goals: number | null
+	away_name: string | null
+	away_logo_url: string | null
+	home_id: string
+	home_season_id: string
+	home_goals: number | null
+	home_name: string | null
+	home_logo_url: string | null
+	has_summary: number
+	away_lineup_posted: number
+	home_lineup_posted: number
+	processed_at: number
 }
 
 interface StatusCheckRow {
@@ -201,6 +372,355 @@ export class KHLDatabase {
 				)
 				.get({id}) ?? null
 		)
+	}
+
+	getTeam(teamId: string, seasonId: string): TeamRecord | null {
+		return this.db
+			.query<TeamRecord, {teamId: string; seasonId: string}>(
+				`SELECT team_id AS teamId, season_id AS seasonId, name,
+					logo_url AS logoUrl, division_id AS divisionId
+				FROM teams WHERE team_id = $teamId AND season_id = $seasonId`,
+			)
+			.get({teamId, seasonId})
+	}
+
+	/** Records a season's teams as its teams page lists them */
+	recordTeams(teams: TeamRecord[]): void {
+		const upsert = this.db.query(
+			`INSERT INTO teams (team_id, season_id, name, logo_url, division_id)
+			VALUES ($teamId, $seasonId, $name, $logoUrl, $divisionId)
+			ON CONFLICT (team_id, season_id) DO UPDATE SET name = excluded.name,
+				logo_url = excluded.logo_url, division_id = excluded.division_id`,
+		)
+		this.db.transaction(() => {
+			for (const team of teams) {
+				upsert.run({...team})
+			}
+		})()
+	}
+
+	/**
+	 * Replaces a game's record, events, and lineups, and records its teams if
+	 * no teams page has
+	 */
+	saveGame(
+		game: GameRecord,
+		teams: TeamRecord[],
+		{goals, penalties}: {goals: KHLGoal[]; penalties: KHLPenalty[]},
+		lineups: GameLineupRecord[],
+	): void {
+		this.db.transaction(() => {
+			const insertTeam = this.db.query(
+				`INSERT OR IGNORE INTO teams
+					(team_id, season_id, name, logo_url, division_id)
+				VALUES ($teamId, $seasonId, $name, $logoUrl, $divisionId)`,
+			)
+			for (const team of teams) {
+				insertTeam.run({...team})
+			}
+			// Cascades to its events and lineups
+			this.db
+				.query("DELETE FROM games WHERE game_id = $gameId")
+				.run({gameId: game.gameId})
+			this.db
+				.query(
+					`INSERT INTO games VALUES ($gameId, $startsAt, $localDate,
+						$localTime, $arenaId, $awayId, $awaySeasonId, $awayGoals,
+						$homeId, $homeSeasonId, $homeGoals, $hasSummary,
+						$awayLineupPosted, $homeLineupPosted, $processedAt)`,
+				)
+				.run({
+					gameId: game.gameId,
+					startsAt: game.startsAt,
+					localDate: game.localDate,
+					localTime: game.localTime,
+					arenaId: game.arenaId,
+					awayId: game.away.id,
+					awaySeasonId: game.away.seasonId,
+					awayGoals: game.away.goals,
+					homeId: game.home.id,
+					homeSeasonId: game.home.seasonId,
+					homeGoals: game.home.goals,
+					hasSummary: game.hasSummary ? 1 : 0,
+					awayLineupPosted: game.away.lineupPosted ? 1 : 0,
+					homeLineupPosted: game.home.lineupPosted ? 1 : 0,
+					processedAt: game.processedAt,
+				})
+			const insertGoal = this.db.query(
+				`INSERT INTO game_goals VALUES ($gameId, $seq, $teamId, $period,
+					$time, $type, $scorer, $scorerSeasonGoals)`,
+			)
+			const insertAssist = this.db.query(
+				`INSERT INTO game_goal_assists VALUES ($gameId, $seq, $position,
+					$khlPlayerId)`,
+			)
+			goals.forEach((goal, seq) => {
+				insertGoal.run({
+					gameId: game.gameId,
+					seq,
+					teamId: goal.teamId,
+					period: goal.period,
+					time: goal.time,
+					type: goal.type,
+					scorer: goal.scorer.id,
+					scorerSeasonGoals: goal.scorerSeasonGoals,
+				})
+				goal.assists.forEach((assist, position) => {
+					insertAssist.run({
+						gameId: game.gameId,
+						seq,
+						position,
+						khlPlayerId: assist.id,
+					})
+				})
+			})
+			const insertPenalty = this.db.query(
+				`INSERT INTO game_penalties VALUES ($gameId, $seq, $teamId, $period,
+					$time, $khlPlayerId, $infraction, $duration)`,
+			)
+			penalties.forEach((penalty, seq) => {
+				insertPenalty.run({
+					gameId: game.gameId,
+					seq,
+					teamId: penalty.teamId,
+					period: penalty.period,
+					time: penalty.time,
+					khlPlayerId: penalty.player?.id ?? null,
+					infraction: penalty.infraction,
+					duration: penalty.duration,
+				})
+			})
+			const insertLineup = this.db.query(
+				`INSERT OR IGNORE INTO game_lineups (game_id, side, khl_player_id)
+				VALUES ($gameId, $side, $khlPlayerId)`,
+			)
+			for (const l of lineups) {
+				insertLineup.run({...l})
+			}
+		})()
+	}
+
+	getGames(gameIds: string[]): Map<string, GameRecordWithTeams> {
+		const rows = this.db
+			.query<GameRow, string[]>(
+				`SELECT g.*, a.name AS away_name, a.logo_url AS away_logo_url,
+					h.name AS home_name, h.logo_url AS home_logo_url
+				FROM games g
+				LEFT JOIN teams a
+					ON a.team_id = g.away_id AND a.season_id = g.away_season_id
+				LEFT JOIN teams h
+					ON h.team_id = g.home_id AND h.season_id = g.home_season_id
+				WHERE g.game_id IN (${toPlaceholders(gameIds)})`,
+			)
+			.all(...gameIds)
+		return new Map(rows.map((row) => [row.game_id, toGameRecord(row)]))
+	}
+
+	/**
+	 * Goals, assists, and penalties in `gameIds`: those of any of the players
+	 * (a goal they scored, or one they assisted), or the team's goals and
+	 * penalties. In scoresheet order within each game.
+	 */
+	getGameEvents(
+		gameIds: string[],
+		by:
+			| {kind: "players"; khlPlayerIds: string[]}
+			| {kind: "team"; teamId: string},
+	): GameEventRecord[] {
+		const games = toPlaceholders(gameIds)
+		const nameOf = (alias: string, idColumn: string, teamColumn: string) =>
+			`LEFT JOIN registrations ${alias}
+				ON ${alias}.khl_player_id = ${idColumn}
+				AND ${alias}.team_id = ${teamColumn}`
+		const goalRows = this.db
+			.query<
+				{
+					game_id: string
+					seq: number
+					team_id: string
+					period: string
+					time: string
+					type: string | null
+					scorer_khl_player_id: string
+					scorer_season_goals: number | null
+					scorer_name: string | null
+				},
+				string[]
+			>(
+				`SELECT g.*, r.name AS scorer_name FROM game_goals g
+				${nameOf("r", "g.scorer_khl_player_id", "g.team_id")}
+				WHERE g.game_id IN (${games})
+				ORDER BY g.game_id, g.seq`,
+			)
+			.all(...gameIds)
+		const assistRows = this.db
+			.query<
+				{
+					game_id: string
+					seq: number
+					khl_player_id: string
+					name: string | null
+				},
+				string[]
+			>(
+				`SELECT a.game_id, a.seq, a.khl_player_id, r.name
+				FROM game_goal_assists a
+				JOIN game_goals g USING (game_id, seq)
+				${nameOf("r", "a.khl_player_id", "g.team_id")}
+				WHERE a.game_id IN (${games})
+				ORDER BY a.game_id, a.seq, a.position`,
+			)
+			.all(...gameIds)
+		const penaltyRows = this.db
+			.query<
+				{
+					game_id: string
+					team_id: string
+					period: string
+					time: string
+					khl_player_id: string | null
+					infraction: string
+					duration: string
+					name: string | null
+				},
+				string[]
+			>(
+				`SELECT p.*, r.name FROM game_penalties p
+				${nameOf("r", "p.khl_player_id", "p.team_id")}
+				WHERE p.game_id IN (${games})
+				ORDER BY p.game_id, p.seq`,
+			)
+			.all(...gameIds)
+
+		const toRef = (id: string, name: string | null): KHLPlayerRef => ({
+			id,
+			// Recorded when the game was processed; the id is a last resort
+			name: name ?? id,
+		})
+		const assistsByGoal = new Map<string, KHLPlayerRef[]>()
+		for (const row of assistRows) {
+			const key = `${row.game_id}:${row.seq}`
+			assistsByGoal.set(key, [
+				...(assistsByGoal.get(key) ?? []),
+				toRef(row.khl_player_id, row.name),
+			])
+		}
+		// How the subject was in a goal, if at all
+		const getGoalKind = (goal: KHLGoal): "goal" | "assist" | null => {
+			return matchField(by, "kind", {
+				players: (b) => {
+					if (b.khlPlayerIds.includes(goal.scorer.id)) {
+						return "goal"
+					}
+					const assisted = goal.assists.some((a) =>
+						b.khlPlayerIds.includes(a.id),
+					)
+					return assisted ? "assist" : null
+				},
+				team: (b) => (goal.teamId === b.teamId ? "goal" : null),
+			})
+		}
+		const isSubjectPenalty = (penalty: KHLPenalty): boolean => {
+			return matchField(by, "kind", {
+				players: (b) =>
+					!!penalty.player &&
+					b.khlPlayerIds.includes(penalty.player.id),
+				team: (b) => penalty.teamId === b.teamId,
+			})
+		}
+		const goals = goalRows.flatMap((row): GameEventRecord[] => {
+			const goal: KHLGoal = {
+				period: row.period,
+				time: row.time,
+				teamId: row.team_id,
+				scorer: toRef(row.scorer_khl_player_id, row.scorer_name),
+				scorerSeasonGoals: row.scorer_season_goals,
+				assists: assistsByGoal.get(`${row.game_id}:${row.seq}`) ?? [],
+				type: row.type,
+			}
+			const kind = getGoalKind(goal)
+			return kind ? [{gameId: row.game_id, event: {kind, goal}}] : []
+		})
+		const penalties = penaltyRows.flatMap((row): GameEventRecord[] => {
+			const penalty: KHLPenalty = {
+				period: row.period,
+				time: row.time,
+				teamId: row.team_id,
+				player: row.khl_player_id
+					? toRef(row.khl_player_id, row.name)
+					: null,
+				infraction: row.infraction,
+				duration: row.duration,
+			}
+			return isSubjectPenalty(penalty)
+				? [{gameId: row.game_id, event: {kind: "penalty", penalty}}]
+				: []
+		})
+		return [...goals, ...penalties]
+	}
+
+	/** The games in `gameIds` any of the players dressed for */
+	getDressedGameIds(gameIds: string[], khlPlayerIds: string[]): Set<string> {
+		const rows = this.db
+			.query<{game_id: string}, string[]>(
+				`SELECT DISTINCT game_id FROM game_lineups
+				WHERE game_id IN (${toPlaceholders(gameIds)})
+					AND khl_player_id IN (${toPlaceholders(khlPlayerIds)})`,
+			)
+			.all(...gameIds, ...khlPlayerIds)
+		return new Set(rows.map((row) => row.game_id))
+	}
+
+	/** Each player's latest game they dressed for on that team, by start time */
+	getLatestDressedGameStarts(
+		keys: RegistrationKey[],
+	): Map<RegistrationKey, string> {
+		const ids = [
+			...new Set(keys.map((k) => parseRegistrationKey(k).khlPlayerId)),
+		]
+		const rows = this.db
+			.query<
+				{khl_player_id: string; team_id: string; starts_at: string},
+				string[]
+			>(
+				`SELECT l.khl_player_id,
+					CASE l.side WHEN 'home' THEN g.home_id ELSE g.away_id END
+						AS team_id,
+					max(g.starts_at) AS starts_at
+				FROM game_lineups l JOIN games g USING (game_id)
+				WHERE l.khl_player_id IN (${toPlaceholders(ids)})
+				GROUP BY 1, 2`,
+			)
+			.all(...ids)
+		const wanted = new Set(keys)
+		return new Map(
+			rows.flatMap((row) => {
+				const key = toRegistrationKey({
+					khlPlayerId: row.khl_player_id,
+					teamId: row.team_id,
+				})
+				return wanted.has(key) ? [[key, row.starts_at] as const] : []
+			}),
+		)
+	}
+
+	hasAppCacheEntry(key: string): boolean {
+		return !!this.db
+			.query<{found: number}, {key: string}>(
+				"SELECT 1 AS found FROM app_cache WHERE key = $key",
+			)
+			.get({key})
+	}
+
+	/** The KHL player ids registered on a team in a season */
+	getTeamSeasonPlayerIds(teamId: string, seasonId: string): string[] {
+		return this.db
+			.query<{khl_player_id: string}, {teamId: string; seasonId: string}>(
+				`SELECT khl_player_id FROM registration_seasons
+				WHERE team_id = $teamId AND season_id = $seasonId`,
+			)
+			.all({teamId, seasonId})
+			.map((row) => row.khl_player_id)
 	}
 
 	getRegistrations(playerId: string): Registration[] {
@@ -406,15 +926,9 @@ export class KHLDatabase {
 	getAppCacheEntry(key: string): StoredAppCacheEntry | null {
 		const row = this.db
 			.query<
-				{
-					value: Uint8Array<ArrayBuffer>
-					computed_at: number
-					stale_at: number
-				},
+				{value: Uint8Array<ArrayBuffer>; computed_at: number},
 				{key: string}
-			>(
-				"SELECT value, computed_at, stale_at FROM app_cache WHERE key = $key",
-			)
+			>("SELECT value, computed_at FROM app_cache WHERE key = $key")
 			.get({key})
 		if (!row) {
 			return null
@@ -423,17 +937,16 @@ export class KHLDatabase {
 			key,
 			value: new TextDecoder().decode(Bun.gunzipSync(row.value)),
 			computedAt: row.computed_at,
-			staleAt: row.stale_at,
 		}
 	}
 
 	setAppCacheEntry(entry: StoredAppCacheEntry): void {
 		this.db
 			.query(
-				`INSERT INTO app_cache (key, value, computed_at, stale_at)
-				VALUES ($key, $value, $computedAt, $staleAt)
+				`INSERT INTO app_cache (key, value, computed_at)
+				VALUES ($key, $value, $computedAt)
 				ON CONFLICT (key) DO UPDATE SET value = excluded.value,
-					computed_at = excluded.computed_at, stale_at = excluded.stale_at`,
+					computed_at = excluded.computed_at`,
 			)
 			.run({...entry, value: Bun.gzipSync(entry.value)})
 	}
@@ -494,5 +1007,38 @@ function toRegistration(row: RegistrationRow): Registration {
 			(a, b) => Number(a) - Number(b),
 		),
 		updatedAt: row.updated_at,
+	}
+}
+
+/** "?, ?, ?" for an IN list; "NULL" for an empty one, which matches nothing */
+function toPlaceholders(values: unknown[]): string {
+	return values.length > 0 ? values.map(() => "?").join(", ") : "NULL"
+}
+
+function toGameRecord(row: GameRow): GameRecordWithTeams {
+	return {
+		gameId: row.game_id,
+		startsAt: row.starts_at,
+		localDate: row.local_date,
+		localTime: row.local_time,
+		arenaId: row.arena_id,
+		away: {
+			id: row.away_id,
+			name: row.away_name ?? row.away_id,
+			logoUrl: row.away_logo_url,
+			seasonId: row.away_season_id,
+			goals: row.away_goals,
+			lineupPosted: row.away_lineup_posted === 1,
+		},
+		home: {
+			id: row.home_id,
+			name: row.home_name ?? row.home_id,
+			logoUrl: row.home_logo_url,
+			seasonId: row.home_season_id,
+			goals: row.home_goals,
+			lineupPosted: row.home_lineup_posted === 1,
+		},
+		hasSummary: row.has_summary === 1,
+		processedAt: row.processed_at,
 	}
 }

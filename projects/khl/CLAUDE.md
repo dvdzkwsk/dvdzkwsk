@@ -16,6 +16,9 @@ To run, smoke-test, typecheck, or screenshot the app, use the `run-khl` skill.
 - Every KHL fetch goes through `cache.cached(key, ttl, load)`. Use `getSeasonTtl(isCurrentSeason)` for season-scoped pages. Fetched pages are stored in `PageStore` by `fetchKHLPage` and `getLivebarnVenues`, so a new fetch should go through `readPage` too.
 - Values we compute from pages and want to keep across restarts go in `AppCache`, with a zod schema for reading them back.
 - A response that needs many KHL pages is built in the background by `KHLSyncer` and served from the app cache; a request never fans out to the KHL. Run background KHL work inside `runInKHLBackground`, so its fetches use the background rate limit instead of visitors'.
+- A page the syncer keeps (teams, schedules, team stats, player pages, box scores and lineups) is read by visitors with `maxPageAgeMs: getSyncedPageMaxAgeMs(isCurrentSeason)`, so they read what it keeps fresh instead of fetching.
+- Game data goes in the games tables by id; names and logos come from `teams` and `registrations` joins, never copied into game rows.
+- Pass a registration around as a `RegistrationKey` (`toRegistrationKey`), not as separate KHL player and team ids.
 - League-local dates and times come from `shared/LeagueTime.ts` (`getLeagueDayKey`, `toLeagueInstant`, `getGameEndsAt`, `isGameInProgress`, `getGameEventClockTime`, `DAY_MS`, and the other duration constants). Don't build another `Intl.DateTimeFormat` for the league's time zone or write `24 * 60 * 60_000` inline.
 - Reuse the existing parsing helpers: `parseClockTime`, `parseArenaLink`, `readStatCells`, `parseSeasonMenus`, and the `TEAM_HREF`, `PLAYER_HREF`, `GAME_HREF`, and `ARENA_HREF` patterns.
 - Look up teams with `findListedTeam` and `getListedDivisionName`, the current season with `getCurrentSeason()`, and rinks with `getRinkInfoOrFallback`.

@@ -142,9 +142,11 @@ export const PlayerRegistrationSchema = z.object({
 }) satisfies z.ZodType<PlayerRegistration>
 
 /**
- * Identifies a `PlayerRegistration`: one player on one team, under one KHL
- * player id. The id alone isn't enough, because a player can keep one id
- * across several teams (one player is on 8 teams under KHL player id 562354).
+ * A registration key identifies a `PlayerRegistration`: one player on one
+ * team, under one KHL player id. It's how a registration is passed around
+ * and looked up (a person, with all of their registrations, is a `playerId`).
+ * The id alone isn't enough, because a player can keep one id across several
+ * teams (one player is on 8 teams under KHL player id 562354).
  * Keyed by id alone:
  *
  * - The team picker would open whichever of the 8 teams is listed first, no
@@ -154,10 +156,26 @@ export const PlayerRegistrationSchema = z.object({
  *   so it would flag correct data on the other 7 teams as wrong, and a resync
  *   would overwrite it.
  */
-export function getPlayerRegistrationKey(
+export const RegistrationKeySchema = z
+	.string()
+	.regex(/^\d+-\d+$/, "expected <KHL player id>-<team id>")
+	.brand("RegistrationKey")
+
+/** "<KHL player id>-<team id>"; see toRegistrationKey */
+export type RegistrationKey = z.infer<typeof RegistrationKeySchema>
+
+export function toRegistrationKey(
 	r: Pick<PlayerRegistration, "khlPlayerId" | "teamId">,
-): string {
-	return `${r.khlPlayerId}-${r.teamId}`
+): RegistrationKey {
+	return `${r.khlPlayerId}-${r.teamId}` as RegistrationKey
+}
+
+export function parseRegistrationKey(key: RegistrationKey): {
+	khlPlayerId: string
+	teamId: string
+} {
+	const [khlPlayerId, teamId] = key.split("-") as [string, string]
+	return {khlPlayerId, teamId}
 }
 
 /** A team's season whose KHL schedule page failed to load */

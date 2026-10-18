@@ -78,6 +78,16 @@ export class PageStore {
 		}
 	}
 
+	/** When the page was last fetched, without reading it; null if never */
+	getFetchedAt(source: PageSource, url: string): number | null {
+		const row = this.db
+			.query<{fetched_at: number}, {url: string}>(
+				`SELECT fetched_at FROM ${PAGE_TABLES[source]} WHERE url = $url`,
+			)
+			.get({url})
+		return row?.fetched_at ?? null
+	}
+
 	/** Stores a fetched page; true if it differs from the stored copy */
 	put(source: PageSource, url: string, body: string): boolean {
 		const now = Date.now()
@@ -125,6 +135,14 @@ let pageStore: PageStore | null = null
 /** Where fetched pages are stored; until it's set, they're only fetched */
 export function setPageStore(store: PageStore) {
 	pageStore = store
+}
+
+/** When a page was last fetched; null if never, or nothing is stored */
+export function getPageFetchedAt(
+	source: PageSource,
+	url: string,
+): number | null {
+	return pageStore?.getFetchedAt(source, url) ?? null
 }
 
 /** How a read uses stored pages */

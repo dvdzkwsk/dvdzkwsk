@@ -8,8 +8,6 @@ export interface AppCacheValue<T> {
 	value: T
 	/** Epoch milliseconds */
 	computedAt: number
-	/** When it's due to be computed again; it's still served until then */
-	staleAt: number
 }
 
 /**
@@ -56,20 +54,23 @@ export class AppCache {
 		const value: AppCacheValue<T> = {
 			value: result.data,
 			computedAt: stored.computedAt,
-			staleAt: stored.staleAt,
 		}
 		this.values.set(key, value)
 		return value
 	}
 
-	set<T>(key: string, value: T, staleAt: number) {
+	/** Whether it was ever computed, without reading it */
+	has(key: string): boolean {
+		return this.values.has(key) || this.db.hasAppCacheEntry(key)
+	}
+
+	set<T>(key: string, value: T) {
 		const computedAt = Date.now()
 		this.db.setAppCacheEntry({
 			key,
 			value: JSON.stringify(value),
 			computedAt,
-			staleAt,
 		})
-		this.values.set(key, {value, computedAt, staleAt})
+		this.values.set(key, {value, computedAt})
 	}
 }

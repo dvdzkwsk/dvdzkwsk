@@ -27,7 +27,7 @@ import {
 	CHECK_CACHE_ENDPOINT,
 	GET_CACHE_ENTRY_ENDPOINT,
 	GET_PLAYER_INTEGRITY_ENDPOINT,
-	getPlayerRegistrationKey,
+	toRegistrationKey,
 	IntegrityCacheEntry,
 	IntegrityCacheKind,
 	IntegrityRegistration,
@@ -683,7 +683,7 @@ function useReportModel(
 	const entries = new Map(report.cache.map((e) => [e.key, e]))
 	const pagesByRegistration = new Map(
 		report.registrations.map((r) => {
-			return [getPlayerRegistrationKey(r), getPageNodes(r, entries)]
+			return [toRegistrationKey(r), getPageNodes(r, entries)]
 		}),
 	)
 	return {
@@ -766,7 +766,7 @@ function getProblems(model: ReportModel): Problem[] {
 		})
 	}
 	for (const r of report.registrations) {
-		const key = getPlayerRegistrationKey(r)
+		const key = toRegistrationKey(r)
 		if (r.differences.length > 0) {
 			const fields = [
 				...new Set(
@@ -806,7 +806,7 @@ function getProblems(model: ReportModel): Problem[] {
 		}
 	}
 	for (const u of report.unlinked) {
-		const key = getPlayerRegistrationKey(u)
+		const key = toRegistrationKey(u)
 		const facts: Fact[] = [
 			...getRegistrationFacts(u),
 			["Seasons", formatSeasonIds(u.seasonIds) ?? "none"],
@@ -968,7 +968,7 @@ const IntegrityGraph = ({
 	})
 	const problemIds = new Set(problems.map((p) => getSelectionId(p.selection)))
 	const hasProblem = (r: IntegrityRegistration) => {
-		const key = getPlayerRegistrationKey(r)
+		const key = toRegistrationKey(r)
 		return (
 			problemIds.has(getSelectionId({kind: "registration", key})) ||
 			model.pagesByRegistration
@@ -1031,7 +1031,7 @@ const IntegrityGraph = ({
 				)}
 				<ul className="IntegrityGraph-tree">
 					{registrations.map((r) => {
-						const key = getPlayerRegistrationKey(r)
+						const key = toRegistrationKey(r)
 						const pages = model.pagesByRegistration.get(key)!
 						const profile = pages.find((p) => p.kind === "profile")
 						const schedules = pages.filter(
@@ -1117,7 +1117,7 @@ const IntegrityGraph = ({
 							</p>
 							<ul className="IntegrityGraph-tree">
 								{report.unlinked.map((u) => {
-									const key = getPlayerRegistrationKey(u)
+									const key = toRegistrationKey(u)
 									return (
 										<li
 											key={key}
@@ -1480,7 +1480,7 @@ const IntegrityInspector = ({
 			},
 			registration: (s) => {
 				const r = report.registrations.find((r) => {
-					return getPlayerRegistrationKey(r) === s.key
+					return toRegistrationKey(r) === s.key
 				})
 				return r ? <RegistrationInspector registration={r} /> : null
 			},
@@ -1490,7 +1490,7 @@ const IntegrityInspector = ({
 			},
 			unlinked: (s) => {
 				const u = report.unlinked.find((u) => {
-					return getPlayerRegistrationKey(u) === s.key
+					return toRegistrationKey(u) === s.key
 				})
 				return u ? <UnlinkedInspector unlinked={u} /> : null
 			},

@@ -6,6 +6,7 @@ import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {HTMLElement, parse} from "node-html-parser"
 import {z} from "zod"
 import {readPage} from "./PageStore.js"
+import {parseRegistrationKey, RegistrationKey} from "../shared/ApiJson.js"
 import {URLS} from "../shared/KHLConfig.js"
 import {
 	KHLArena,
@@ -78,12 +79,18 @@ export async function getKHLTeams(seasonId?: string): Promise<KHLTeam[]> {
 export async function getKHLTeamsPage(
 	seasonId?: string,
 ): Promise<KHLTeamsPage> {
+	const url = getKHLTeamsPageUrl(seasonId)
+	const root = await fetchKHLPage(url)
+	return KHLTeamsPageSchema.parse(parseKHLTeamsPage(root, url))
+}
+
+/** Defaults to the current season */
+export function getKHLTeamsPageUrl(seasonId?: string): URL {
 	const url = new URL("/teams/", URLS.KHL)
 	if (seasonId !== undefined) {
 		url.searchParams.set("season", seasonId)
 	}
-	const root = await fetchKHLPage(url)
-	return KHLTeamsPageSchema.parse(parseKHLTeamsPage(root, url))
+	return url
 }
 
 /** The season id KHL uses to search every season at once */
@@ -109,14 +116,14 @@ export async function searchKHLPlayers(
  * the page to show one team's details.
  */
 export async function getKHLPlayer(
-	playerId: string,
-	teamId: string,
+	registrationKey: RegistrationKey,
 	seasonId: string,
 ): Promise<KHLPlayer> {
-	const url = getKHLPlayerUrl(playerId, teamId, seasonId)
+	const url = getKHLPlayerUrl(registrationKey, seasonId)
+	const {khlPlayerId, teamId} = parseRegistrationKey(registrationKey)
 	const root = await fetchKHLPage(url)
 	return KHLPlayerSchema.parse(
-		parseKHLPlayer(root, url, {playerId, teamId, seasonId}),
+		parseKHLPlayer(root, url, {playerId: khlPlayerId, teamId, seasonId}),
 	)
 }
 
@@ -130,11 +137,11 @@ export function getKHLPlayerSearchUrl(query: string, seasonId?: string): URL {
 }
 
 export function getKHLPlayerUrl(
-	playerId: string,
-	teamId: string,
+	registrationKey: RegistrationKey,
 	seasonId: string,
 ): URL {
-	const url = new URL(`/player/${playerId}/home/`, URLS.KHL)
+	const {khlPlayerId, teamId} = parseRegistrationKey(registrationKey)
+	const url = new URL(`/player/${khlPlayerId}/home/`, URLS.KHL)
 	url.searchParams.set("team", teamId)
 	url.searchParams.set("season", seasonId)
 	return url
@@ -144,12 +151,17 @@ export async function getKHLTeamSchedule(
 	teamId: string,
 	seasonId: string,
 ): Promise<KHLGame[]> {
-	const url = new URL(`/team/${teamId}/schedule/`, URLS.KHL)
-	url.searchParams.set("season", seasonId)
+	const url = getKHLTeamScheduleUrl(teamId, seasonId)
 	const root = await fetchKHLPage(url)
 	return z
 		.array(KHLGameSchema)
 		.parse(parseKHLTeamSchedule(root, url, {teamId, seasonId}))
+}
+
+export function getKHLTeamScheduleUrl(teamId: string, seasonId: string): URL {
+	const url = new URL(`/team/${teamId}/schedule/`, URLS.KHL)
+	url.searchParams.set("season", seasonId)
+	return url
 }
 
 /** A team's roster with stats for one season, plus every season it played. */
@@ -157,12 +169,17 @@ export async function getKHLTeamStats(
 	teamId: string,
 	seasonId: string,
 ): Promise<KHLTeamStats> {
-	const url = new URL(`/team/${teamId}/stats/`, URLS.KHL)
-	url.searchParams.set("season", seasonId)
+	const url = getKHLTeamStatsUrl(teamId, seasonId)
 	const root = await fetchKHLPage(url)
 	return KHLTeamStatsSchema.parse(
 		parseKHLTeamStats(root, url, {teamId, seasonId}),
 	)
+}
+
+export function getKHLTeamStatsUrl(teamId: string, seasonId: string): URL {
+	const url = new URL(`/team/${teamId}/stats/`, URLS.KHL)
+	url.searchParams.set("season", seasonId)
+	return url
 }
 
 /** Every division's standings for a season. Defaults to the current season. */
@@ -195,9 +212,13 @@ export async function getKHLGamePreviewStats(
 
 /** The game's period-by-period score, goals, and penalties. */
 export async function getKHLBoxScore(gameId: string): Promise<KHLBoxScore> {
-	const url = new URL(`/game/${gameId}/summary`, URLS.KHL)
+	const url = getKHLBoxScoreUrl(gameId)
 	const root = await fetchKHLPage(url)
 	return KHLBoxScoreSchema.parse(parseKHLBoxScore(root, url, gameId))
+}
+
+export function getKHLBoxScoreUrl(gameId: string): URL {
+	return new URL(`/game/${gameId}/summary`, URLS.KHL)
 }
 
 /** Every game on one league-local day ("yyyy-MM-dd"), past or future. */
@@ -214,9 +235,13 @@ export async function getKHLScoreboard(
 
 /** Each team's players in a game and their stats in it. */
 export async function getKHLGameStats(gameId: string): Promise<KHLGameStats> {
-	const url = new URL(`/game/${gameId}/team-stats`, URLS.KHL)
+	const url = getKHLGameStatsUrl(gameId)
 	const root = await fetchKHLPage(url)
 	return KHLGameStatsSchema.parse(parseKHLGameStats(root, url, gameId))
+}
+
+export function getKHLGameStatsUrl(gameId: string): URL {
+	return new URL(`/game/${gameId}/team-stats`, URLS.KHL)
 }
 
 export async function getKHLArena(arenaId: string): Promise<KHLArena> {

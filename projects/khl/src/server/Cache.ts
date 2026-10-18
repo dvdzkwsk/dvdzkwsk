@@ -23,16 +23,27 @@ export class KHLCache {
 	private mustFetch = new Set<string>()
 
 	/**
-	 * Memoizes `load` for `ttlMs`, reading stored pages up to `ttlMs` old, or
-	 * older ones if fetching them fails. Concurrent callers share one
-	 * in-flight request, and failures aren't cached.
+	 * Memoizes `load` for `ttlMs`, reading stored pages up to `ttlMs` old (or
+	 * `maxPageAgeMs`), or older ones if fetching them fails. Concurrent
+	 * callers share one in-flight request, and failures aren't cached.
 	 */
 	cached<T>(
 		key: string,
 		ttlMs: number,
 		load: () => Promise<T>,
-		/** Once loaded, how long to keep this value instead of `ttlMs` */
-		getTtlMs?: (value: T) => number,
+		{
+			getTtlMs,
+			maxPageAgeMs = ttlMs,
+		}: {
+			/** Once loaded, how long to keep this value instead of `ttlMs` */
+			getTtlMs?: (value: T) => number
+			/**
+			 * How old a stored page can be and still be read instead of
+			 * fetched. Longer than `ttlMs` for pages the syncer keeps fresh,
+			 * so a short `ttlMs` picks up its refreshes without fetching.
+			 */
+			maxPageAgeMs?: number
+		} = {},
 	): Promise<T> {
 		const hit = this.entries.get(key)
 		if (hit && hit.expiresAt > Date.now()) {
@@ -41,7 +52,7 @@ export class KHLCache {
 		}
 		const policy = this.mustFetch.delete(key)
 			? {maxAgeMs: 0, allowStale: false}
-			: {maxAgeMs: ttlMs, allowStale: true}
+			: {maxAgeMs: maxPageAgeMs, allowStale: true}
 		const value = withPageReadPolicy(policy, load)
 		const entry: CacheEntry = {
 			expiresAt: Date.now() + ttlMs,

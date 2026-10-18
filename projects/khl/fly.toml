@@ -14,7 +14,7 @@ KHL_STATIC_DIR = "/app/website"
 KHL_DB_PATH = "/data/khl.sqlite"
 # Every fetched KHL and LiveBarn page, gzipped; about 1.5-3 GB once the whole
 # league is synced
-KHL_PAGES_DB_PATH = "/data/khl-pages.sqlite"
+KHL_SOURCES_DB_PATH = "/data/sources.sqlite"
 
 # SQLite on a volume means exactly one machine. `pnpm run deploy` creates the
 # volume at this size, and grows it to this size if it's smaller.

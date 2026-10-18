@@ -2,7 +2,6 @@ import * as fs from "fs"
 import * as path from "path"
 import {ConsoleTransport, Logger, setLoggerTransports} from "@dvdzkwsk/logger"
 import {ApiError, registerEndpoint} from "@dvdzkwsk/util/ApiServerUtil"
-import {sleep} from "@dvdzkwsk/util/AsyncUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
@@ -1235,12 +1234,10 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 	return players
 })
 
-const SYNC_TEAM_GAP_MS = 1_000
-
 /**
- * A season's player list, from every team's stats page (~175 of them). Teams
- * are read one at a time and spaced out, since the KHL site starts returning
- * 403s at a few requests a second, which would fail visitors' requests too.
+ * A season's player list, from every team's stats page (~175 of them), read
+ * one team at a time. KHLSyncer runs it in the background lane, which paces
+ * the fetches.
  */
 async function loadPlayers(
 	season: KHLSeason,
@@ -1253,7 +1250,6 @@ async function loadPlayers(
 	const unavailableTeams: KHLTeam[] = []
 	const loaded: {team: KHLTeam; roster: TeamRoster}[] = []
 	for (const team of teamsPage.teams) {
-		await sleep(SYNC_TEAM_GAP_MS)
 		try {
 			const stats = await getTeamStats(
 				team.id,

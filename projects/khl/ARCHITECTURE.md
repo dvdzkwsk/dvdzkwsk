@@ -46,7 +46,7 @@ flowchart LR
     Express --> DB
     Status --> DB
     DB --> SQLite
-    KHL -- "≤2 concurrent" --> KHLSite
+    KHL -- "visitors ≤2/s · background ≤1/s" --> KHLSite
     LB --> LBAPI
     Status -. "HEAD" .-> KHLSite
     Status -. "HEAD" .-> LBAPI
@@ -56,7 +56,7 @@ flowchart LR
 
 | Component | Files | Responsibility |
 | --- | --- | --- |
-| Scraper | `src/server/KHL.ts` | One `getKHL*` per league page. Each fetches through `fetchKHLPage` (a 2-request concurrency limiter around `doFetch`) and hands the DOM to a pure `parseKHL*` that returns a `KHLJson` shape or throws `newParseError`. Knows nothing about caching or the API. |
+| Scraper | `src/server/KHL.ts` | One `getKHL*` per league page. Each fetches through `fetchKHLPage`, which rate-limits `doFetch` per lane (2 requests a second for visitors, 1 for background work run through `runInKHLBackground`), and hands the DOM to a pure `parseKHL*` that returns a `KHLJson` shape or throws `newParseError`. Knows nothing about caching or the API. |
 | LiveBarn client | `src/server/LiveBarn.ts` | Fetches the venues list (validated by `LiveBarnJson.ts`). The live/VOD watch URLs are built by `src/shared/LiveBarn.ts`, so the client can link scoresheet events to their moment in a replay. |
 | Arena mapping | `src/server/Arenas.ts` | Hand-maintained map from KHL arena id to LiveBarn surfaces, display name, and city. The two sites disagree on names and addresses, so nothing here is inferred. |
 | Cache | `src/server/Cache.ts` | `KHLCache`: memoizes loaded KHL and LiveBarn data by key and TTL, sharing in-flight loads, and writes each value through to SQLite so it survives restarts. A stored value is read back through the caller's zod schema; one that no longer matches is loaded again. |
@@ -106,7 +106,7 @@ In dev, Vite serves the client on `:3000` and proxies `/api` to the server on `:
 
 When the league changes its markup, the fix belongs in the matching `parseKHL*`. When a response needs new data, add a field to `KHLJson.ts` and then use it from `Server.ts`.
 
-The KHL site starts returning 403s at a few requests a second, so anything that reads many pages runs in the background instead of in a request. `KHLSyncer` builds each season's player list from about 175 team pages, one team a second, and refreshes it halfway through its TTL (12 hours for the current season, 14 days for past ones), so a failed refresh still leaves the last list in place. `/api/players` serves the cached list or a 503 while the first sync runs, and never fetches itself.
+The KHL site starts returning 403s at a few requests a second, counting all of ours together, so `fetchKHLPage` has a rate limiter for each lane. A fetch for a visitor waiting on an uncached page gets up to 2 a second. Background work (anything inside `runInKHLBackground`) gets 1 a second on its own limiter, so visitors never queue behind it. Anything that reads many pages runs in the background instead of in a request. `KHLSyncer` builds each season's player list from about 175 team pages in the background lane, and refreshes it halfway through its TTL (12 hours for the current season, 14 days for past ones), so a failed refresh still leaves the last list in place. `/api/players` serves the cached list or a 503 while the first sync runs, and never fetches itself.
 
 ### 3. KHL ↔ LiveBarn: `Arenas.ts` with runtime verification
 

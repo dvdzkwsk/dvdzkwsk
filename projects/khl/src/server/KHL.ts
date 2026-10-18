@@ -1,6 +1,8 @@
+import {AsyncLocalStorage} from "async_hooks"
 import {Logger} from "@dvdzkwsk/logger"
-import {createConcurrencyLimiter} from "@dvdzkwsk/util/AsyncUtil"
+import {createRateLimiter} from "@dvdzkwsk/util/AsyncUtil"
 import {doFetch} from "@dvdzkwsk/util/FetchUtil"
+import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {HTMLElement, parse} from "node-html-parser"
 import {z} from "zod"
 import {URLS} from "../shared/KHLConfig.js"
@@ -222,11 +224,34 @@ export async function getKHLArena(arenaId: string): Promise<KHLArena> {
 	return KHLArenaSchema.parse(parseKHLArena(root, url, arenaId))
 }
 
-// The site starts returning 403s when hit with ~10 concurrent requests
-const limitKHLRequests = createConcurrencyLimiter(2)
+/**
+ * Who a KHL fetch is for: a visitor waiting on a page we haven't cached, or
+ * background work (KHLSyncer) that nobody is waiting on
+ */
+type KHLRequestLane = "visitor" | "background"
+
+const khlRequestLane = new AsyncLocalStorage<KHLRequestLane>()
+
+/**
+ * The site starts returning 403s at a few requests a second (4.5 a second
+ * was blocked, 1 a second wasn't), counting all of ours together. Each lane
+ * has its own limiter, so a visitor never waits behind background work, and
+ * the two together stay at 3 requests a second.
+ */
+const KHL_REQUEST_LIMITERS = {
+	visitor: createRateLimiter(2),
+	background: createRateLimiter(1),
+}
+
+/** Runs `work` with its KHL fetches in the background lane */
+export function runInKHLBackground<T>(work: () => Promise<T>): Promise<T> {
+	return khlRequestLane.run("background", work)
+}
 
 async function fetchKHLPage(url: URL): Promise<HTMLElement> {
-	const html = await limitKHLRequests(() => {
+	const lane = khlRequestLane.getStore() ?? "visitor"
+	const limit = matchValue(lane, KHL_REQUEST_LIMITERS)
+	const html = await limit(() => {
 		return doFetch({
 			method: "GET",
 			url: url.toString(),

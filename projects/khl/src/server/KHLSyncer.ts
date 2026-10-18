@@ -1,6 +1,7 @@
 import {Logger} from "@dvdzkwsk/logger"
 import {sleep} from "@dvdzkwsk/util/AsyncUtil"
 import {KHLCache} from "./Cache.js"
+import {runInKHLBackground} from "./KHL.js"
 import {PlayersResponse} from "../shared/ApiJson.js"
 import {KHLSeason} from "../shared/KHLJson.js"
 import {DAY_MS, HOUR_MS, MINUTE_MS} from "../shared/LeagueTime.js"
@@ -59,8 +60,15 @@ export class KHLSyncer {
 		void this.run()
 	}
 
-	/** Syncs the first season that's due; false if none is */
-	async syncNext(): Promise<boolean> {
+	/**
+	 * Syncs the first season that's due; false if none is. Its KHL fetches
+	 * share the background rate limit, so visitors' requests don't wait on it.
+	 */
+	syncNext(): Promise<boolean> {
+		return runInKHLBackground(() => this.syncFirstDue())
+	}
+
+	private async syncFirstDue(): Promise<boolean> {
 		let listed: {current: KHLSeason; seasons: KHLSeason[]}
 		try {
 			listed = await this.source.getSeasons()

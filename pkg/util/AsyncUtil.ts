@@ -36,3 +36,20 @@ export function createConcurrencyLimiter(concurrency: number) {
 		}
 	}
 }
+
+/**
+ * Returns a function that starts tasks at most `perSecond` times a second,
+ * in order, queueing the rest. Only the starts are spaced out, so slow tasks
+ * can still overlap.
+ */
+export function createRateLimiter(perSecond: number) {
+	const intervalMs = 1000 / perSecond
+	let nextStartAt = 0
+
+	return async function limit<T>(task: () => Promise<T>): Promise<T> {
+		const startAt = Math.max(Date.now(), nextStartAt)
+		nextStartAt = startAt + intervalMs
+		await sleep(startAt - Date.now())
+		return task()
+	}
+}

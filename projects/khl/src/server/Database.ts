@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
-import {matchField} from "@dvdzkwsk/util/MatchUtil"
+import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {Database as SQLiteDatabase} from "bun:sqlite"
 import {
 	ActivityEvent,
@@ -179,44 +179,41 @@ const MIGRATIONS = [
 		home_lineup_posted INTEGER NOT NULL,
 		processed_at INTEGER NOT NULL
 	);
-	-- Players are KHL player ids; their names come from registrations, by
-	-- (KHL player id, team). seq is the goal's order in the game.
-	CREATE TABLE game_goals (
+	-- Goals and penalties, in scoresheet order (seq). Columns for one kind
+	-- are null for the other.
+	CREATE TABLE game_events (
 		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
 		seq INTEGER NOT NULL,
+		kind TEXT NOT NULL,
 		team_id TEXT NOT NULL,
 		period TEXT NOT NULL,
 		time TEXT NOT NULL,
-		type TEXT,
-		scorer_khl_player_id TEXT NOT NULL,
+		goal_type TEXT,
 		scorer_season_goals INTEGER,
-		PRIMARY KEY (game_id, seq)
+		infraction TEXT,
+		duration TEXT,
+		PRIMARY KEY (game_id, seq),
+		CHECK (kind IN ('goal', 'penalty')),
+		CHECK (kind = 'goal' OR (goal_type IS NULL AND scorer_season_goals IS NULL)),
+		CHECK (kind = 'penalty' OR (infraction IS NULL AND duration IS NULL)),
+		CHECK (kind = 'goal' OR (infraction IS NOT NULL AND duration IS NOT NULL))
 	);
-	CREATE INDEX game_goals_scorer ON game_goals (scorer_khl_player_id);
-	CREATE TABLE game_goal_assists (
+	-- Who was in each event, by KHL player id; their names come from
+	-- registrations, by (KHL player id, the event's team). A bench penalty
+	-- has no one.
+	CREATE TABLE game_event_players (
 		game_id TEXT NOT NULL,
 		seq INTEGER NOT NULL,
-		-- The assist's order on the goal
+		role TEXT NOT NULL,
+		-- The assist's order on the goal; 0 for a scorer or penalized player
 		position INTEGER NOT NULL,
 		khl_player_id TEXT NOT NULL,
-		PRIMARY KEY (game_id, seq, position),
-		FOREIGN KEY (game_id, seq) REFERENCES game_goals (game_id, seq)
-			ON DELETE CASCADE
+		PRIMARY KEY (game_id, seq, role, position),
+		FOREIGN KEY (game_id, seq) REFERENCES game_events (game_id, seq)
+			ON DELETE CASCADE,
+		CHECK (role IN ('scorer', 'assist', 'penalized'))
 	);
-	CREATE INDEX game_goal_assists_player ON game_goal_assists (khl_player_id);
-	CREATE TABLE game_penalties (
-		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
-		seq INTEGER NOT NULL,
-		team_id TEXT NOT NULL,
-		period TEXT NOT NULL,
-		time TEXT NOT NULL,
-		-- Null for a bench penalty
-		khl_player_id TEXT,
-		infraction TEXT NOT NULL,
-		duration TEXT NOT NULL,
-		PRIMARY KEY (game_id, seq)
-	);
-	CREATE INDEX game_penalties_player ON game_penalties (khl_player_id);
+	CREATE INDEX game_event_players_player ON game_event_players (khl_player_id);
 	-- Who dressed, by KHL player id
 	CREATE TABLE game_lineups (
 		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
@@ -319,6 +316,25 @@ interface TeamDisplay {
 	logoUrl: string | null
 }
 
+/** A goal or penalty as the box score lists it */
+export type ScoresheetEvent =
+	{kind: "goal"; goal: KHLGoal} | {kind: "penalty"; penalty: KHLPenalty}
+
+type EventRole = "scorer" | "assist" | "penalized"
+
+interface EventRow {
+	game_id: string
+	seq: number
+	kind: ScoresheetEvent["kind"]
+	team_id: string
+	period: string
+	time: string
+	goal_type: string | null
+	scorer_season_goals: number | null
+	infraction: string | null
+	duration: string | null
+}
+
 /** A goal or penalty in a game, with player names from registrations */
 export interface GameEventRecord {
 	gameId: string
@@ -406,7 +422,8 @@ export class KHLDatabase {
 	saveGame(
 		game: GameRecord,
 		teams: TeamRecord[],
-		{goals, penalties}: {goals: KHLGoal[]; penalties: KHLPenalty[]},
+		/** In scoresheet order */
+		events: ScoresheetEvent[],
 		lineups: GameLineupRecord[],
 	): void {
 		this.db.transaction(() => {
@@ -446,49 +463,21 @@ export class KHLDatabase {
 					homeLineupPosted: game.home.lineupPosted ? 1 : 0,
 					processedAt: game.processedAt,
 				})
-			const insertGoal = this.db.query(
-				`INSERT INTO game_goals VALUES ($gameId, $seq, $teamId, $period,
-					$time, $type, $scorer, $scorerSeasonGoals)`,
+			const insertEvent = this.db.query(
+				`INSERT INTO game_events VALUES ($gameId, $seq, $kind, $teamId,
+					$period, $time, $goalType, $scorerSeasonGoals, $infraction,
+					$duration)`,
 			)
-			const insertAssist = this.db.query(
-				`INSERT INTO game_goal_assists VALUES ($gameId, $seq, $position,
-					$khlPlayerId)`,
+			const insertPlayer = this.db.query(
+				`INSERT INTO game_event_players VALUES ($gameId, $seq, $role,
+					$position, $khlPlayerId)`,
 			)
-			goals.forEach((goal, seq) => {
-				insertGoal.run({
-					gameId: game.gameId,
-					seq,
-					teamId: goal.teamId,
-					period: goal.period,
-					time: goal.time,
-					type: goal.type,
-					scorer: goal.scorer.id,
-					scorerSeasonGoals: goal.scorerSeasonGoals,
-				})
-				goal.assists.forEach((assist, position) => {
-					insertAssist.run({
-						gameId: game.gameId,
-						seq,
-						position,
-						khlPlayerId: assist.id,
-					})
-				})
-			})
-			const insertPenalty = this.db.query(
-				`INSERT INTO game_penalties VALUES ($gameId, $seq, $teamId, $period,
-					$time, $khlPlayerId, $infraction, $duration)`,
-			)
-			penalties.forEach((penalty, seq) => {
-				insertPenalty.run({
-					gameId: game.gameId,
-					seq,
-					teamId: penalty.teamId,
-					period: penalty.period,
-					time: penalty.time,
-					khlPlayerId: penalty.player?.id ?? null,
-					infraction: penalty.infraction,
-					duration: penalty.duration,
-				})
+			events.forEach((event, seq) => {
+				const {row, players} = toEventRow(event)
+				insertEvent.run({gameId: game.gameId, seq, ...row})
+				for (const player of players) {
+					insertPlayer.run({gameId: game.gameId, seq, ...player})
+				}
 			})
 			const insertLineup = this.db.query(
 				`INSERT OR IGNORE INTO game_lineups (game_id, side, khl_player_id)
@@ -517,9 +506,9 @@ export class KHLDatabase {
 	}
 
 	/**
-	 * Goals, assists, and penalties in `gameIds`: those of any of the players
-	 * (a goal they scored, or one they assisted), or the team's goals and
-	 * penalties. In scoresheet order within each game.
+	 * Goals, assists, and penalties in `gameIds`: those any of the players were
+	 * in (a goal they scored or assisted, or their penalty), or the team's
+	 * goals and penalties. In scoresheet order within each game.
 	 */
 	getGameEvents(
 		gameIds: string[],
@@ -528,135 +517,94 @@ export class KHLDatabase {
 			| {kind: "team"; teamId: string},
 	): GameEventRecord[] {
 		const games = toPlaceholders(gameIds)
-		const nameOf = (alias: string, idColumn: string, teamColumn: string) =>
-			`LEFT JOIN registrations ${alias}
-				ON ${alias}.khl_player_id = ${idColumn}
-				AND ${alias}.team_id = ${teamColumn}`
-		const goalRows = this.db
-			.query<
-				{
-					game_id: string
-					seq: number
-					team_id: string
-					period: string
-					time: string
-					type: string | null
-					scorer_khl_player_id: string
-					scorer_season_goals: number | null
-					scorer_name: string | null
-				},
-				string[]
-			>(
-				`SELECT g.*, r.name AS scorer_name FROM game_goals g
-				${nameOf("r", "g.scorer_khl_player_id", "g.team_id")}
-				WHERE g.game_id IN (${games})
-				ORDER BY g.game_id, g.seq`,
+		const [where, params] = matchField(by, "kind", {
+			players: (b) => [
+				`EXISTS (SELECT 1 FROM game_event_players p
+					WHERE p.game_id = e.game_id AND p.seq = e.seq
+					AND p.khl_player_id IN (${toPlaceholders(b.khlPlayerIds)}))`,
+				b.khlPlayerIds,
+			],
+			team: (b) => ["e.team_id = ?", [b.teamId]],
+		})
+		const eventRows = this.db
+			.query<EventRow, string[]>(
+				`SELECT e.* FROM game_events e
+				WHERE e.game_id IN (${games}) AND ${where}
+				ORDER BY e.game_id, e.seq`,
 			)
-			.all(...gameIds)
-		const assistRows = this.db
+			.all(...gameIds, ...params)
+		const playerRows = this.db
 			.query<
 				{
 					game_id: string
 					seq: number
+					role: EventRole
 					khl_player_id: string
 					name: string | null
 				},
 				string[]
 			>(
-				`SELECT a.game_id, a.seq, a.khl_player_id, r.name
-				FROM game_goal_assists a
-				JOIN game_goals g USING (game_id, seq)
-				${nameOf("r", "a.khl_player_id", "g.team_id")}
-				WHERE a.game_id IN (${games})
-				ORDER BY a.game_id, a.seq, a.position`,
-			)
-			.all(...gameIds)
-		const penaltyRows = this.db
-			.query<
-				{
-					game_id: string
-					team_id: string
-					period: string
-					time: string
-					khl_player_id: string | null
-					infraction: string
-					duration: string
-					name: string | null
-				},
-				string[]
-			>(
-				`SELECT p.*, r.name FROM game_penalties p
-				${nameOf("r", "p.khl_player_id", "p.team_id")}
+				`SELECT p.game_id, p.seq, p.role, p.khl_player_id, r.name
+				FROM game_event_players p
+				JOIN game_events e USING (game_id, seq)
+				LEFT JOIN registrations r
+					ON r.khl_player_id = p.khl_player_id AND r.team_id = e.team_id
 				WHERE p.game_id IN (${games})
-				ORDER BY p.game_id, p.seq`,
+				ORDER BY p.game_id, p.seq, p.position`,
 			)
 			.all(...gameIds)
-
-		const toRef = (id: string, name: string | null): KHLPlayerRef => ({
-			id,
-			// Recorded when the game was processed; the id is a last resort
-			name: name ?? id,
-		})
-		const assistsByGoal = new Map<string, KHLPlayerRef[]>()
-		for (const row of assistRows) {
+		const playersByEvent = new Map<string, typeof playerRows>()
+		for (const row of playerRows) {
 			const key = `${row.game_id}:${row.seq}`
-			assistsByGoal.set(key, [
-				...(assistsByGoal.get(key) ?? []),
-				toRef(row.khl_player_id, row.name),
-			])
+			playersByEvent.set(key, [...(playersByEvent.get(key) ?? []), row])
 		}
-		// How the subject was in a goal, if at all
-		const getGoalKind = (goal: KHLGoal): "goal" | "assist" | null => {
-			return matchField(by, "kind", {
-				players: (b) => {
-					if (b.khlPlayerIds.includes(goal.scorer.id)) {
-						return "goal"
+
+		return eventRows.map((row): GameEventRecord => {
+			const players =
+				playersByEvent.get(`${row.game_id}:${row.seq}`) ?? []
+			const refs = (role: EventRole): KHLPlayerRef[] =>
+				players
+					.filter((p) => p.role === role)
+					.map((p) => ({
+						id: p.khl_player_id,
+						// Recorded when the game was processed; the id is a last resort
+						name: p.name ?? p.khl_player_id,
+					}))
+			const event = matchValue(row.kind, {
+				goal: () => {
+					const goal: KHLGoal = {
+						period: row.period,
+						time: row.time,
+						teamId: row.team_id,
+						scorer: refs("scorer")[0]!,
+						scorerSeasonGoals: row.scorer_season_goals,
+						assists: refs("assist"),
+						type: row.goal_type,
 					}
-					const assisted = goal.assists.some((a) =>
-						b.khlPlayerIds.includes(a.id),
-					)
-					return assisted ? "assist" : null
+					// For a player, a goal they only assisted is an assist
+					const kind = matchField(by, "kind", {
+						players: (b) =>
+							b.khlPlayerIds.includes(goal.scorer.id)
+								? ("goal" as const)
+								: ("assist" as const),
+						team: () => "goal" as const,
+					})
+					return {kind, goal}
 				},
-				team: (b) => (goal.teamId === b.teamId ? "goal" : null),
-			})
-		}
-		const isSubjectPenalty = (penalty: KHLPenalty): boolean => {
-			return matchField(by, "kind", {
-				players: (b) =>
-					!!penalty.player &&
-					b.khlPlayerIds.includes(penalty.player.id),
-				team: (b) => penalty.teamId === b.teamId,
-			})
-		}
-		const goals = goalRows.flatMap((row): GameEventRecord[] => {
-			const goal: KHLGoal = {
-				period: row.period,
-				time: row.time,
-				teamId: row.team_id,
-				scorer: toRef(row.scorer_khl_player_id, row.scorer_name),
-				scorerSeasonGoals: row.scorer_season_goals,
-				assists: assistsByGoal.get(`${row.game_id}:${row.seq}`) ?? [],
-				type: row.type,
-			}
-			const kind = getGoalKind(goal)
-			return kind ? [{gameId: row.game_id, event: {kind, goal}}] : []
+				penalty: (): ActivityEvent => ({
+					kind: "penalty",
+					penalty: {
+						period: row.period,
+						time: row.time,
+						teamId: row.team_id,
+						player: refs("penalized")[0] ?? null,
+						infraction: row.infraction!,
+						duration: row.duration!,
+					},
+				}),
+			})()
+			return {gameId: row.game_id, event}
 		})
-		const penalties = penaltyRows.flatMap((row): GameEventRecord[] => {
-			const penalty: KHLPenalty = {
-				period: row.period,
-				time: row.time,
-				teamId: row.team_id,
-				player: row.khl_player_id
-					? toRef(row.khl_player_id, row.name)
-					: null,
-				infraction: row.infraction,
-				duration: row.duration,
-			}
-			return isSubjectPenalty(penalty)
-				? [{gameId: row.game_id, event: {kind: "penalty", penalty}}]
-				: []
-		})
-		return [...goals, ...penalties]
 	}
 
 	/** The games in `gameIds` any of the players dressed for */
@@ -1041,4 +989,67 @@ function toGameRecord(row: GameRow): GameRecordWithTeams {
 		hasSummary: row.has_summary === 1,
 		processedAt: row.processed_at,
 	}
+}
+
+/** An event's game_events columns and its game_event_players rows */
+function toEventRow(event: ScoresheetEvent): {
+	row: {
+		kind: ScoresheetEvent["kind"]
+		teamId: string
+		period: string
+		time: string
+		goalType: string | null
+		scorerSeasonGoals: number | null
+		infraction: string | null
+		duration: string | null
+	}
+	players: {role: EventRole; position: number; khlPlayerId: string}[]
+} {
+	return matchField(event, "kind", {
+		goal: ({goal}) => ({
+			row: {
+				kind: "goal" as const,
+				teamId: goal.teamId,
+				period: goal.period,
+				time: goal.time,
+				goalType: goal.type,
+				scorerSeasonGoals: goal.scorerSeasonGoals,
+				infraction: null,
+				duration: null,
+			},
+			players: [
+				{
+					role: "scorer" as const,
+					position: 0,
+					khlPlayerId: goal.scorer.id,
+				},
+				...goal.assists.map((assist, position) => ({
+					role: "assist" as const,
+					position,
+					khlPlayerId: assist.id,
+				})),
+			],
+		}),
+		penalty: ({penalty}) => ({
+			row: {
+				kind: "penalty" as const,
+				teamId: penalty.teamId,
+				period: penalty.period,
+				time: penalty.time,
+				goalType: null,
+				scorerSeasonGoals: null,
+				infraction: penalty.infraction,
+				duration: penalty.duration,
+			},
+			players: penalty.player
+				? [
+						{
+							role: "penalized" as const,
+							position: 0,
+							khlPlayerId: penalty.player.id,
+						},
+					]
+				: [],
+		}),
+	})
 }

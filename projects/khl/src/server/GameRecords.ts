@@ -1,11 +1,16 @@
-import {GameLineupRecord, GameRecord, TeamRecord} from "./Database.js"
+import {matchField} from "@dvdzkwsk/util/MatchUtil"
+import {
+	GameLineupRecord,
+	GameRecord,
+	ScoresheetEvent,
+	TeamRecord,
+} from "./Database.js"
 import {
 	KHLBoxScore,
 	KHLBoxScoreTeam,
+	compareGameEvents,
 	KHLGameStats,
 	KHLGameTeamStats,
-	KHLGoal,
-	KHLPenalty,
 } from "../shared/KHLJson.js"
 import {DAY_MS, MINUTE_MS} from "../shared/LeagueTime.js"
 
@@ -22,7 +27,7 @@ export const GAME_SETTLE_LIMIT_MS = 2 * DAY_MS
 /**
  * A finished game as rows for the games tables: the box score's scores, its
  * two teams (kept only where no teams page lists them), its goals and
- * penalties, and who dressed from the game's stats page (null if it couldn't
+ * penalties in scoresheet order, and who dressed from the game's stats page (null if it couldn't
  * be read, which leaves both lineups unposted).
  */
 export function toGameRecords(
@@ -31,7 +36,8 @@ export function toGameRecords(
 ): {
 	game: GameRecord
 	teams: TeamRecord[]
-	events: {goals: KHLGoal[]; penalties: KHLPenalty[]}
+	/** In scoresheet order */
+	events: ScoresheetEvent[]
 	lineups: GameLineupRecord[]
 } {
 	const gameId = boxScore.gameId
@@ -80,11 +86,33 @@ export function toGameRecords(
 	return {
 		game,
 		teams,
-		events: {goals: boxScore.goals, penalties: boxScore.penalties},
+		events: toScoresheetOrder(boxScore),
 		lineups,
 	}
 }
 
 function getLineupIds(team: KHLGameTeamStats): string[] {
 	return [...team.skaters, ...team.goalies].map((row) => row.playerId)
+}
+
+/**
+ * The box score's goals and penalties as one list, by period and clock. The
+ * box score lists each in game order, and a goal comes before a penalty at
+ * the same moment.
+ */
+function toScoresheetOrder(boxScore: KHLBoxScore): ScoresheetEvent[] {
+	const events: ScoresheetEvent[] = [
+		...boxScore.goals.map((goal) => ({kind: "goal" as const, goal})),
+		...boxScore.penalties.map((penalty) => ({
+			kind: "penalty" as const,
+			penalty,
+		})),
+	]
+	const getAt = (event: ScoresheetEvent) =>
+		matchField(event, "kind", {
+			goal: (e) => e.goal,
+			penalty: (e) => e.penalty,
+		})
+	// Stable, so each kind keeps the box score's order
+	return events.sort((a, b) => compareGameEvents(getAt(a), getAt(b)))
 }

@@ -165,6 +165,48 @@ describe("games tables", () => {
 		)
 	})
 
+	test("goals and penalties read back in scoresheet order", () => {
+		const db = openDatabase(":memory:")
+		const early = {
+			period: "1st",
+			time: "18:00",
+			teamId: "11",
+			player: null,
+			infraction: "Delay of game",
+			duration: "2:00",
+		}
+		const records = toGameRecords(
+			{...boxScore, penalties: [early, ...boxScore.penalties]},
+			stats,
+		)
+		db.saveGame(
+			records.game,
+			records.teams,
+			records.events,
+			records.lineups,
+		)
+		const events = db.getGameEvents(["900"], {kind: "team", teamId: "11"})
+		expect(events.map((e) => e.event)).toEqual([
+			{kind: "penalty", penalty: early},
+			// Its scorer and assist weren't recorded, so they go by id
+			{
+				kind: "goal",
+				goal: {
+					...boxScore.goals[0]!,
+					scorer: {id: "501", name: "501"},
+					assists: [{id: "502", name: "502"}],
+				},
+			},
+			{
+				kind: "penalty",
+				penalty: {
+					...boxScore.penalties[0]!,
+					player: {id: "502", name: "502"},
+				},
+			},
+		])
+	})
+
 	test("saving a game again replaces it", () => {
 		const db = saveGame()
 		const records = toGameRecords(

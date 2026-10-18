@@ -32,6 +32,18 @@ const MIGRATIONS = [
 		changed_at INTEGER NOT NULL
 	);
 	`,
+	`
+	-- A fetched page that didn't parse, kept apart so it doesn't replace the
+	-- last good copy, and so a parser fix can be checked against it
+	CREATE TABLE failed_pages (
+		source TEXT NOT NULL,
+		url TEXT NOT NULL,
+		body BLOB NOT NULL,
+		error TEXT NOT NULL,
+		failed_at INTEGER NOT NULL,
+		PRIMARY KEY (source, url)
+	);
+	`,
 ]
 
 /** A stored page; times are epoch milliseconds */
@@ -78,39 +90,93 @@ export class PageStore {
 		}
 	}
 
-	/** When the page was last fetched, without reading it; null if never */
-	getFetchedAt(source: PageSource, url: string): number | null {
+	/** When the page was last fetched and its hash, without reading it */
+	getInfo(
+		source: PageSource,
+		url: string,
+	): {fetchedAt: number; hash: string} | null {
 		const row = this.db
-			.query<{fetched_at: number}, {url: string}>(
-				`SELECT fetched_at FROM ${PAGE_TABLES[source]} WHERE url = $url`,
+			.query<{fetched_at: number; hash: string}, {url: string}>(
+				`SELECT fetched_at, hash FROM ${PAGE_TABLES[source]} WHERE url = $url`,
 			)
 			.get({url})
-		return row?.fetched_at ?? null
+		return row ? {fetchedAt: row.fetched_at, hash: row.hash} : null
 	}
 
-	/** Stores a fetched page; true if it differs from the stored copy */
-	put(source: PageSource, url: string, body: string): boolean {
-		const now = Date.now()
-		const hash = Bun.hash(body).toString(16)
-		const previous = this.db
-			.query<{hash: string}, {url: string}>(
-				`SELECT hash FROM ${PAGE_TABLES[source]} WHERE url = $url`,
+	/**
+	 * When the page was last fetched, whether it parsed or not (see
+	 * putFailed); null if never
+	 */
+	getLastFetchedAt(source: PageSource, url: string): number | null {
+		const row = this.db
+			.query<{at: number | null}, {source: string; url: string}>(
+				// A scalar max() with a NULL argument is NULL, so each side
+				// defaults to 0
+				`SELECT max(
+					coalesce(
+						(SELECT fetched_at FROM ${PAGE_TABLES[source]} WHERE url = $url),
+						0
+					),
+					coalesce(
+						(SELECT failed_at FROM failed_pages
+							WHERE source = $source AND url = $url),
+						0
+					)
+				) AS at`,
 			)
-			.get({url})
-		const changed = previous?.hash !== hash
-		this.db
-			.query(
-				`INSERT INTO ${PAGE_TABLES[source]}
+			.get({source, url})
+		return row?.at || null
+	}
+
+	/**
+	 * Stores a fetched page that parsed, replacing the last copy, and clears
+	 * any failure recorded for it
+	 */
+	put(source: PageSource, url: string, body: string): {hash: string} {
+		const now = Date.now()
+		const hash = toPageHash(body)
+		this.db.transaction(() => {
+			this.db
+				.query(
+					`INSERT INTO ${PAGE_TABLES[source]}
 					(url, body, hash, fetched_at, changed_at)
 				VALUES ($url, $body, $hash, $now, $now)
 				ON CONFLICT (url) DO UPDATE SET body = excluded.body,
 					hash = excluded.hash, fetched_at = excluded.fetched_at,
 					changed_at = CASE WHEN hash = excluded.hash
 						THEN changed_at ELSE excluded.changed_at END`,
-			)
-			.run({url, body: Bun.gzipSync(body), hash, now})
-		return changed
+				)
+				.run({url, body: Bun.gzipSync(body), hash, now})
+			this.db
+				.query(
+					"DELETE FROM failed_pages WHERE source = $source AND url = $url",
+				)
+				.run({source, url})
+		})()
+		return {hash}
 	}
+
+	/** Keeps a fetched page that didn't parse, leaving the last good copy */
+	putFailed(source: PageSource, url: string, body: string, error: unknown) {
+		this.db
+			.query(
+				`INSERT INTO failed_pages (source, url, body, error, failed_at)
+				VALUES ($source, $url, $body, $error, $now)
+				ON CONFLICT (source, url) DO UPDATE SET body = excluded.body,
+					error = excluded.error, failed_at = excluded.failed_at`,
+			)
+			.run({
+				source,
+				url,
+				body: Bun.gzipSync(body),
+				error: error instanceof Error ? error.message : String(error),
+				now: Date.now(),
+			})
+	}
+}
+
+function toPageHash(body: string): string {
+	return Bun.hash(body).toString(16)
 }
 
 export function openPageStore(filepath: string): PageStore {
@@ -137,12 +203,23 @@ export function setPageStore(store: PageStore) {
 	pageStore = store
 }
 
-/** When a page was last fetched; null if never, or nothing is stored */
-export function getPageFetchedAt(
+/** When a page was last fetched and its hash; null if never, or no store */
+export function getPageInfo(
+	source: PageSource,
+	url: string,
+): {fetchedAt: number; hash: string} | null {
+	return pageStore?.getInfo(source, url) ?? null
+}
+
+/**
+ * When a page was last fetched, whether it parsed or not; null if never, or
+ * nothing is stored
+ */
+export function getPageLastFetchedAt(
 	source: PageSource,
 	url: string,
 ): number | null {
-	return pageStore?.getFetchedAt(source, url) ?? null
+	return pageStore?.getLastFetchedAt(source, url) ?? null
 }
 
 /** How a read uses stored pages */
@@ -181,58 +258,153 @@ export interface PageLoad {
 	key: string
 	/** Time spent fetching; 0 unless fetched */
 	ms: number
+	/** The parsed page's hash; null for "memory", or a page not stored */
+	hash?: string | null
 }
 
-const pageLoadLog = new AsyncLocalStorage<PageLoad[]>()
-
-/** Runs `work`, recording each page it loads in `log` (see PageLoad) */
-export function withPageLoadLog<T>(log: PageLoad[], work: () => T): T {
-	return pageLoadLog.run(log, work)
-}
-
-/** Records a page load in the current request's log, if there is one */
-export function recordPageLoad(load: PageLoad) {
-	pageLoadLog.getStore()?.push(load)
-}
+const pageLoadLogs = new AsyncLocalStorage<PageLoad[][]>()
 
 /**
- * A page's body: the stored copy if it's recent enough (see
- * withPageReadPolicy), or else `fetchBody`'s, which is stored for next time.
- * If the fetch fails, the policy can fall back to the stored copy.
+ * Runs `work`, recording each page it loads in `log` (see PageLoad). Logs
+ * nest: a load is recorded in every log around it.
  */
-export async function readPage(
+export function withPageLoadLog<T>(log: PageLoad[], work: () => T): T {
+	return pageLoadLogs.run([...(pageLoadLogs.getStore() ?? []), log], work)
+}
+
+/** Records a page load in each log around it, if there are any */
+export function recordPageLoad(load: PageLoad) {
+	for (const log of pageLoadLogs.getStore() ?? []) {
+		log.push(load)
+	}
+}
+
+/** Fetches in flight, so concurrent reads of one page share a request */
+const fetching = new Map<string, Promise<string>>()
+
+function fetchShared(
 	source: PageSource,
 	url: string,
 	fetchBody: () => Promise<string>,
 ): Promise<string> {
-	const policy = pageReadPolicy.getStore() ?? FETCH_ONLY
-	const stored = pageStore?.get(source, url)
-	if (stored && Date.now() - stored.fetchedAt < policy.maxAgeMs) {
-		recordPageLoad({source: "stored", key: url, ms: 0})
-		return stored.body
+	const key = `${source} ${url}`
+	const inFlight = fetching.get(key)
+	if (inFlight) {
+		return inFlight
 	}
-	const start = Date.now()
-	let body: string
-	try {
-		body = await fetchBody()
-	} catch (error) {
-		if (!stored || !policy.allowStale) {
+	const body = fetchBody().finally(() => fetching.delete(key))
+	fetching.set(key, body)
+	return body
+}
+
+export interface ReadPageOptions {
+	/**
+	 * False for pages not worth keeping, like one-off searches: they're
+	 * always fetched, and never stored
+	 */
+	store?: boolean
+}
+
+/**
+ * A page, parsed: the stored copy if it's recent enough (see
+ * withPageReadPolicy), or else `fetchBody`'s. A fetched page replaces the
+ * stored copy only once it parses; one that doesn't is kept apart (see
+ * putFailed). If the fetch fails, or what it fetched doesn't parse, the
+ * policy can fall back to the stored copy.
+ */
+export async function readPage<T>(
+	source: PageSource,
+	url: string,
+	fetchBody: () => Promise<string>,
+	parse: (body: string) => T,
+	{store = true}: ReadPageOptions = {},
+): Promise<T> {
+	const pages = store ? pageStore : null
+	const policy = pageReadPolicy.getStore() ?? FETCH_ONLY
+	// The stored copy, parsed; null if there isn't one, or it doesn't parse
+	// (e.g. after a parser change), in which case the page is fetched
+	const readStored = (): {
+		value: T
+		hash: string
+		fetchedAt: number
+	} | null => {
+		const stored = pages?.get(source, url)
+		if (!stored) {
+			return null
+		}
+		try {
+			return {
+				value: parse(stored.body),
+				hash: stored.hash,
+				fetchedAt: stored.fetchedAt,
+			}
+		} catch (error) {
+			logger.warn("readPage", "stored page doesn't parse", {
+				source,
+				url,
+				error,
+			})
+			return null
+		}
+	}
+	const info = pages?.getInfo(source, url) ?? null
+	if (pages && info && Date.now() - info.fetchedAt < policy.maxAgeMs) {
+		const stored = readStored()
+		if (stored) {
+			recordPageLoad({
+				source: "stored",
+				key: url,
+				ms: 0,
+				hash: stored.hash,
+			})
+			return stored.value
+		}
+	}
+
+	// The stored copy, parsed, in place of a failed fetch or parse
+	const fallBack = (error: unknown): T => {
+		const stored = policy.allowStale ? readStored() : null
+		if (!stored) {
 			throw error
 		}
-		logger.warn("readPage", "fetch failed; serving the stored copy", {
+		logger.warn("readPage", "serving the stored copy", {
 			source,
 			url,
 			fetchedAt: new Date(stored.fetchedAt).toISOString(),
 			error,
 		})
-		recordPageLoad({source: "stale", key: url, ms: Date.now() - start})
-		return stored.body
+		recordPageLoad({source: "stale", key: url, ms: 0, hash: stored.hash})
+		return stored.value
 	}
-	recordPageLoad({source: "fetched", key: url, ms: Date.now() - start})
+
+	const start = Date.now()
+	let body: string
 	try {
-		pageStore?.put(source, url, body)
+		body = await fetchShared(source, url, fetchBody)
+	} catch (error) {
+		return fallBack(error)
+	}
+	let value: T
+	try {
+		value = parse(body)
+	} catch (error) {
+		try {
+			pages?.putFailed(source, url, body, error)
+		} catch (storeError) {
+			logger.warn("readPage", "couldn't keep the failed page", {
+				source,
+				url,
+				error: storeError,
+			})
+		}
+		return fallBack(error)
+	}
+	let hash: string | null = null
+	try {
+		hash = pages?.put(source, url, body).hash ?? null
 	} catch (error) {
 		logger.warn("readPage", "couldn't store page", {source, url, error})
 	}
-	return body
+	recordPageLoad({source: "fetched", key: url, ms: Date.now() - start, hash})
+	return value
 }

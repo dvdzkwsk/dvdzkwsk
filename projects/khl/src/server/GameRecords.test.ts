@@ -99,7 +99,7 @@ const saveGame = (gameStats: KHLGameStats | null = stats) => {
 		].map((r) => ({
 			...r,
 			position: null,
-			teamName: r.teamId,
+			teamName: r.teamId === "11" ? "Bullets" : "Flamingos",
 			teamLogoUrl: null,
 			seasonId: "100",
 		})),
@@ -130,18 +130,21 @@ describe("games tables", () => {
 
 	test("teams' names and logos come from the teams table", () => {
 		const db = saveGame()
-		db.recordTeams([
-			{
-				teamId: "11",
-				seasonId: "100",
-				name: "Bullets (from the teams page)",
-				logoUrl: null,
-				divisionId: "5",
-			},
-		])
+		db.recordTeams(
+			[
+				{
+					teamId: "11",
+					seasonId: "100",
+					name: "Bullets (from the teams page)",
+					logoUrl: null,
+					divisionId: "5",
+				},
+			],
+			[{divisionId: "5", seasonId: "100", name: "Division 5"}],
+		)
 		const game = db.getGames(["900"]).get("900")!
 		expect(game.away.name).toBe("Bullets (from the teams page)")
-		// Known only from the box score
+		// Known only from its players' rows and the box score
 		expect(game.home.name).toBe("Flamingos")
 	})
 
@@ -156,13 +159,45 @@ describe("games tables", () => {
 		expect(unposted.away.lineupPosted).toBe(false)
 	})
 
-	test("each player's latest game is by their team", () => {
+	test("each player's latest completed game is by their team", () => {
 		const db = saveGame()
+		const completedAt = db.getGames(["900"]).get("900")!.completedAt!
 		const onBullets = toRegistrationKey({khlPlayerId: "501", teamId: "11"})
 		const elsewhere = toRegistrationKey({khlPlayerId: "501", teamId: "99"})
-		expect(db.getLatestDressedGameStarts([onBullets, elsewhere])).toEqual(
-			new Map([[onBullets, boxScore.startsAt]]),
+		expect(db.getLatestCompletedGames([onBullets, elsewhere])).toEqual(
+			new Map([[onBullets, completedAt]]),
 		)
+		expect(db.getTeamLatestCompletedGame("11", "100")).toBe(completedAt)
+		expect(db.getTeamLatestCompletedGame("11", "99")).toBeNull()
+	})
+
+	test("a game is completed once, and never replaced by an incomplete copy", () => {
+		const db = saveGame()
+		const completedAt = db.getGames(["900"]).get("900")!.completedAt
+		expect(completedAt).not.toBeNull()
+
+		const older = toGameRecords(boxScore, null)
+		expect(
+			db.saveGame(older.game, older.teams, older.events, older.lineups),
+		).toBe(false)
+		expect(db.getGames(["900"]).get("900")!.away.lineupPosted).toBe(true)
+
+		const again = toGameRecords(boxScore, stats)
+		again.game.processedAt += 60_000
+		db.saveGame(again.game, again.teams, again.events, again.lineups)
+		expect(db.getGames(["900"]).get("900")!.completedAt).toBe(completedAt)
+
+		expect(
+			saveGame(null).getGames(["900"]).get("900")!.completedAt,
+		).toBeNull()
+	})
+
+	test("a game's league-local date and time come from its start", () => {
+		const game = saveGame().getGames(["900"]).get("900")!
+		expect([game.localDate, game.localTime]).toEqual([
+			"2026-10-17",
+			"21:00",
+		])
 	})
 
 	test("goals and penalties read back in scoresheet order", () => {
@@ -222,5 +257,87 @@ describe("games tables", () => {
 		expect(db.getGameEvents(["900"], {kind: "team", teamId: "11"})).toEqual(
 			[],
 		)
+	})
+})
+
+describe("other synced records", () => {
+	test("a team's schedule is replaced as a whole", () => {
+		const db = openDatabase(":memory:")
+		const game = {
+			gameId: "1",
+			startsAt: "2026-10-18T04:00:00.000Z",
+			isFinal: false,
+		}
+		db.saveSchedule("11", "100", [game, {...game, gameId: null}])
+		db.saveSchedule("11", "100", [{...game, isFinal: true}])
+		expect(db.getSchedule("11", "100")).toEqual([{...game, isFinal: true}])
+		expect(db.getSeasonSchedules("100")).toEqual(
+			new Map([["11", [{...game, isFinal: true}]]]),
+		)
+	})
+
+	test("a registration's team name and logo come from teams", () => {
+		const db = saveGame()
+		const playerId = db.findPlayerIdForRegistration("501")!
+		expect(db.getRegistrations(playerId)[0]!.teamName).toBe("Bullets")
+		db.recordTeams(
+			[
+				{
+					teamId: "11",
+					seasonId: "100",
+					name: "Bullets FC",
+					logoUrl: "https://example.com/b.png",
+					divisionId: null,
+				},
+			],
+			[],
+		)
+		expect(db.getRegistrations(playerId)[0]).toMatchObject({
+			teamName: "Bullets FC",
+			teamLogoUrl: "https://example.com/b.png",
+		})
+	})
+
+	test("a team's player pages are synced as of each player's latest season there", () => {
+		const db = openDatabase(":memory:")
+		const row = {
+			name: "Kim Lee",
+			position: null,
+			teamId: "11",
+			teamName: "Bullets",
+			teamLogoUrl: null,
+		}
+		db.recordRegistrations([
+			{...row, playerId: "601", seasonId: "99"},
+			{...row, playerId: "601", seasonId: "100"},
+			{...row, playerId: "602", name: "Ana Diaz", seasonId: "99"},
+		])
+		expect(db.getTeamSeasonLatestPlayerIds("11", "100")).toEqual(["601"])
+		expect(db.getTeamSeasonLatestPlayerIds("11", "99")).toEqual(["602"])
+	})
+
+	test("a new KHL id matching one player's name is recorded as a match", () => {
+		const db = openDatabase(":memory:")
+		const row = {
+			name: "Kim Lee",
+			position: null,
+			teamName: "Bullets",
+			teamLogoUrl: null,
+			seasonId: "100",
+		}
+		const ids = db.recordRegistrations([
+			{...row, playerId: "601", teamId: "11"},
+			{...row, playerId: "701", teamId: "22"},
+		])
+		// Accepted, until acceptNameMatch decides otherwise
+		expect(ids.get("701")).toBe(ids.get("601"))
+		expect(db.getNameMatches()).toEqual([
+			{
+				khlPlayerId: "701",
+				teamId: "22",
+				playerId: ids.get("601")!,
+				accepted: true,
+			},
+		])
 	})
 })

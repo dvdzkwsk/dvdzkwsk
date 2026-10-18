@@ -5,7 +5,7 @@ import {doFetch} from "@dvdzkwsk/util/FetchUtil"
 import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {HTMLElement, parse} from "node-html-parser"
 import {z} from "zod"
-import {readPage} from "./PageStore.js"
+import {readPage, ReadPageOptions} from "./PageStore.js"
 import {parseRegistrationKey, RegistrationKey} from "../shared/ApiJson.js"
 import {URLS} from "../shared/KHLConfig.js"
 import {
@@ -80,8 +80,9 @@ export async function getKHLTeamsPage(
 	seasonId?: string,
 ): Promise<KHLTeamsPage> {
 	const url = getKHLTeamsPageUrl(seasonId)
-	const root = await fetchKHLPage(url)
-	return KHLTeamsPageSchema.parse(parseKHLTeamsPage(root, url))
+	return fetchKHLPage(url, (root) =>
+		KHLTeamsPageSchema.parse(parseKHLTeamsPage(root, url)),
+	)
 }
 
 /** Defaults to the current season */
@@ -105,10 +106,15 @@ export async function searchKHLPlayers(
 	seasonId?: string,
 ): Promise<KHLPlayerSearchResult[]> {
 	const url = getKHLPlayerSearchUrl(query, seasonId)
-	const root = await fetchKHLPage(url)
-	return z
-		.array(KHLPlayerSearchResultSchema)
-		.parse(parseKHLPlayerSearch(root, url))
+	// One-off queries aren't worth keeping, and could grow without bound
+	return fetchKHLPage(
+		url,
+		(root) =>
+			z
+				.array(KHLPlayerSearchResultSchema)
+				.parse(parseKHLPlayerSearch(root, url)),
+		{store: false},
+	)
 }
 
 /**
@@ -121,9 +127,14 @@ export async function getKHLPlayer(
 ): Promise<KHLPlayer> {
 	const url = getKHLPlayerUrl(registrationKey, seasonId)
 	const {khlPlayerId, teamId} = parseRegistrationKey(registrationKey)
-	const root = await fetchKHLPage(url)
-	return KHLPlayerSchema.parse(
-		parseKHLPlayer(root, url, {playerId: khlPlayerId, teamId, seasonId}),
+	return fetchKHLPage(url, (root) =>
+		KHLPlayerSchema.parse(
+			parseKHLPlayer(root, url, {
+				playerId: khlPlayerId,
+				teamId,
+				seasonId,
+			}),
+		),
 	)
 }
 
@@ -152,10 +163,11 @@ export async function getKHLTeamSchedule(
 	seasonId: string,
 ): Promise<KHLGame[]> {
 	const url = getKHLTeamScheduleUrl(teamId, seasonId)
-	const root = await fetchKHLPage(url)
-	return z
-		.array(KHLGameSchema)
-		.parse(parseKHLTeamSchedule(root, url, {teamId, seasonId}))
+	return fetchKHLPage(url, (root) =>
+		z
+			.array(KHLGameSchema)
+			.parse(parseKHLTeamSchedule(root, url, {teamId, seasonId})),
+	)
 }
 
 export function getKHLTeamScheduleUrl(teamId: string, seasonId: string): URL {
@@ -170,9 +182,10 @@ export async function getKHLTeamStats(
 	seasonId: string,
 ): Promise<KHLTeamStats> {
 	const url = getKHLTeamStatsUrl(teamId, seasonId)
-	const root = await fetchKHLPage(url)
-	return KHLTeamStatsSchema.parse(
-		parseKHLTeamStats(root, url, {teamId, seasonId}),
+	return fetchKHLPage(url, (root) =>
+		KHLTeamStatsSchema.parse(
+			parseKHLTeamStats(root, url, {teamId, seasonId}),
+		),
 	)
 }
 
@@ -190,15 +203,17 @@ export async function getKHLStandings(
 	if (seasonId !== undefined) {
 		url.searchParams.set("season", seasonId)
 	}
-	const root = await fetchKHLPage(url)
-	return KHLStandingsPageSchema.parse(parseKHLStandings(root, url))
+	return fetchKHLPage(url, (root) =>
+		KHLStandingsPageSchema.parse(parseKHLStandings(root, url)),
+	)
 }
 
 /** Every upcoming game in the league, starting with today's. */
 export async function getKHLLeagueSchedule(): Promise<KHLLeagueGame[]> {
 	const url = new URL("/schedule", URLS.KHL)
-	const root = await fetchKHLPage(url)
-	return z.array(KHLLeagueGameSchema).parse(parseKHLLeagueSchedule(root, url))
+	return fetchKHLPage(url, (root) =>
+		z.array(KHLLeagueGameSchema).parse(parseKHLLeagueSchedule(root, url)),
+	)
 }
 
 /** Season stats the game's preview page compares (PP%, shots, ...). */
@@ -206,15 +221,17 @@ export async function getKHLGamePreviewStats(
 	gameId: string,
 ): Promise<KHLGamePreviewStats> {
 	const url = new URL(`/game/${gameId}/preview`, URLS.KHL)
-	const root = await fetchKHLPage(url)
-	return KHLGamePreviewStatsSchema.parse(parseKHLGamePreviewStats(root))
+	return fetchKHLPage(url, (root) =>
+		KHLGamePreviewStatsSchema.parse(parseKHLGamePreviewStats(root)),
+	)
 }
 
 /** The game's period-by-period score, goals, and penalties. */
 export async function getKHLBoxScore(gameId: string): Promise<KHLBoxScore> {
 	const url = getKHLBoxScoreUrl(gameId)
-	const root = await fetchKHLPage(url)
-	return KHLBoxScoreSchema.parse(parseKHLBoxScore(root, url, gameId))
+	return fetchKHLPage(url, (root) =>
+		KHLBoxScoreSchema.parse(parseKHLBoxScore(root, url, gameId)),
+	)
 }
 
 export function getKHLBoxScoreUrl(gameId: string): URL {
@@ -227,17 +244,19 @@ export async function getKHLScoreboard(
 ): Promise<KHLScoreboardGame[]> {
 	const url = new URL("/scoreboard/", URLS.KHL)
 	url.searchParams.set("date", date)
-	const root = await fetchKHLPage(url)
-	return z
-		.array(KHLScoreboardGameSchema)
-		.parse(parseKHLScoreboard(root, url, date))
+	return fetchKHLPage(url, (root) =>
+		z
+			.array(KHLScoreboardGameSchema)
+			.parse(parseKHLScoreboard(root, url, date)),
+	)
 }
 
 /** Each team's players in a game and their stats in it. */
 export async function getKHLGameStats(gameId: string): Promise<KHLGameStats> {
 	const url = getKHLGameStatsUrl(gameId)
-	const root = await fetchKHLPage(url)
-	return KHLGameStatsSchema.parse(parseKHLGameStats(root, url, gameId))
+	return fetchKHLPage(url, (root) =>
+		KHLGameStatsSchema.parse(parseKHLGameStats(root, url, gameId)),
+	)
 }
 
 export function getKHLGameStatsUrl(gameId: string): URL {
@@ -246,8 +265,9 @@ export function getKHLGameStatsUrl(gameId: string): URL {
 
 export async function getKHLArena(arenaId: string): Promise<KHLArena> {
 	const url = new URL(`/arena/${arenaId}`, URLS.KHL)
-	const root = await fetchKHLPage(url)
-	return KHLArenaSchema.parse(parseKHLArena(root, url, arenaId))
+	return fetchKHLPage(url, (root) =>
+		KHLArenaSchema.parse(parseKHLArena(root, url, arenaId)),
+	)
 }
 
 /**
@@ -274,21 +294,37 @@ export function runInKHLBackground<T>(work: () => Promise<T>): Promise<T> {
 	return khlRequestLane.run("background", work)
 }
 
-/** Read through the page store, so a stored copy saves a fetch */
-async function fetchKHLPage(url: URL): Promise<HTMLElement> {
+/** A slow KHL page shouldn't hold up the syncer, or a visitor, for long */
+const KHL_FETCH_TIMEOUT_MS = 15_000
+
+/**
+ * Reads a KHL page through the page store, so a stored copy saves a fetch,
+ * and parses it with `parsePage`. A fetched page is stored only once it
+ * parses (see readPage).
+ */
+function fetchKHLPage<T>(
+	url: URL,
+	parsePage: (root: HTMLElement) => T,
+	options?: ReadPageOptions,
+): Promise<T> {
 	const lane = khlRequestLane.getStore() ?? "visitor"
 	const limit = matchValue(lane, KHL_REQUEST_LIMITERS)
-	const html = await readPage("khl", url.toString(), () => {
-		return limit(() => {
-			return doFetch({
-				method: "GET",
-				url: url.toString(),
-				responseFormat: "text",
-				responseSchema: z.string(),
-			})
-		})
-	})
-	return parse(html)
+	return readPage(
+		"khl",
+		url.toString(),
+		() =>
+			limit(() =>
+				doFetch({
+					method: "GET",
+					url: url.toString(),
+					responseFormat: "text",
+					responseSchema: z.string(),
+					timeoutMs: KHL_FETCH_TIMEOUT_MS,
+				}),
+			),
+		(html) => parsePage(parse(html)),
+		options,
+	)
 }
 
 /**

@@ -12,29 +12,39 @@ const logger = new Logger("LiveBarn")
 const LIVEBARN_API_URL = "https://prod-watch-oktaapi.livebarn.com/api/v2.0.0"
 /** Every LiveBarn venue; also what the status page checks LiveBarn with */
 export const LIVEBARN_VENUES_URL = `${LIVEBARN_API_URL}/staticdata/venues`
+/** The venues list is several MB, so it gets longer than a KHL page */
+const LIVEBARN_FETCH_TIMEOUT_MS = 30_000
 
 /** Read through the page store, so a stored copy saves a fetch */
-export async function getLivebarnVenues(): Promise<LiveBarnVenuesResponse> {
-	const body = await readPage("livebarn", LIVEBARN_VENUES_URL, () => {
-		return doFetch({
-			method: "GET",
-			url: LIVEBARN_VENUES_URL,
-			responseFormat: "text",
-			responseSchema: z.string(),
-		})
-	})
+export function getLivebarnVenues(): Promise<LiveBarnVenuesResponse> {
+	return readPage(
+		"livebarn",
+		LIVEBARN_VENUES_URL,
+		() =>
+			doFetch({
+				method: "GET",
+				url: LIVEBARN_VENUES_URL,
+				responseFormat: "text",
+				responseSchema: z.string(),
+				timeoutMs: LIVEBARN_FETCH_TIMEOUT_MS,
+			}),
+		parseVenues,
+	)
+}
+
+function parseVenues(body: string): LiveBarnVenuesResponse {
 	let json: unknown
 	try {
 		json = JSON.parse(body)
 	} catch (error) {
-		throw logger.newError("getLivebarnVenues", "venues aren't JSON", {
+		throw logger.newError("parseVenues", "venues aren't JSON", {
 			url: LIVEBARN_VENUES_URL,
 			error,
 		})
 	}
 	const result = LiveBarnVenuesResponseSchema.safeParse(json)
 	if (!result.success) {
-		throw logger.newError("getLivebarnVenues", "unexpected venues", {
+		throw logger.newError("parseVenues", "unexpected venues", {
 			url: LIVEBARN_VENUES_URL,
 			issues: z.prettifyError(result.error),
 		})

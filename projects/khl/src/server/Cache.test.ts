@@ -8,7 +8,13 @@ describe("KHLCache", () => {
 	test("a new process parses a stored page within the TTL", async () => {
 		setPageStore(openPageStore(":memory:"))
 		let fetches = 0
-		const load = () => readPage("khl", URL, async () => `page ${++fetches}`)
+		const load = () =>
+			readPage(
+				"khl",
+				URL,
+				async () => `page ${++fetches}`,
+				(body) => body,
+			)
 		await new KHLCache().cached("arena-page:30", 60_000, load)
 		expect(await new KHLCache().cached("arena-page:30", 60_000, load)).toBe(
 			"page 1",
@@ -19,7 +25,13 @@ describe("KHLCache", () => {
 	test("an invalidated entry fetches again", async () => {
 		setPageStore(openPageStore(":memory:"))
 		let fetches = 0
-		const load = () => readPage("khl", URL, async () => `page ${++fetches}`)
+		const load = () =>
+			readPage(
+				"khl",
+				URL,
+				async () => `page ${++fetches}`,
+				(body) => body,
+			)
 		const cache = new KHLCache()
 		await cache.cached("arena-page:30", 60_000, load)
 		cache.invalidate("arena-page:30")

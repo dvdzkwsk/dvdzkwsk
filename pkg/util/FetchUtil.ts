@@ -15,6 +15,11 @@ interface FetchRequestBase<TResponseBody> {
 	responseSchema: z.ZodType<TResponseBody>
 	/** Let the request outlive the page, e.g. to flush logs on unload */
 	keepalive?: boolean
+	/**
+	 * Give up after this long, reading the body included; it then fails like
+	 * an unreachable server. No limit by default.
+	 */
+	timeoutMs?: number
 }
 
 export interface FetchRequestWithoutBody<
@@ -89,6 +94,10 @@ export async function doFetch<TRequestBody, TResponseBody>(
 					? undefined
 					: JSON.stringify(requestBody),
 			keepalive: request.keepalive,
+			signal:
+				request.timeoutMs === undefined
+					? undefined
+					: AbortSignal.timeout(request.timeoutMs),
 		})
 	} catch (error) {
 		throw new FetchError(
@@ -108,10 +117,25 @@ export async function doFetch<TRequestBody, TResponseBody>(
 		)
 	}
 
-	const body: unknown = await matchFn(request.responseFormat ?? "json", {
-		json: () => response.json(),
-		text: () => response.text(),
-	})
+	let body: unknown
+	try {
+		body = await matchFn(request.responseFormat ?? "json", {
+			json: () => response.json(),
+			text: () => response.text(),
+		})
+	} catch (error) {
+		// Invalid JSON is the server's response, not a network failure
+		if (error instanceof SyntaxError) {
+			throw error
+		}
+		// A timeout or dropped connection while reading the body
+		throw new FetchError(
+			`${label}: network error reading the response: ${error instanceof Error ? error.message : String(error)}`,
+			request.method,
+			request.url,
+			null,
+		)
+	}
 	const responseResult = request.responseSchema.safeParse(body)
 	if (!responseResult.success) {
 		throw new Error(

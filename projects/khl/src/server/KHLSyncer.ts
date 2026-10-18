@@ -1,28 +1,27 @@
 import {Logger} from "@dvdzkwsk/logger"
 import {sleep} from "@dvdzkwsk/util/AsyncUtil"
-import {KHLCache} from "./Cache.js"
+import {AppCache} from "./AppCache.js"
 import {runInKHLBackground} from "./KHL.js"
-import {PlayersResponse} from "../shared/ApiJson.js"
+import {PlayersResponse, PlayersResponseSchema} from "../shared/ApiJson.js"
 import {KHLSeason} from "../shared/KHLJson.js"
 import {DAY_MS, HOUR_MS, MINUTE_MS} from "../shared/LeagueTime.js"
 
 const logger = new Logger("KHLSyncer")
 
 /**
- * How long a season's player list is cached, and when to try again after a
- * failed sync. The syncer refreshes a list halfway through its TTL, so a
- * failed refresh leaves time to retry before it expires.
+ * How long until a season's player list is built again, and when to try
+ * again after a failed sync. Readers keep getting the last list meanwhile.
  */
 const SYNC_POLICY = {
 	// Changes only as players register or play
 	current: {
-		ttlMs: 12 * HOUR_MS,
-		partialTtlMs: HOUR_MS,
+		refreshMs: 6 * HOUR_MS,
+		partialRefreshMs: 30 * MINUTE_MS,
 		retryMs: 30 * MINUTE_MS,
 	},
 	// Over, so it changes only if the league edits it. Lists missing teams
 	// wait longer than the current season's, since old pages often fail for good.
-	past: {ttlMs: 14 * DAY_MS, partialTtlMs: 2 * DAY_MS, retryMs: DAY_MS},
+	past: {refreshMs: 7 * DAY_MS, partialRefreshMs: DAY_MS, retryMs: DAY_MS},
 }
 /** How often to look for a season that's due */
 const CHECK_INTERVAL_MS = 5 * MINUTE_MS
@@ -42,8 +41,8 @@ export interface KHLSyncerSource {
 }
 
 /**
- * Keeps every season's player list cached (getPlayersCacheKey), so serving
- * one never fetches from the KHL. Each list reads every team's stats page
+ * Keeps every season's player list in the app cache (getPlayersCacheKey),
+ * so serving one never fetches from the KHL. Each list reads every team's stats page
  * (~175 of them), so the syncer builds one season at a time in the
  * background: the current season first, then the rest in the league's order.
  */
@@ -52,7 +51,7 @@ export class KHLSyncer {
 	private retryAt = new Map<string, number>()
 
 	constructor(
-		private cache: KHLCache,
+		private appCache: AppCache,
 		private source: KHLSyncerSource,
 	) {}
 
@@ -95,32 +94,36 @@ export class KHLSyncer {
 		}
 	}
 
-	/** Not cached, or past half its TTL, and not waiting out a failure */
+	/** Never built, or stale, and not waiting out a failure */
 	private isDue(seasonId: string): boolean {
 		const now = Date.now()
 		if ((this.retryAt.get(seasonId) ?? 0) > now) {
 			return false
 		}
-		const entry = this.cache.getLoadedEntry(getPlayersCacheKey(seasonId))
-		if (!entry) {
-			return true
-		}
-		return now >= entry.loadedAt + (entry.expiresAt - entry.loadedAt) / 2
+		const players = this.appCache.get(
+			getPlayersCacheKey(seasonId),
+			PlayersResponseSchema,
+		)
+		return !players || now >= players.staleAt
 	}
 
 	private async syncSeason(season: KHLSeason, isCurrentSeason: boolean) {
 		const policy = isCurrentSeason ? SYNC_POLICY.current : SYNC_POLICY.past
 		const start = Date.now()
 		try {
-			const players = await this.cache.refresh(
+			const players = await this.source.loadPlayers(
+				season,
+				isCurrentSeason,
+			)
+			// Missing teams, so it's built again sooner
+			const refreshMs =
+				players.unavailableTeams.length > 0
+					? policy.partialRefreshMs
+					: policy.refreshMs
+			this.appCache.set(
 				getPlayersCacheKey(season.id),
-				policy.ttlMs,
-				() => this.source.loadPlayers(season, isCurrentSeason),
-				// Missing teams, so it's refreshed sooner
-				(players) =>
-					players.unavailableTeams.length > 0
-						? policy.partialTtlMs
-						: policy.ttlMs,
+				players,
+				Date.now() + refreshMs,
 			)
 			this.retryAt.delete(season.id)
 			logger.info("syncSeason", "synced players", {
@@ -130,7 +133,7 @@ export class KHLSyncer {
 				ms: Date.now() - start,
 			})
 		} catch (error) {
-			// The list cached before, if any, stays until it expires
+			// The list built before, if any, is still served
 			logger.error("syncSeason", "couldn't sync players", {
 				seasonId: season.id,
 				error,

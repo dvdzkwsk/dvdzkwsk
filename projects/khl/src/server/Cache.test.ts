@@ -1,67 +1,44 @@
 import {describe, expect, test} from "bun:test"
-import {z} from "zod"
 import {KHLCache} from "./Cache.js"
-import {openDatabase} from "./Database.js"
+import {openPageStore, readPage, setPageStore} from "./PageStore.js"
 
-const Schema = z.object({name: z.string()})
+const URL = "https://krakenhockeyleague.com/arena/30"
 
 describe("KHLCache", () => {
-	test("a new process reads entries back from SQLite", async () => {
-		const db = openDatabase(":memory:")
-		await new KHLCache(db).cached("k", 60_000, Schema, async () => ({
-			name: "Bullets",
-		}))
+	test("a new process parses a stored page within the TTL", async () => {
+		setPageStore(openPageStore(":memory:"))
+		let fetches = 0
+		const load = () => readPage("khl", URL, async () => `page ${++fetches}`)
+		await new KHLCache().cached("arena-page:30", 60_000, load)
+		expect(await new KHLCache().cached("arena-page:30", 60_000, load)).toBe(
+			"page 1",
+		)
+		expect(fetches).toBe(1)
+	})
+
+	test("an invalidated entry fetches again", async () => {
+		setPageStore(openPageStore(":memory:"))
+		let fetches = 0
+		const load = () => readPage("khl", URL, async () => `page ${++fetches}`)
+		const cache = new KHLCache()
+		await cache.cached("arena-page:30", 60_000, load)
+		cache.invalidate("arena-page:30")
+		expect(await cache.cached("arena-page:30", 60_000, load)).toBe("page 2")
+	})
+
+	test("concurrent callers share one load, and failures aren't kept", async () => {
+		const cache = new KHLCache()
 		let loads = 0
-		const value = await new KHLCache(db).cached(
-			"k",
-			60_000,
-			Schema,
-			async () => {
-				loads++
-				return {name: "reloaded"}
-			},
-		)
-		expect(value).toEqual({name: "Bullets"})
-		expect(loads).toBe(0)
-	})
-
-	test("a stored entry that no longer matches its schema is reloaded", async () => {
-		const db = openDatabase(":memory:")
-		await new KHLCache(db).cached(
-			"k",
-			60_000,
-			z.object({id: z.number()}),
-			async () => ({
-				id: 1,
-			}),
-		)
-		const value = await new KHLCache(db).cached(
-			"k",
-			60_000,
-			Schema,
-			async () => ({
-				name: "Bullets",
-			}),
-		)
-		expect(value).toEqual({name: "Bullets"})
-	})
-
-	test("a failed refresh keeps the cached value", async () => {
-		const cache = new KHLCache(openDatabase(":memory:"))
-		await cache.refresh("k", 60_000, async () => ({name: "Bullets"}))
-		const failing = cache.refresh("k", 60_000, async () => {
+		const failing = async () => {
+			loads++
 			throw new Error("KHL 403")
-		})
-		expect(failing).rejects.toThrow("KHL 403")
-		await failing.catch(() => {})
-		expect(await cache.getValue("k", Schema)).toEqual({name: "Bullets"})
-	})
-
-	test("an invalidated entry is gone from SQLite too", async () => {
-		const db = openDatabase(":memory:")
-		const cache = new KHLCache(db)
-		await cache.refresh("k", 60_000, async () => ({name: "Bullets"}))
-		cache.invalidate("k")
-		expect(new KHLCache(db).getValue("k", Schema)).toBeNull()
+		}
+		const results = await Promise.allSettled([
+			cache.cached("k", 60_000, failing),
+			cache.cached("k", 60_000, failing),
+		])
+		expect(results.map((r) => r.status)).toEqual(["rejected", "rejected"])
+		expect(loads).toBe(1)
+		expect(await cache.cached("k", 60_000, async () => "ok")).toBe("ok")
 	})
 })

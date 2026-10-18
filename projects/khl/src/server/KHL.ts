@@ -5,6 +5,7 @@ import {doFetch} from "@dvdzkwsk/util/FetchUtil"
 import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {HTMLElement, parse} from "node-html-parser"
 import {z} from "zod"
+import {readPage} from "./PageStore.js"
 import {URLS} from "../shared/KHLConfig.js"
 import {
 	KHLArena,
@@ -248,15 +249,18 @@ export function runInKHLBackground<T>(work: () => Promise<T>): Promise<T> {
 	return khlRequestLane.run("background", work)
 }
 
+/** Read through the page store, so a stored copy saves a fetch */
 async function fetchKHLPage(url: URL): Promise<HTMLElement> {
 	const lane = khlRequestLane.getStore() ?? "visitor"
 	const limit = matchValue(lane, KHL_REQUEST_LIMITERS)
-	const html = await limit(() => {
-		return doFetch({
-			method: "GET",
-			url: url.toString(),
-			responseFormat: "text",
-			responseSchema: z.string(),
+	const html = await readPage("khl", url.toString(), () => {
+		return limit(() => {
+			return doFetch({
+				method: "GET",
+				url: url.toString(),
+				responseFormat: "text",
+				responseSchema: z.string(),
+			})
 		})
 	})
 	return parse(html)

@@ -123,6 +123,17 @@ const MIGRATIONS = [
 	);
 	CREATE INDEX cache_entries_expires_at ON cache_entries (expires_at);
 	`,
+	`
+	-- Fetched pages moved to their own file (PageStore). This holds what we
+	-- compute from them (see AppCache), gzipped.
+	DROP TABLE cache_entries;
+	CREATE TABLE app_cache (
+		key TEXT PRIMARY KEY,
+		value BLOB NOT NULL,
+		computed_at INTEGER NOT NULL,
+		stale_at INTEGER NOT NULL
+	);
+	`,
 ]
 
 export function openDatabase(filepath: string) {
@@ -159,12 +170,16 @@ interface RegistrationRow {
 	season_ids: string | null
 }
 
-/** A cached value as JSON; times are epoch milliseconds */
-export interface StoredCacheEntry {
+/**
+ * A value we computed from fetched pages, as JSON; times are epoch
+ * milliseconds
+ */
+export interface StoredAppCacheEntry {
 	key: string
 	value: string
-	loadedAt: number
-	expiresAt: number
+	computedAt: number
+	/** When it's due to be computed again; it's still served until then */
+	staleAt: number
 }
 
 interface StatusCheckRow {
@@ -388,36 +403,39 @@ export class KHLDatabase {
 		this.db.query("DELETE FROM status_checks WHERE day < $day").run({day})
 	}
 
-	/** An unexpired cache entry, if there is one */
-	getCacheEntry(key: string, now: number): StoredCacheEntry | null {
-		return this.db
-			.query<StoredCacheEntry, {key: string; now: number}>(
-				`SELECT key, value, loaded_at AS loadedAt, expires_at AS expiresAt
-				FROM cache_entries WHERE key = $key AND expires_at > $now`,
+	getAppCacheEntry(key: string): StoredAppCacheEntry | null {
+		const row = this.db
+			.query<
+				{
+					value: Uint8Array<ArrayBuffer>
+					computed_at: number
+					stale_at: number
+				},
+				{key: string}
+			>(
+				"SELECT value, computed_at, stale_at FROM app_cache WHERE key = $key",
 			)
-			.get({key, now})
+			.get({key})
+		if (!row) {
+			return null
+		}
+		return {
+			key,
+			value: new TextDecoder().decode(Bun.gunzipSync(row.value)),
+			computedAt: row.computed_at,
+			staleAt: row.stale_at,
+		}
 	}
 
-	setCacheEntry(entry: StoredCacheEntry): void {
+	setAppCacheEntry(entry: StoredAppCacheEntry): void {
 		this.db
 			.query(
-				`INSERT INTO cache_entries (key, value, loaded_at, expires_at)
-				VALUES ($key, $value, $loadedAt, $expiresAt)
+				`INSERT INTO app_cache (key, value, computed_at, stale_at)
+				VALUES ($key, $value, $computedAt, $staleAt)
 				ON CONFLICT (key) DO UPDATE SET value = excluded.value,
-					loaded_at = excluded.loaded_at, expires_at = excluded.expires_at`,
+					computed_at = excluded.computed_at, stale_at = excluded.stale_at`,
 			)
-			.run({...entry})
-	}
-
-	deleteCacheEntry(key: string): void {
-		this.db.query("DELETE FROM cache_entries WHERE key = $key").run({key})
-	}
-
-	/** Drops entries that expired before `now` */
-	pruneCacheEntries(now: number): void {
-		this.db
-			.query("DELETE FROM cache_entries WHERE expires_at <= $now")
-			.run({now})
+			.run({...entry, value: Bun.gzipSync(entry.value)})
 	}
 
 	/** The player a KHL player id is attached to, if we've recorded it */

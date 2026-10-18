@@ -1,5 +1,5 @@
 import {describe, expect, test} from "bun:test"
-import {KHLCache} from "./Cache.js"
+import {AppCache} from "./AppCache.js"
 import {openDatabase} from "./Database.js"
 import {getPlayersCacheKey, KHLSyncer} from "./KHLSyncer.js"
 import {PlayersResponse, PlayersResponseSchema} from "../shared/ApiJson.js"
@@ -23,8 +23,8 @@ const toPlayers = (season: KHLSeason): PlayersResponse => {
 
 const createSyncer = (loadPlayers = async (s: KHLSeason) => toPlayers(s)) => {
 	const loaded: string[] = []
-	const cache = new KHLCache(openDatabase(":memory:"))
-	const syncer = new KHLSyncer(cache, {
+	const appCache = new AppCache(openDatabase(":memory:"))
+	const syncer = new KHLSyncer(appCache, {
 		getSeasons: async () => ({current, seasons}),
 		loadPlayers: async (season) => {
 			loaded.push(season.id)
@@ -32,9 +32,9 @@ const createSyncer = (loadPlayers = async (s: KHLSeason) => toPlayers(s)) => {
 		},
 	})
 	const getCachedPlayers = (season: KHLSeason) => {
-		return cache.getValue(
-			getPlayersCacheKey(season.id),
-			PlayersResponseSchema,
+		return (
+			appCache.get(getPlayersCacheKey(season.id), PlayersResponseSchema)
+				?.value ?? null
 		)
 	}
 	return {syncer, loaded, getCachedPlayers}
@@ -53,7 +53,7 @@ describe("KHLSyncer", () => {
 		const {syncer, loaded, getCachedPlayers} = createSyncer()
 		await syncAll(syncer)
 		expect(loaded).toEqual(["100", "96", "92"])
-		expect(await getCachedPlayers(current)).toEqual(toPlayers(current))
+		expect(getCachedPlayers(current)).toEqual(toPlayers(current))
 	})
 
 	test("leaves a fresh list alone", async () => {
@@ -75,6 +75,6 @@ describe("KHLSyncer", () => {
 		await syncAll(syncer)
 		expect(loaded).toEqual(["100", "96", "92"])
 		expect(getCachedPlayers(past)).toBeNull()
-		expect(await getCachedPlayers(older)).toEqual(toPlayers(older))
+		expect(getCachedPlayers(older)).toEqual(toPlayers(older))
 	})
 })

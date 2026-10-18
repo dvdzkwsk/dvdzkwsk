@@ -7,13 +7,12 @@ import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import compression from "compression"
 import express from "express"
-import {z} from "zod"
+import {AppCache} from "./AppCache.js"
 import {
 	ArenaMapping,
 	getArenaName,
 	KHL_ARENA_LIVEBARN_SURFACES,
 	LiveBarnSurfaceMapping,
-	LiveBarnSurfaceMappingSchema,
 	toDisplayArena,
 } from "./Arenas.js"
 import {KHLCache} from "./Cache.js"
@@ -43,6 +42,13 @@ import {
 } from "./KHL.js"
 import {getPlayersCacheKey, KHLSyncer} from "./KHLSyncer.js"
 import {getLivebarnVenues} from "./LiveBarn.js"
+import {
+	openPageStore,
+	PageLoad,
+	PageLoadSource,
+	setPageStore,
+	withPageLoadLog,
+} from "./PageStore.js"
 import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
 import {
 	ActivityAttendance,
@@ -118,34 +124,22 @@ import {
 	compareGameEvents,
 	getGoalsByTeam,
 	getLineupAttendance,
-	KHLArenaSchema,
 	KHLBoxScore,
-	KHLBoxScoreSchema,
 	KHLBoxScoreTeam,
 	KHLGame,
 	KHLGamePreviewStats,
-	KHLGamePreviewStatsSchema,
-	KHLGameSchema,
 	KHLGameStats,
-	KHLGameStatsSchema,
 	KHLGameTeamStats,
 	KHLLeagueGame,
-	KHLLeagueGameSchema,
 	KHLLeagueTeam,
-	KHLPlayerSchema,
 	KHLPlayerSearchResult,
-	KHLPlayerSearchResultSchema,
 	KHLRosterRow,
 	KHLScoreboardGame,
-	KHLScoreboardGameSchema,
 	KHLScoreboardTeam,
 	KHLSeason,
-	KHLStandingsPageSchema,
 	KHLTeam,
 	KHLTeamsPage,
-	KHLTeamsPageSchema,
 	KHLTeamStats,
-	KHLTeamStatsSchema,
 	normalizePlayerName,
 } from "../shared/KHLJson.js"
 import {
@@ -158,12 +152,7 @@ import {
 	MINUTE_MS as MINUTE,
 } from "../shared/LeagueTime.js"
 import {getLiveBarnLiveUrl, getLiveBarnVodUrl} from "../shared/LiveBarn.js"
-import {
-	LiveBarnSurface,
-	LiveBarnSurfaceSchema,
-	LiveBarnVenue,
-	LiveBarnVenueSchema,
-} from "../shared/LiveBarnJson.js"
+import {LiveBarnSurface, LiveBarnVenue} from "../shared/LiveBarnJson.js"
 
 setLoggerTransports([new ConsoleTransport({verbose: true})])
 const logger = new Logger("Server")
@@ -179,11 +168,18 @@ const DB_PATH =
 	process.env.KHL_DB_PATH ?? path.join(PROJECT_DIR, "data/khl.sqlite")
 
 const db = openDatabase(DB_PATH)
+// Fetched KHL and LiveBarn pages, in a file of their own since they can be
+// fetched again, unlike the player identities in `db`
+const PAGES_DB_PATH =
+	process.env.KHL_PAGES_DB_PATH ??
+	path.join(PROJECT_DIR, "data/khl-pages.sqlite")
+setPageStore(openPageStore(PAGES_DB_PATH))
 
 const app = express()
 
-const cache = new KHLCache(db)
-const playersSyncer = new KHLSyncer(cache, {
+const cache = new KHLCache()
+const appCache = new AppCache(db)
+const playersSyncer = new KHLSyncer(appCache, {
 	getSeasons: async () => {
 		const teamsPage = await getTeamsPage()
 		return {current: teamsPage.season, seasons: teamsPage.seasons}
@@ -196,6 +192,23 @@ app.use(compression())
 
 // Client log batches with stack traces can outgrow the 100kb default
 app.use(express.json({limit: "512kb"}))
+
+// Reports where each API request's pages came from: counts in Server-Timing
+// (DevTools shows them under the request's Timing), the pages themselves in
+// X-KHL-Pages, and anything that wasn't in memory in the log
+app.use("/api", (req, res, next) => {
+	const log: PageLoad[] = []
+	const json = res.json.bind(res)
+	res.json = (body) => {
+		if (log.length > 0 && !res.headersSent) {
+			res.setHeader("Server-Timing", toServerTiming(log))
+			res.setHeader("X-KHL-Pages", toPageLoadsHeader(log))
+			logPageLoads(req.originalUrl, log)
+		}
+		return json(body)
+	}
+	withPageLoadLog(log, next)
+})
 
 app.get("/api/health", (_req, res) => {
 	res.json({ok: true, commit: DEPLOY_INFO.commit, dirty: DEPLOY_INFO.dirty})
@@ -240,7 +253,6 @@ registerEndpoint(app, SEARCH_ENDPOINT, async ({q}) => {
 	const registrations = await cache.cached(
 		`search:${query.toLowerCase()}:${teamsPage.season.id}`,
 		10 * MINUTE,
-		z.array(KHLPlayerSearchResultSchema),
 		() => searchKHLPlayers(query, teamsPage.season.id),
 	)
 	const playerIds = db.recordRegistrations(registrations)
@@ -417,10 +429,6 @@ registerEndpoint(
 				error: null,
 			}
 		}
-		// Inspectable entries are only read through `cached`, which has a loader
-		if (!entry.load) {
-			throw new ApiError(400, `cache key ${key} can't be reloaded`)
-		}
 		const cachedValue = JsonValueSchema.parse(await entry.value)
 		let khl: JsonValue
 		try {
@@ -485,8 +493,7 @@ function getHistoryCacheKey(player: Player): string {
  */
 function searchPlayerHistory(player: Player): Promise<KHLPlayerSearchResult[]> {
 	const nameKey = normalizePlayerName(player.name)
-	const schema = z.array(KHLPlayerSearchResultSchema)
-	return cache.cached(getHistoryCacheKey(player), HOUR, schema, async () => {
+	return cache.cached(getHistoryCacheKey(player), HOUR, async () => {
 		return (await searchKHLPlayers(player.name, KHL_ALL_SEASONS)).filter(
 			(r) => normalizePlayerName(r.name) === nameKey,
 		)
@@ -1197,7 +1204,6 @@ registerEndpoint(app, GET_STANDINGS_ENDPOINT, async ({season}) => {
 	const page = await cache.cached(
 		`standings:${season ?? "current"}`,
 		10 * MINUTE,
-		KHLStandingsPageSchema,
 		() => {
 			return getKHLStandings(season)
 		},
@@ -1221,7 +1227,7 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 	if (!isListed) {
 		throw new ApiError(404, `season ${seasonId} not found`)
 	}
-	const players = cache.getValue(
+	const players = appCache.get(
 		getPlayersCacheKey(seasonId),
 		PlayersResponseSchema,
 	)
@@ -1231,7 +1237,7 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 			"this season's players are still loading; try again in a few minutes",
 		)
 	}
-	return players
+	return players.value
 })
 
 /**
@@ -1398,11 +1404,8 @@ async function getPreviewStats(
 	gameId: string,
 ): Promise<KHLGamePreviewStats | null> {
 	try {
-		return await cache.cached(
-			`game-preview:${gameId}`,
-			10 * MINUTE,
-			KHLGamePreviewStatsSchema,
-			() => getKHLGamePreviewStats(gameId),
+		return await cache.cached(`game-preview:${gameId}`, 10 * MINUTE, () =>
+			getKHLGamePreviewStats(gameId),
 		)
 	} catch (error) {
 		logger.warn("getPreviewStats", "KHL preview stats unavailable", {
@@ -1630,7 +1633,7 @@ registerEndpoint(app, GET_RINK_ENDPOINT, async ({arenaId}) => {
 	const teamsPage = await getTeamsPage()
 	const [rink, arena, recent] = await Promise.all([
 		getRink(arenaId, teamsPage),
-		cache.cached(`arena-page:${arenaId}`, 24 * HOUR, KHLArenaSchema, () =>
+		cache.cached(`arena-page:${arenaId}`, 24 * HOUR, () =>
 			getKHLArena(arenaId),
 		),
 		getRecentRinkGames(arenaId, teamsPage),
@@ -1682,13 +1685,81 @@ app.listen(PORT, () => {
 	})
 	startStatusChecks(db)
 	playersSyncer.start()
-	cache.prune()
-	setInterval(() => cache.prune(), HOUR)
 })
+
+const PAGE_LOAD_LABELS: Record<PageLoadSource, string> = {
+	memory: "from memory",
+	stored: "from stored pages",
+	fetched: "fetched from the KHL or LiveBarn",
+	stale: "stored pages served after a failed fetch",
+}
+
+function countPageLoads(log: PageLoad[]): Record<PageLoadSource, number> {
+	const counts = {memory: 0, stored: 0, fetched: 0, stale: 0}
+	for (const load of log) {
+		counts[load.source]++
+	}
+	return counts
+}
+
+function toServerTiming(log: PageLoad[]): string {
+	const counts = countPageLoads(log)
+	const fetchMs = log.reduce((total, load) => total + load.ms, 0)
+	return (Object.keys(counts) as PageLoadSource[])
+		.map((source) => {
+			const dur = matchValue(source, {
+				memory: "",
+				stored: "",
+				fetched: `;dur=${fetchMs}`,
+				stale: "",
+			})
+			const desc = `${counts[source]} ${PAGE_LOAD_LABELS[source]}`
+			return `khl-${source}${dur};desc="${desc}"`
+		})
+		.join(", ")
+}
+
+/** "fetched <url>, memory <key>, ...", capped so the header stays small */
+function toPageLoadsHeader(log: PageLoad[]): string {
+	const MAX_PAGES = 40
+	// Header values must be printable ASCII; player names may not be
+	const items = log
+		.slice(0, MAX_PAGES)
+		.map(
+			(load) =>
+				`${load.source} ${load.key.replace(/[^\x20-\x7e]/g, "?")}`,
+		)
+	if (log.length > MAX_PAGES) {
+		items.push(`+${log.length - MAX_PAGES} more`)
+	}
+	return items.join(", ")
+}
+
+function logPageLoads(path: string, log: PageLoad[]) {
+	const counts = countPageLoads(log)
+	if (counts.stored + counts.fetched + counts.stale === 0) {
+		return
+	}
+	logger.info("pageLoads", "loaded pages", {
+		path,
+		...counts,
+		fetchMs: log.reduce((total, load) => total + load.ms, 0),
+		pages: log
+			.filter((load) =>
+				matchValue(load.source, {
+					memory: false,
+					stored: true,
+					fetched: true,
+					stale: true,
+				}),
+			)
+			.map((load) => `${load.source} ${load.key}`),
+	})
+}
 
 function getTeamsPage(seasonId?: string): Promise<KHLTeamsPage> {
 	const key = `teams:${seasonId ?? "current"}`
-	return cache.cached(key, HOUR, KHLTeamsPageSchema, () => {
+	return cache.cached(key, HOUR, () => {
 		return getKHLTeamsPage(seasonId)
 	})
 }
@@ -1714,7 +1785,6 @@ function getPlayer(playerId: string, teamId: string, seasonId: string) {
 	return cache.cached(
 		getPlayerCacheKey(playerId, teamId, seasonId),
 		10 * MINUTE,
-		KHLPlayerSchema,
 		() => {
 			return getKHLPlayer(playerId, teamId, seasonId)
 		},
@@ -1733,7 +1803,6 @@ function getSchedule(
 	return cache.cached(
 		getScheduleCacheKey(teamId, seasonId),
 		getSeasonTtl(isCurrentSeason),
-		z.array(KHLGameSchema),
 		() => {
 			return getKHLTeamSchedule(teamId, seasonId)
 		},
@@ -1748,7 +1817,6 @@ function getTeamStats(
 	return cache.cached(
 		`team-stats:${teamId}:${seasonId}`,
 		getSeasonTtl(isCurrentSeason),
-		KHLTeamStatsSchema,
 		() => getKHLTeamStats(teamId, seasonId),
 	)
 }
@@ -1939,7 +2007,6 @@ function getGameStats(gameId: string): Promise<KHLGameStats> {
 	return cache.cached(
 		`game-stats:${gameId}`,
 		10 * MINUTE,
-		KHLGameStatsSchema,
 		() => {
 			return getKHLGameStats(gameId)
 		},
@@ -1957,7 +2024,6 @@ function getBoxScore(gameId: string): Promise<KHLBoxScore> {
 	return cache.cached(
 		`box-score:${gameId}`,
 		10 * MINUTE,
-		KHLBoxScoreSchema,
 		() => {
 			return getKHLBoxScore(gameId)
 		},
@@ -2030,11 +2096,8 @@ async function getRink(
 function getScoreboard(date: string): Promise<KHLScoreboardGame[]> {
 	// A finished day's scores only change when the league corrects one
 	const isPast = date < getLeagueDayKey(new Date())
-	return cache.cached(
-		`scoreboard:${date}`,
-		isPast ? HOUR : 5 * MINUTE,
-		z.array(KHLScoreboardGameSchema),
-		() => getKHLScoreboard(date),
+	return cache.cached(`scoreboard:${date}`, isPast ? HOUR : 5 * MINUTE, () =>
+		getKHLScoreboard(date),
 	)
 }
 
@@ -2124,7 +2187,6 @@ async function getLeagueSchedule(): Promise<KHLLeagueGame[]> {
 	const games = await cache.cached(
 		"league-schedule",
 		5 * MINUTE,
-		z.array(KHLLeagueGameSchema),
 		getKHLLeagueSchedule,
 	)
 	return [...games].sort((a, b) => a.startsAt.localeCompare(b.startsAt))
@@ -2247,33 +2309,19 @@ interface LiveBarnSurfaceEntry {
 	surface: LiveBarnSurface
 }
 
-const LiveBarnSurfaceEntrySchema = z.object({
-	venue: LiveBarnVenueSchema,
-	surface: LiveBarnSurfaceSchema,
-}) satisfies z.ZodType<LiveBarnSurfaceEntry>
-
-/** Only the mapped surfaces: the full venues list is several MB */
 async function getLiveBarnSurfaces(): Promise<
 	Map<number, LiveBarnSurfaceEntry>
 > {
-	const mapped = new Set(
-		Object.values(KHL_ARENA_LIVEBARN_SURFACES).flatMap((arena) =>
-			arena.livebarnSurfaces.map((s) => s.surfaceId),
-		),
-	)
-	const entries = await cache.cached(
-		"livebarn:surfaces",
-		24 * HOUR,
-		z.array(LiveBarnSurfaceEntrySchema),
-		async () => {
-			return (await getLivebarnVenues()).flatMap((venue) =>
-				venue.surfaces
-					.filter((surface) => mapped.has(surface.id))
-					.map((surface) => ({venue, surface})),
-			)
-		},
-	)
-	return new Map(entries.map((entry) => [entry.surface.id, entry]))
+	return cache.cached("livebarn:surfaces", 24 * HOUR, async () => {
+		const venues = await getLivebarnVenues()
+		const surfaces = new Map<number, LiveBarnSurfaceEntry>()
+		for (const venue of venues) {
+			for (const surface of venue.surfaces) {
+				surfaces.set(surface.id, {venue, surface})
+			}
+		}
+		return surfaces
+	})
 }
 
 async function toFeedGames(
@@ -2357,11 +2405,8 @@ async function getVerifiedSurfaces(
 	arenaId: string,
 ): Promise<LiveBarnSurfaceMapping[]> {
 	try {
-		return await cache.cached(
-			`arena:${arenaId}`,
-			24 * HOUR,
-			z.array(LiveBarnSurfaceMappingSchema),
-			() => verifyArenaMapping(arenaId),
+		return await cache.cached(`arena:${arenaId}`, 24 * HOUR, () =>
+			verifyArenaMapping(arenaId),
 		)
 	} catch (error) {
 		logger.error("getVerifiedSurfaces", "could not verify arena", {

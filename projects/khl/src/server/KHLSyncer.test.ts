@@ -11,9 +11,10 @@ const past: KHLSeason = {id: "96", name: "Summer 2026"}
 
 /**
  * A league of one team per season, with one game each, where each player
- * dressed for every game. Pages are "fetched" by stamping the time.
+ * dressed for every game. Pages are "fetched" by stamping the time, and each
+ * fetch takes `fetchMs` of it.
  */
-const createLeague = () => {
+const createLeague = ({fetchMs = 0}: {fetchMs?: number} = {}) => {
 	const fetchedAt = new Map<string, number>()
 	const fetches: string[] = []
 	const failing = new Set<string>()
@@ -33,10 +34,10 @@ const createLeague = () => {
 		["2", ["601"]],
 	])
 	const teamsBySeason = new Map([
-		["100", "11"],
-		["96", "22"],
+		["100", ["11"]],
+		["96", ["22"]],
 	])
-	const rosters = new Map([
+	const rosters = new Map<string, string[]>([
 		["11:100", ["501", "502"]],
 		["22:96", ["601"]],
 	])
@@ -46,6 +47,7 @@ const createLeague = () => {
 		if (failing.has(key)) {
 			throw new Error("KHL 403")
 		}
+		setSystemTime(Date.now() + fetchMs)
 		fetchedAt.set(key, Date.now())
 		fetches.push(key)
 		recordPageLoad({source: "fetched", key, ms: 0})
@@ -60,7 +62,7 @@ const createLeague = () => {
 		getFetchedAt: (page) => fetchedAt.get(JSON.stringify(page)) ?? null,
 		readTeams: async (seasonId, mustFetch) => {
 			read({kind: "teams", seasonId}, mustFetch)
-			return [teamsBySeason.get(seasonId)!]
+			return teamsBySeason.get(seasonId)!
 		},
 		readSchedule: async (teamId, seasonId, mustFetch) => {
 			read({kind: "schedule", teamId, seasonId}, mustFetch)
@@ -109,6 +111,7 @@ const createLeague = () => {
 		failing,
 		schedules,
 		lineups,
+		teamsBySeason,
 		/** Fetches since the last call */
 		takeFetches: () => fetches.splice(0),
 	}
@@ -169,6 +172,43 @@ describe("KHLSyncer", () => {
 					seasonId: "100",
 				}),
 			].sort(),
+		)
+	})
+
+	test("a game that finishes during a long walk is refreshed before the walk ends", async () => {
+		setSystemTime(START)
+		// Every fetch takes 10 minutes, so walking the past season's 6 teams
+		// takes hours
+		const league = createLeague({fetchMs: 10 * MINUTE_MS})
+		league.teamsBySeason.set("96", ["22", "23", "24", "25", "26", "27"])
+		league.schedules.set("11:100", [
+			...league.schedules.get("11:100")!,
+			{gameId: "3", startsAt: iso(START), isFinal: true},
+		])
+		await league.syncer.syncOnce()
+		const fetches = league.takeFetches()
+		const gameFetch = fetches.indexOf(page({kind: "game", gameId: "3"}))
+		const lastTeamFetch = fetches.indexOf(
+			page({kind: "schedule", teamId: "27", seasonId: "96"}),
+		)
+		expect(gameFetch).toBeGreaterThan(-1)
+		expect(gameFetch).toBeLessThan(lastTeamFetch)
+	})
+
+	test("the same holds during the current season's own walk", async () => {
+		setSystemTime(START)
+		const league = createLeague({fetchMs: 10 * MINUTE_MS})
+		league.teamsBySeason.set("100", ["11", "12", "13", "14", "15", "16"])
+		league.schedules.set("11:100", [
+			...league.schedules.get("11:100")!,
+			{gameId: "3", startsAt: iso(START), isFinal: true},
+		])
+		await league.syncer.syncOnce()
+		const fetches = league.takeFetches()
+		expect(fetches.indexOf(page({kind: "game", gameId: "3"}))).toBeLessThan(
+			fetches.indexOf(
+				page({kind: "schedule", teamId: "16", seasonId: "100"}),
+			),
 		)
 	})
 

@@ -28,8 +28,8 @@ const PAGE_REFRESH_MS = {current: 6 * HOUR_MS, past: 30 * DAY_MS}
 /** How long a page whose fetch failed waits before it's tried again */
 const PAGE_RETRY_MS = {current: 30 * MINUTE_MS, past: DAY_MS}
 /**
- * How often to look for current-season games that just finished while a
- * past season is being walked, and how long to wait when nothing is due
+ * How often to look for current-season games that just finished, between
+ * the teams of a walk, and how long to wait when nothing is due
  */
 const CHECK_INTERVAL_MS = 5 * MINUTE_MS
 
@@ -137,12 +137,18 @@ export class KHLSyncer {
 		void this.run()
 	}
 
-	/** Walks every season that has a page due; returns how many it fetched */
+	/**
+	 * Walks every season that has a page due, a team at a time. Between
+	 * teams, it checks for current-season games that just finished, so their
+	 * refreshes never wait for a long walk. Returns how many pages it fetched.
+	 */
 	syncOnce(): Promise<number> {
 		const log: PageLoad[] = []
 		return runInKHLBackground(() =>
 			withPageLoadLog(log, async () => {
-				await this.walkDueSeasons()
+				for await (const _team of this.walkDueSeasons()) {
+					await this.checkFinishedGames()
+				}
 				return log.filter((load) =>
 					matchValue(load.source, {
 						memory: false,
@@ -170,7 +176,8 @@ export class KHLSyncer {
 		}
 	}
 
-	private async walkDueSeasons() {
+	/** Yields after each team it walks */
+	private async *walkDueSeasons(): AsyncGenerator<void> {
 		let listed: {current: KHLSeason; seasons: KHLSeason[]}
 		try {
 			listed = await this.source.getSeasons()
@@ -191,12 +198,16 @@ export class KHLSyncer {
 				continue
 			}
 			const walk = new SeasonWalk(season.id === current.id)
-			await this.walkSeason(walk, season)
+			yield* this.walkSeason(walk, season)
 			this.seasonDueAt.set(season.id, walk.dueAt)
 		}
 	}
 
-	private async walkSeason(walk: SeasonWalk, season: KHLSeason) {
+	/** Yields after each team */
+	private async *walkSeason(
+		walk: SeasonWalk,
+		season: KHLSeason,
+	): AsyncGenerator<void> {
 		const teamsPage: SyncPage = {kind: "teams", seasonId: season.id}
 		const teamIds = await this.attempt(walk, teamsPage, () =>
 			this.source.readTeams(season.id, this.isDue(walk, teamsPage, null)),
@@ -209,9 +220,7 @@ export class KHLSyncer {
 			if (await this.walkTeam(walk, teamId, season.id)) {
 				rosterChanged = true
 			}
-			if (!walk.isCurrentSeason) {
-				await this.checkFinishedGames()
-			}
+			yield
 		}
 		if (rosterChanged || !this.source.hasPlayerList(season.id)) {
 			try {
@@ -226,8 +235,9 @@ export class KHLSyncer {
 	}
 
 	/**
-	 * Refreshes current-season teams with a game that finished recently,
-	 * rather than waiting for a past season's walk to end
+	 * Walks current-season teams with a game that finished recently, at most
+	 * every 5 minutes. Their pages' due rules decide what's fetched, so a
+	 * team already refreshed fetches nothing.
 	 */
 	private async checkFinishedGames() {
 		const now = Date.now()

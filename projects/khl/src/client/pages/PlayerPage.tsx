@@ -24,7 +24,7 @@ import {
 import {
 	AsyncContent,
 	Card,
-	Hint,
+	InfoPopover,
 	Link,
 	PageShell,
 	PageTitle,
@@ -495,19 +495,24 @@ const PlayerBadges = ({
 				</Link>
 			</h2>
 			<ul className="PlayerBadges">
+				{/* A popover rather than a Hint, so a tap explains the icon on
+				    phones, where there's no hover */}
 				{badges.map(({badge, count}) => (
-					<Hint
-						key={badge.id}
-						label={<BadgeHint badge={badge} count={count} />}
-					>
-						<li
-							className="PlayerBadges-badge"
-							tabIndex={0}
-							aria-label={`${badge.label}${count > 1 ? ` ×${count}` : ""}: ${badge.description}`}
+					<li key={badge.id}>
+						<InfoPopover
+							trigger={
+								<button
+									type="button"
+									className="PlayerBadges-badge"
+									aria-label={`${badge.label}${count > 1 ? ` ×${count}` : ""}: ${badge.description}`}
+								>
+									<BadgeIcon badge={badge} count={count} />
+								</button>
+							}
 						>
-							<BadgeIcon badge={badge} count={count} />
-						</li>
-					</Hint>
+							<BadgeHint badge={badge} count={count} />
+						</InfoPopover>
+					</li>
 				))}
 			</ul>
 		</section>

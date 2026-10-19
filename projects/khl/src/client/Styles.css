@@ -2842,13 +2842,20 @@ table {
 }
 
 .PlayerBadges-badge {
+	appearance: none;
 	display: flex;
+	padding: 0;
+	border: 0;
 	border-radius: var(--radius-md);
-	cursor: default;
+	background: none;
+	font: inherit;
+	color: inherit;
+	cursor: help;
 }
 
 .PlayerBadges-badge:hover .BadgeIcon,
-.PlayerBadges-badge:focus-visible .BadgeIcon {
+.PlayerBadges-badge:focus-visible .BadgeIcon,
+.PlayerBadges-badge[data-popup-open] .BadgeIcon {
 	border-color: var(--card-hover-border);
 	background: var(--card-hover-bg);
 }

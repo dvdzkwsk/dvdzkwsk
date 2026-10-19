@@ -124,17 +124,21 @@ export async function searchKHLPlayers(
 export async function getKHLPlayer(
 	registrationKey: RegistrationKey,
 	seasonId: string,
+	options?: ReadPageOptions,
 ): Promise<KHLPlayer> {
 	const url = getKHLPlayerUrl(registrationKey, seasonId)
 	const {khlPlayerId, teamId} = parseRegistrationKey(registrationKey)
-	return fetchKHLPage(url, (root) =>
-		KHLPlayerSchema.parse(
-			parseKHLPlayer(root, url, {
-				playerId: khlPlayerId,
-				teamId,
-				seasonId,
-			}),
-		),
+	return fetchKHLPage(
+		url,
+		(root) =>
+			KHLPlayerSchema.parse(
+				parseKHLPlayer(root, url, {
+					playerId: khlPlayerId,
+					teamId,
+					seasonId,
+				}),
+			),
+		options,
 	)
 }
 
@@ -161,12 +165,16 @@ export function getKHLPlayerUrl(
 export async function getKHLTeamSchedule(
 	teamId: string,
 	seasonId: string,
+	options?: ReadPageOptions,
 ): Promise<KHLGame[]> {
 	const url = getKHLTeamScheduleUrl(teamId, seasonId)
-	return fetchKHLPage(url, (root) =>
-		z
-			.array(KHLGameSchema)
-			.parse(parseKHLTeamSchedule(root, url, {teamId, seasonId})),
+	return fetchKHLPage(
+		url,
+		(root) =>
+			z
+				.array(KHLGameSchema)
+				.parse(parseKHLTeamSchedule(root, url, {teamId, seasonId})),
+		options,
 	)
 }
 

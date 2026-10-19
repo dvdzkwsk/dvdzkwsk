@@ -4,7 +4,7 @@ To run, smoke-test, typecheck, or screenshot the app, use the `run-khl` skill.
 
 ## Layout
 
-- `src/server/KHL.ts` scrapes krakenhockeyleague.com: one `getKHL*` per page, each with a `parseKHL*` function. `Server.ts` caches those pages and builds API responses from them.
+- `src/server/KHL.ts` scrapes krakenhockeyleague.com: one `getKHL*` per page, each with a `parseKHL*` function. `KHLSyncer.ts` syncs the pages behind the site into the league tables (`LeagueDatabase.ts`), and `Server.ts` builds API responses from those tables.
 - `src/shared/` is imported by both sides: API contracts (`ApiJson.ts`), scraped shapes (`KHLJson.ts`), settings (`KHLConfig.ts`), league-local time (`LeagueTime.ts`), and LiveBarn watch URLs (`LiveBarn.ts`).
 - `src/client/`: `Components.tsx` holds generic UI, `Games.tsx` holds game lists, cards, and tables, `Util.ts` holds hooks, formatting, and links, and `pages/` has one route per file.
 
@@ -13,12 +13,9 @@ To run, smoke-test, typecheck, or screenshot the app, use the `run-khl` skill.
 - Parse failures in `KHL.ts` throw `newParseError(pageUrl, message)` (or `newElementError`), which logs through `logger.newError`. Never use a bare `new Error`.
 - Extras that a page can render without (preview stats, rosters, LiveBarn checks) are wrapped so that a KHL failure logs a `warn` and returns null or `[]` instead of failing the request.
 - Errors that reach the Express error middleware are logged there. A `FetchError` (the KHL or LiveBarn site failed) returns 502, and anything else returns 500.
-- Every KHL fetch goes through `cache.cached(key, ttl, load)`. Use `getSeasonTtl(isCurrentSeason)` for season-scoped pages. Fetched pages are stored in `PageStore` by `fetchKHLPage` and `getLivebarnVenues`, so a new fetch should go through `readPage` too.
-- Values we compute from pages and want to keep across restarts go in `AppCache`, with a zod schema for reading them back.
-- A response that needs many KHL pages is built in the background by `KHLSyncer` and served from the app cache; a request never fans out to the KHL. Run background KHL work inside `runInKHLBackground`, so its fetches use the background rate limit instead of visitors'.
-- A page the syncer keeps (teams, schedules, team stats, player pages, box scores and lineups) is read by visitors with `maxPageAgeMs: getSyncedPageMaxAgeMs(isCurrentSeason)`, so they read what it keeps fresh instead of fetching.
-- League data goes in the league records by id; names and logos come from `teams` and `registrations` joins, never copied into other rows.
-- A new KHL fetch goes through `fetchKHLPage(url, parse)`, so the page is stored only once it parses. Pass `{store: false}` for pages not worth keeping, like searches.
+- Pages behind the site (teams, schedules, team stats, player pages, games) are synced into the league tables by `KHLSyncer` and read from there: use `getTeamsPage`, `getSchedule`, `getTeamStats`, `getPlayer`, `getBoxScore`, and `getGameStats`, which sync a page that never was. Don't fetch those kinds from a request, and don't write league data from a request (the search endpoint, whose pages aren't synced, is the one exception).
+- New derived data goes in processing (`KHLSyncer.process*`) and the league tables (`LeagueDatabase.ts`), by id, with names joined in. Bump `PROCESSING_VERSION` when processing changes what it derives, so stored pages are reprocessed.
+- Other KHL pages go through `cache.cached(key, ttl, load)`. A new fetch goes through `fetchKHLPage(url, parse)`, so a page is stored only once it parses; pass `{store: false}` for pages not worth keeping, like searches.
 - When a game counts as settled, complete, or due for another look is decided in `GameRecords.ts`; use its helpers rather than restating the rule.
 - Pass a registration around as a `RegistrationKey` (`toRegistrationKey`), not as separate KHL player and team ids.
 - League-local dates and times come from `shared/LeagueTime.ts` (`getLeagueDayKey`, `toLeagueInstant`, `getGameEndsAt`, `isGameInProgress`, `getGameEventClockTime`, `DAY_MS`, and the other duration constants). Don't build another `Intl.DateTimeFormat` for the league's time zone or write `24 * 60 * 60_000` inline.

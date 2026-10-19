@@ -1,6 +1,6 @@
 # KHL+ architecture
 
-KHL+ is a faster, friendlier front end for [krakenhockeyleague.com](https://krakenhockeyleague.com). The league has no API, so a Bun/Express server scrapes its HTML pages, stores every page it fetches, parses and caches them in memory, joins them with LiveBarn's venue data and a small SQLite database, and serves typed JSON to a React single-page app.
+KHL+ is a faster, friendlier front end for [krakenhockeyleague.com](https://krakenhockeyleague.com). The league has no API, so a Bun/Express server keeps its own copy of the league: a background syncer fetches the KHL's HTML pages, stores each one, and processes it into SQLite tables, which the API reads, joined with LiveBarn's venue data, to serve typed JSON to a React single-page app.
 
 ```mermaid
 flowchart LR
@@ -21,10 +21,10 @@ flowchart LR
 
     subgraph Server["Server process (Bun)"]
         Express["Server.ts<br/>registerEndpoint handlers"]
-        Cache[("Cache.ts · KHLCache<br/>parsed pages, in memory")]
+        Cache[("Cache.ts · KHLCache<br/>pages we don't sync, in memory")]
         PageStore[("PageStore.ts<br/>every fetched page")]
-        AppCache["AppCache.ts<br/>values we compute"]
-        Syncer["KHLSyncer.ts<br/>background player lists"]
+        Syncer["KHLSyncer.ts<br/>fetch queue → process → tables"]
+        League["LeagueDatabase.ts<br/>league tables + fetch queue"]
         KHL["KHL.ts<br/>getKHL* → fetchKHLPage → parseKHL*"]
         LB["LiveBarn.ts"]
         Arenas["Arenas.ts<br/>hand-kept arena ↔ surface map"]
@@ -41,10 +41,11 @@ flowchart LR
     ApiJson -- "HTTP /api/*" --> Express
     ClientLog -- "POST /api/logs" --> Express
     Express --> Cache
-    Express --> AppCache
-    Syncer --> AppCache
-    Syncer --> Cache
-    AppCache --> DB
+    Express -- "ensureSynced, then read" --> Syncer
+    Express --> League
+    Syncer --> KHL
+    Syncer --> League
+    League --> DB
     Cache --> KHL
     Cache --> LB
     KHL --> PageStore
@@ -68,12 +69,11 @@ flowchart LR
 | LiveBarn client | `src/server/LiveBarn.ts` | Fetches the venues list (validated by `LiveBarnJson.ts`). The live/VOD watch URLs are built by `src/shared/LiveBarn.ts`, so the client can link scoresheet events to their moment in a replay. |
 | Arena mapping | `src/server/Arenas.ts` | Hand-maintained map from KHL arena id to LiveBarn surfaces, display name, and city. The two sites disagree on names and addresses, so nothing here is inferred. |
 | Page store | `src/server/PageStore.ts` | Every page fetched from the KHL (`khl_pages`) and LiveBarn (`livebarn_responses`), as fetched and gzipped, in its own SQLite file (`KHL_SOURCES_DB_PATH`). It's a copy of the sources, not a cache: nothing expires, and a refetch replaces a page, recording whether it changed. Fetches read through it (`readPage`, which also parses), so a recent enough stored page saves a fetch. A fetched page replaces the stored copy only once it parses; one that doesn't goes to `failed_pages`, and a stale fallback can still serve the last good copy. Concurrent fetches of one page share a request, fetches time out after 15 seconds, and one-off searches aren't stored. |
-| Cache | `src/server/Cache.ts` | `KHLCache`: parsed KHL and LiveBarn data in memory, by key and TTL, sharing in-flight loads. A load reads stored pages up to the TTL old, so after a restart it parses them again instead of fetching. |
-| App cache | `src/server/AppCache.ts` | Values we compute from fetched pages, like each season's player list, in the main database (`app_cache`, gzipped). They don't expire: whatever computes one replaces it, and its schema is checked when it's read back. |
-| Background sync | `src/server/KHLSyncer.ts` | Keeps a copy of every page behind the player pages: each season's teams, each team's schedule and stats, each finished game's box score and lineups, and each rostered player's page as of their latest season. It walks the current season first, then the rest newest first, fetching only the pages that are due, reprocessing stored pages whose derived rows are out of date (`processed_pages`), and builds each season's player list (`players:<season>`) into the app cache when a roster changes. See seam 2. |
-| League records | `src/server/GameRecords.ts`, `Database.ts` | Rows derived from pages, which refer to each other only by id: `divisions` and `teams` (per season), `schedule_games`, `games`, `game_events` (goals and penalties in scoresheet order), `game_event_players` (scorer, assist, or penalized), and `game_lineups` (who dressed, for which team). Names and logos come from joins with `teams` and `registrations`. A game's `completed_at` is when its summary and both lineups were first saved, and a complete game is never replaced by an incomplete copy. `GameRecords.ts` holds the one policy for when a game has settled and when to look again. Activity is a query on these tables. |
-| API server | `src/server/Server.ts` | Express app. Picks each page's TTL and schema, composes scraped pages into API responses, enriches them (LiveBarn links, logos, preview stats, rosters), serves the built SPA, and maps errors to status codes. |
-| Database | `src/server/Database.ts` | `bun:sqlite` with append-only migrations. Stores the person-level player identity the KHL lacks, status-check history, the app cache, and the league records. A new KHL id whose name matches one player goes through `acceptNameMatch` (its criteria are a TODO; it accepts every match for now), and each such match is recorded in `name_matches` for review. Fetched pages are in a separate file (see Page store), since they can always be fetched again and these can't. |
+| Sync | `src/server/KHLSyncer.ts`, `SyncPages.ts` | Keeps the league tables in sync with the KHL through a persistent fetch queue (`fetch_queue`): every page it keeps, when it's next due, its priority, attempts, and last error. The loop takes the most urgent due page, fetches it, processes it into tables, and schedules it and whatever follows from it. Visitors call `ensureSynced`, which syncs a page that never was, so every stored page of these kinds is processed whoever fetched it. See seam 2. |
+| League tables | `src/server/LeagueDatabase.ts`, `GameRecords.ts` | `seasons`, `divisions`, `teams` (with which page named each, since a teams page outranks a schedule, box score, roster, or search), `arenas`, `schedule_games`, `team_seasons` and `roster_stats`, `player_profiles`, and the games: `games`, `game_teams`, `game_periods`, `game_events` (goals and penalties in scoresheet order), `game_event_players`, and `game_lineups`. Rows refer to each other by id; reads join in names and rebuild the scraped shapes (`KHLJson`) the API is built from. Stat columns and values, which each page defines, are JSON. `GameRecords.ts` holds when a game has settled, is complete, and is due for another look. |
+| Cache | `src/server/Cache.ts` | `KHLCache`: parsed pages the syncer doesn't keep (standings, scoreboards, previews, arenas, LiveBarn, searches), in memory by key and TTL, sharing in-flight loads. |
+| API server | `src/server/Server.ts` | Express app. Reads the league tables (`getTeamsPage`, `getSchedule`, `getTeamStats`, `getPlayer`, `getBoxScore`, `getGameStats` sync a page that never was, then read), composes them into API responses, enriches them (LiveBarn links, logos, preview stats, rosters), serves the built SPA, and maps errors to status codes. |
+| Database | `src/server/Database.ts` | `bun:sqlite` with append-only migrations. Stores the person-level player identity the KHL lacks and status-check history, and holds the league tables (`db.league`). A new KHL id whose name matches one player goes through `acceptNameMatch` (its criteria are a TODO; it accepts every match for now), and each such match is recorded in `name_matches` for review. Fetched pages are in a separate file (see Page store), since they can always be fetched again and these can't. |
 | Status monitor | `src/server/Status.ts` | On boot and every 5 minutes, checks the app/DB, the KHL site, and LiveBarn, records results, and prunes to 90 days. Serves `/api/status` and `DEPLOY_INFO` (git commit). |
 | Shared contracts | `src/shared/*` | `ApiJson.ts` defines every endpoint (`uri`, `method`, and request and response zod schemas). `KHLJson.ts` is the scraper's output vocabulary. `KHLConfig.ts` holds strings, URLs, league settings, and limits. `LeagueTime.ts` is the only place that knows the league's time zone, and it estimates when a scoresheet event happened from its period and clock (`getGameEventClockTime`). `LiveBarn.ts` builds watch URLs. |
 | Client shell | `src/client/App.tsx`, `Util.ts` | Hand-rolled router over `history` (a `ROUTES` table and `matchRoute`), `AppContext`, per-route `ErrorBoundary`, React root error hooks, and client logging. |
@@ -106,34 +106,38 @@ Both sides import the same `*_ENDPOINT` object, so a route, its parameters, and 
 
 In dev, Vite serves the client on `:3000` and proxies `/api` to the server on `:3001`. In production, one process serves both: `express.static(dist/website)` with an `index.html` fallback for client routes.
 
-### 2. Scraper ↔ server: `KHLJson.ts` and `KHLCache`
+### 2. KHL ↔ league tables: `KHLSyncer` and the fetch queue
 
-`KHL.ts` turns HTML into `KHLJson` types and does nothing else. `Server.ts` never touches the DOM, and `KHL.ts` never caches or builds API responses. Every scraper call goes through `cache.cached(key, ttl, load)`. That method:
+`KHL.ts` turns HTML into `KHLJson` types and does nothing else: each `getKHL*` fetches through `fetchKHLPage` (rate-limited, timed out, read through the page store) and hands the DOM to a pure `parseKHL*`. When the league changes its markup, the fix belongs in the matching `parseKHL*`; bump `PROCESSING_VERSION` if what's derived from a page changes, and the syncer reprocesses every stored page without fetching.
 
-- shares one in-flight promise between concurrent callers,
-- drops failures so the next request retries,
-- takes a TTL per key: `getSeasonTtl(isCurrentSeason)` caches the current season for 10 minutes and past seasons for 24 hours. An optional `getTtlMs` can also set the TTL from the loaded value,
-- reads stored pages up to `ttl` old through the page store, so a deploy parses what's stored instead of fetching it again. `invalidate(key)` makes the next load fetch.
+The KHL site starts returning 403s at a few requests a second, counting all of ours together, so `fetchKHLPage` has a rate limiter for each lane: up to 2 a second for visitors, and 1 a second for background work (anything inside `runInKHLBackground`) on its own limiter, so visitors never queue behind it.
 
-When the league changes its markup, the fix belongs in the matching `parseKHL*`. When a response needs new data, add a field to `KHLJson.ts` and then use it from `Server.ts`.
+The pages behind the site (teams, schedules, team stats, player pages, and games) are kept by `KHLSyncer`. Each is a row in `fetch_queue`, in the main database next to the tables processing writes:
 
-The KHL site starts returning 403s at a few requests a second, counting all of ours together, so `fetchKHLPage` has a rate limiter for each lane. A fetch for a visitor waiting on an uncached page gets up to 2 a second. Background work (anything inside `runInKHLBackground`) gets 1 a second on its own limiter, so visitors never queue behind it. Anything that reads many pages runs in the background instead of in a request.
+```mermaid
+flowchart LR
+    Q[("fetch_queue<br/>url · next_at · priority<br/>attempts · last_error")] -- "most urgent due page" --> F["fetch<br/>(background lane, 1/s)"]
+    F --> S[("page store")]
+    S --> P["process(page)"]
+    P --> T[("league tables")]
+    P -- "when it's next due,<br/>and what follows from it" --> Q
+    V["visitor: ensureSynced"] -- "never synced" --> F
+```
 
-`KHLSyncer` keeps a copy of every page behind the player pages, in the background lane. Each page decides for itself whether it's due, from when the page store says it was fetched:
+Processing a page schedules what follows from it:
 
-| Page | Due when |
-| --- | --- |
-| Teams, schedules, team stats, and player pages | Never fetched, or older than 6 hours (current season) or 30 days (past seasons) |
-| A team's schedule | A game on it has ended (plus 30 minutes to settle) since it was fetched |
-| A team's stats | A game of theirs has completed (its summary and lineups were posted) since they were fetched |
-| A player's page (latest season only) | A game they dressed for on that team has completed since it was fetched |
-| A finished game's box score and lineups | Never fetched, fetched before the game settled, or every 10 minutes for 2 days until it's complete |
+| Page | Processing queues | Due again |
+| --- | --- | --- |
+| The default teams page | Every season's teams page; marks the current season | In a day |
+| A season's teams page | Each team's schedule and stats | In a day (current season), 30 days (past) |
+| A schedule | Each game, for when it should have settled | When its next game settles, or in 6 hours (current) / 30 days (past) |
+| A team's stats | Each rostered player's page, as of their latest season | In a day / 30 days, or when a game of theirs completes |
+| A player's page | | In a day / 30 days, or when a game they dressed for completes |
+| A game (box score and stats) | When complete (summary and both lineups posted): both teams' stats, and the pages of the players who dressed | Every 10 minutes for 2 days until complete; then in 30 days |
 
-The syncer walks the current season, then past seasons newest first: each season's teams, then each team's schedule, finished games, stats, and players. It checks what's due against the recorded schedule (`schedule_games`) and the game tables, without parsing pages. It fetches only what's due, and reprocesses a stored page whose derived rows were built from a different copy, or never built, so a restart, deploy, or restored database just walks again. A failed fetch waits 30 minutes (a day for past seasons) without stopping the walk. A page that fetched but didn't parse waits for its next refresh instead, since fetching it again won't help until the page or the parser changes; its `failed_pages` copy counts as its last fetch, so a restart doesn't fetch it again either. Each walk notes when the season's next page is due, including the next refresh of every page it synced, so seasons with nothing due are skipped.
+A completed game brings its teams' and players' pages forward only if they were synced before it was posted: since the last look if it was seen incomplete, or by its settle time otherwise, so a first sync doesn't fetch them twice. The loop takes the most urgent due page by priority (how many seasons before the current one; teams pages first) and then due time, so the current season, including after-game refreshes, always comes before past seasons. With nothing due, it sleeps until the next page is, up to 5 minutes. A failed fetch waits 30 minutes (a day for past seasons); a page that fetched but didn't parse waits for its next refresh, since fetching it again won't help until the page or the parser changes. All of this lives in the table, so a restart or deploy carries on where it left off.
 
-One loop runs it all, started at boot: it checks for current-season games that just ended, walks every season with a page due, then walks again right away if that fetched anything, or sleeps 5 minutes if not. Walks yield to the loop after each team, and between teams the loop checks again (at most every 5 minutes), so a refresh after a game never waits for a long walk to finish. Rechecks that check finds count toward the current season's next due time, so they happen even when nothing else is due. A season's player list is rebuilt from the stored stats pages whenever a roster was fetched. `/api/players` serves that list, or a 503 before a season's first build, and never fetches itself.
-
-Visitors read the same stored pages. Player pages, schedules, and team stats are read up to twice the sync interval old (12 hours, or 60 days for past seasons), so visitors don't refetch what the syncer keeps fresh, while their short memory TTL picks up its refreshes within minutes.
+Visitors read the tables. A getter like `getSchedule` calls `syncer.ensureSynced(page)`, which syncs a page that never was (from the stored copy, fetched if there isn't one) and queues it, so the syncer keeps it fresh from then on; a page that's failing and waiting to be retried is a 502 without another fetch. `/api/players` is a query on `roster_stats`, or a 503 before a season has any.
 
 ### 3. KHL ↔ LiveBarn: `Arenas.ts` with runtime verification
 
@@ -155,43 +159,18 @@ The KHL issues a new player id each time a player registers, so one person has m
 
 #### Building a player profile
 
-A player gets a UUID the first time a roster, box score, or search shows them. The syncer reads every season's rosters, so the database holds each person's registrations across seasons, and a profile is built from what's stored, without searching the KHL:
+A player gets a UUID the first time a roster, box score, or search shows them. The syncer reads every season's rosters, so the database holds each person's registrations across seasons, and a profile is built from the league tables, without searching the KHL:
 
 ```mermaid
 flowchart LR
     Search["/api/search<br/>current-season search"] --> Record["db.recordRegistrations<br/>KHL id → UUID by name"]
     Roster["team rosters<br/>(every season, by the syncer)"] --> Record
-    Box["box scores"] --> Record
+    Box["box scores and lineups"] --> Record
     Record --> UUID[("players + registrations<br/>SQLite")]
     UUID -- "/players/:uuid" --> Profile["GET /api/players/:playerId"]
 ```
 
-`GET /api/players/:playerId` reads, in this order:
-
-```mermaid
-sequenceDiagram
-    participant H as GET /api/players/:playerId
-    participant DB as Database
-    participant P as Page store
-    participant KHL as krakenhockeyleague.com
-    H->>DB: getPlayer(uuid) → name (404 if unknown)
-    H->>DB: getRegistrations(uuid)<br/>one per (KHL id, team), latest first
-    H->>P: current teams page (teams:current, 1h)
-    par one per registration
-        H->>P: player page for its latest season<br/>(stored up to 12h / 60d old) → profile, or null on failure
-    and one per team per season
-        H->>P: team schedule (stored up to 12h / 60d old)<br/>→ games, or listed in unavailableSchedules
-    end
-    Note over H,KHL: a page that isn't stored, or is older than that, is fetched
-    loop each arena in those games
-        H->>P: arena page and LiveBarn venues → verified replay links
-    end
-    opt on a current-season team
-        H->>P: league schedule (5m) → upcoming games
-    end
-```
-
-Opponent logos come from the teams page already loaded. The page also requests `GET /api/players/:playerId/activity` once, separately. That one response feeds the activity feed, the games the player sat out, and the badges' penalty trend. It reads the same registrations and schedules, then queries the games tables for the recent finished games: goals, assists, and penalties by the player's KHL ids, and lineups for whether they dressed. A game that isn't in the tables yet, or was saved before its summary or lineups were posted, is processed from its pages first. The integrity report (`/players/:playerId?integrity`) still searches the KHL by name, since it checks what we've stored against the KHL.
+`GET /api/players/:playerId` reads the player's registrations, then each registration's player page as of its latest season (`player_profiles`) and each team-season's schedule (`schedule_games`), syncing any that never were; a schedule that's failing is listed in `unavailableSchedules`. Replay links come from the arena pages and LiveBarn venues (memory cache), and upcoming games from the league schedule. The page also requests `GET /api/players/:playerId/activity` once. That one response feeds the activity feed, the games the player sat out, and the badges' penalty trend: it queries the games tables for the recent finished games, goals, assists, and penalties by the player's KHL ids, and lineups for whether they dressed. The integrity report (`/players/:playerId?integrity`) still searches the KHL by name, since it checks what we've stored against the KHL, and its check fetches the KHL's page without storing it.
 
 ### 5. League time: `LeagueTime.ts`
 

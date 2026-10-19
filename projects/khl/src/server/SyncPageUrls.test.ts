@@ -7,7 +7,7 @@ import {
 	getKHLTeamsPage,
 	getKHLTeamStats,
 } from "./KHL.js"
-import {getSyncPageUrl, SyncPage} from "./KHLSyncer.js"
+import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
 import {toRegistrationKey} from "../shared/ApiJson.js"
 
 const realFetch = globalThis.fetch
@@ -38,6 +38,7 @@ describe("getSyncPageUrl", () => {
 		teamId: "3452",
 	})
 	const cases: [SyncPage, () => Promise<unknown>][] = [
+		[{kind: "teams", seasonId: null}, () => getKHLTeamsPage()],
 		[{kind: "teams", seasonId: "2143"}, () => getKHLTeamsPage("2143")],
 		[
 			{kind: "schedule", teamId: "3452", seasonId: "2143"},
@@ -54,7 +55,7 @@ describe("getSyncPageUrl", () => {
 		[{kind: "game", gameId: "56994"}, () => getKHLBoxScore("56994")],
 	]
 	for (const [page, load] of cases) {
-		test(`a ${page.kind} page is stored under the URL it's fetched from`, async () => {
+		test(`${JSON.stringify(page)} is stored under the URL it's fetched from`, async () => {
 			expect(await getFetchedUrl(load)).toBe(getSyncPageUrl(page))
 		})
 	}

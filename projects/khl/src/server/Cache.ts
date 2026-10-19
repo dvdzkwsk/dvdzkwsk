@@ -10,9 +10,10 @@ export interface CacheEntry {
 }
 
 /**
- * Parsed KHL and LiveBarn data, in memory. The pages behind it are kept in
- * the page store (see PageStore), so after a restart, a load within an
- * entry's TTL parses the stored page again instead of fetching it.
+ * Parsed KHL and LiveBarn pages the syncer doesn't keep (standings,
+ * scoreboards, previews, arenas, searches), in memory. Those that are stored
+ * (all but searches) are kept in the page store, so after a restart, a load
+ * within an entry's TTL parses the stored page instead of fetching it.
  */
 export class KHLCache {
 	private entries = new Map<string, CacheEntry>()
@@ -23,9 +24,9 @@ export class KHLCache {
 	private mustFetch = new Set<string>()
 
 	/**
-	 * Memoizes `load` for `ttlMs`, reading stored pages up to `ttlMs` old (or
-	 * `maxPageAgeMs`), or older ones if fetching them fails. Concurrent
-	 * callers share one in-flight request, and failures aren't cached.
+	 * Memoizes `load` for `ttlMs`, reading stored pages up to `ttlMs` old, or
+	 * older ones if fetching them fails. Concurrent callers share one
+	 * in-flight request, and failures aren't cached.
 	 */
 	cached<T>(
 		key: string,
@@ -33,16 +34,9 @@ export class KHLCache {
 		load: () => Promise<T>,
 		{
 			getTtlMs,
-			maxPageAgeMs = ttlMs,
 		}: {
 			/** Once loaded, how long to keep this value instead of `ttlMs` */
 			getTtlMs?: (value: T) => number
-			/**
-			 * How old a stored page can be and still be read instead of
-			 * fetched. Longer than `ttlMs` for pages the syncer keeps fresh,
-			 * so a short `ttlMs` picks up its refreshes without fetching.
-			 */
-			maxPageAgeMs?: number
 		} = {},
 	): Promise<T> {
 		const hit = this.entries.get(key)
@@ -52,7 +46,7 @@ export class KHLCache {
 		}
 		const policy = this.mustFetch.delete(key)
 			? {maxAgeMs: 0, allowStale: false}
-			: {maxAgeMs: maxPageAgeMs, allowStale: true}
+			: {maxAgeMs: ttlMs, allowStale: true}
 		const value = withPageReadPolicy(policy, load)
 		const entry: CacheEntry = {
 			expiresAt: Date.now() + ttlMs,

@@ -2,512 +2,486 @@ import {Logger} from "@dvdzkwsk/logger"
 import {sleep} from "@dvdzkwsk/util/AsyncUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
+import {KHLDatabase} from "./Database.js"
 import {
-	GAME_SETTLE_LIMIT_MS,
 	getGameRecheckAt,
 	getSettleAt,
-	ScheduleGame,
+	isGameRecordComplete,
 } from "./GameRecords.js"
 import {
-	getKHLBoxScoreUrl,
-	getKHLPlayerUrl,
-	getKHLTeamScheduleUrl,
-	getKHLTeamsPageUrl,
-	getKHLTeamStatsUrl,
+	getKHLBoxScore,
+	getKHLGameStats,
+	getKHLPlayer,
+	getKHLTeamSchedule,
+	getKHLTeamsPage,
+	getKHLTeamStats,
 	runInKHLBackground,
 } from "./KHL.js"
-import {PageLoad, withPageLoadLog} from "./PageStore.js"
-import {RegistrationKey} from "../shared/ApiJson.js"
-import {KHLSeason} from "../shared/KHLJson.js"
+import {withPageReadPolicy} from "./PageStore.js"
+import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
+import {RegistrationKey, toRegistrationKey} from "../shared/ApiJson.js"
+import {
+	KHLBoxScore,
+	KHLGame,
+	KHLGameStats,
+	KHLPlayer,
+	KHLPlayerSearchResult,
+	KHLTeamsPage,
+	KHLTeamStats,
+} from "../shared/KHLJson.js"
 import {DAY_MS, HOUR_MS, MINUTE_MS} from "../shared/LeagueTime.js"
 
 const logger = new Logger("KHLSyncer")
 
 /**
- * How often a season's pages are fetched again, on top of the refreshes a
- * finished game triggers. Past seasons are over, so they change only if the
- * league edits them.
+ * Bump when processing changes what it derives from a page, so every stored
+ * page is processed again (from storage, without fetching)
  */
-const PAGE_REFRESH_MS = {current: 6 * HOUR_MS, past: 30 * DAY_MS}
+export const PROCESSING_VERSION = 1
+
+/**
+ * How long until each kind of page is fetched again, besides what a game
+ * triggers: a schedule is also due when each of its games settles, and a
+ * team's stats and its players' pages when a game of theirs completes
+ */
+const REFRESH_MS = {
+	teams: {current: DAY_MS, past: 30 * DAY_MS},
+	schedule: {current: 6 * HOUR_MS, past: 30 * DAY_MS},
+	"team-stats": {current: DAY_MS, past: 30 * DAY_MS},
+	player: {current: DAY_MS, past: 30 * DAY_MS},
+	// Once complete; corrections after that are rare
+	game: {current: 30 * DAY_MS, past: 30 * DAY_MS},
+}
 /** How long a page whose fetch failed waits before it's tried again */
-const PAGE_RETRY_MS = {current: 30 * MINUTE_MS, past: DAY_MS}
-/**
- * How often to look for current-season games that just finished (each pass,
- * and between the teams of a walk), and how long to wait when nothing is due
- */
-const CHECK_INTERVAL_MS = 5 * MINUTE_MS
+const RETRY_MS = {current: 30 * MINUTE_MS, past: DAY_MS}
+/** The longest the loop sleeps when nothing is due */
+const MAX_IDLE_MS = 5 * MINUTE_MS
 
 /**
- * How old a synced page can be and still be read instead of fetched when a
- * visitor needs it: twice the syncer's interval, so a sync that runs late
- * still doesn't send visitors to the KHL
+ * Reads a page for the syncer, parsed: fetched if `fetch`, or else the
+ * stored copy, which is fetched only if there isn't one
  */
-export function getSyncedPageMaxAgeMs(isCurrentSeason: boolean): number {
-	return 2 * getSeasonPolicy(PAGE_REFRESH_MS, isCurrentSeason)
-}
-
-export function getPlayersCacheKey(seasonId: string): string {
-	return `players:${seasonId}`
-}
-
-/** A page the syncer keeps */
-export type SyncPage =
-	| {kind: "teams"; seasonId: string}
-	| {kind: "schedule"; teamId: string; seasonId: string}
-	| {kind: "team-stats"; teamId: string; seasonId: string}
-	| {kind: "player"; registrationKey: RegistrationKey; seasonId: string}
-	/** The box score and stats page, fetched together */
-	| {kind: "game"; gameId: string}
-
-/** The URL a page is stored under; a game's is its box score's */
-export function getSyncPageUrl(page: SyncPage): string {
-	return matchField(page, "kind", {
-		teams: (p) => getKHLTeamsPageUrl(p.seasonId),
-		schedule: (p) => getKHLTeamScheduleUrl(p.teamId, p.seasonId),
-		"team-stats": (p) => getKHLTeamStatsUrl(p.teamId, p.seasonId),
-		player: (p) => getKHLPlayerUrl(p.registrationKey, p.seasonId),
-		game: (p) => getKHLBoxScoreUrl(p.gameId),
-	}).toString()
-}
-
-/**
- * Reads and stores KHL pages for the syncer, and records what's derived from
- * them. A `sync*` with `fetch` false processes the stored page, fetching it
- * only if there isn't one.
- */
-export interface KHLSyncerSource {
-	/** The league's current season and every season it lists */
-	getSeasons: () => Promise<{current: KHLSeason; seasons: KHLSeason[]}>
-	/** When the page was last fetched; null if never */
-	getFetchedAt: (page: SyncPage) => number | null
-	/**
-	 * Whether the stored page's derived rows were built from a different
-	 * copy of it, or never built
-	 */
-	needsProcessing: (page: SyncPage) => boolean
-	/** Records the season's teams and divisions; returns the team ids */
-	syncTeams: (seasonId: string, fetch: boolean) => Promise<string[]>
-	/** Records the team's schedule (see getSchedule) */
-	syncSchedule: (
+export interface KHLSyncerPages {
+	teams: (seasonId: string | null, fetch: boolean) => Promise<KHLTeamsPage>
+	schedule: (
 		teamId: string,
 		seasonId: string,
 		fetch: boolean,
-	) => Promise<void>
-	/** Records the roster's registrations */
-	syncTeamStats: (
+	) => Promise<KHLGame[]>
+	teamStats: (
 		teamId: string,
 		seasonId: string,
 		fetch: boolean,
-	) => Promise<void>
-	fetchPlayer: (
-		registrationKey: RegistrationKey,
+	) => Promise<KHLTeamStats>
+	player: (
+		key: RegistrationKey,
 		seasonId: string,
-	) => Promise<void>
-	/** Saves the game to the games tables from its box score and stats */
-	syncGame: (gameId: string, fetch: boolean) => Promise<void>
-	/** The team's schedule as last recorded; empty if never */
-	getSchedule: (teamId: string, seasonId: string) => ScheduleGame[]
-	/** Every team's schedule that season as last recorded, by team */
-	getSeasonSchedules: (seasonId: string) => Map<string, ScheduleGame[]>
-	/** Null if the game isn't in the games tables */
-	getGameStatus: (gameId: string) => {isComplete: boolean} | null
-	/** When the team's latest game that season completed; null if none has */
-	getTeamLatestCompletedGame: (
-		teamId: string,
-		seasonId: string,
-	) => number | null
-	/**
-	 * The players registered on the team whose latest season there is this
-	 * one, since a registration's player page is read as of that season
-	 */
-	getTeamRegistrationKeys: (
-		teamId: string,
-		seasonId: string,
-	) => RegistrationKey[]
-	/** When each player's latest game they dressed for on that team completed */
-	getLatestCompletedGames: (
-		keys: RegistrationKey[],
-	) => Map<RegistrationKey, number>
-	/** Builds the season's player list from its stored team stats pages */
-	buildPlayerList: (
-		season: KHLSeason,
-		isCurrentSeason: boolean,
-	) => Promise<void>
-	hasPlayerList: (seasonId: string) => boolean
+		fetch: boolean,
+	) => Promise<KHLPlayer>
+	boxScore: (gameId: string, fetch: boolean) => Promise<KHLBoxScore>
+	gameStats: (gameId: string, fetch: boolean) => Promise<KHLGameStats>
+}
+
+/** The KHL's pages, through the page store */
+export const KHL_PAGES: KHLSyncerPages = {
+	teams: (seasonId, fetch) =>
+		readForSync(fetch, () => getKHLTeamsPage(seasonId ?? undefined)),
+	schedule: (teamId, seasonId, fetch) =>
+		readForSync(fetch, () => getKHLTeamSchedule(teamId, seasonId)),
+	teamStats: (teamId, seasonId, fetch) =>
+		readForSync(fetch, () => getKHLTeamStats(teamId, seasonId)),
+	player: (key, seasonId, fetch) =>
+		readForSync(fetch, () => getKHLPlayer(key, seasonId)),
+	boxScore: (gameId, fetch) =>
+		readForSync(fetch, () => getKHLBoxScore(gameId)),
+	gameStats: (gameId, fetch) =>
+		readForSync(fetch, () => getKHLGameStats(gameId)),
 }
 
 /**
- * Keeps a copy of every KHL page behind the site's player pages: every
- * season's teams, each team's schedule and stats, each finished game's box
- * score and lineups, and each rostered player's page as of their latest
- * season. It walks the current season first, then the rest newest first,
- * fetching only the pages that are due, so a restart walks again and skips
- * what's fresh. A stored page that's not due but whose derived rows are
- * missing or out of date is processed again from storage. Fetches share the
- * KHL's background rate limit, so visitors don't wait on them.
+ * Fetched if `fetch`, or else the stored copy, which is fetched only if
+ * there isn't one. No stale fallback, so a failed fetch fails, and is
+ * retried, instead of passing for a fresh one.
+ */
+function readForSync<T>(fetch: boolean, load: () => Promise<T>): Promise<T> {
+	return withPageReadPolicy(
+		{maxAgeMs: fetch ? 0 : Infinity, allowStale: false},
+		load,
+	)
+}
+
+/**
+ * Keeps the league's tables in sync with the KHL. Every page it keeps is a
+ * row in the fetch queue with when it's next due; the loop takes the most
+ * urgent due page, fetches it, processes it into tables, and schedules it
+ * and whatever follows from it:
  *
- * A page is due when it was never fetched, when its season's refresh
- * interval has passed, or when something that changes it has happened
- * since: a team's schedule after each of its games ends, its stats after
- * each game completes (its summary and lineups are posted), a player's page
- * after each completed game they dressed for, and a game's own pages until
- * it's complete.
+ * - The default teams page queues every season's teams page.
+ * - A teams page queues each team's schedule and stats.
+ * - A schedule queues each game for when it should have settled, and is
+ *   due again when its next game settles.
+ * - A team's stats queue each rostered player's page (as of their latest
+ *   season).
+ * - A game is looked at again until it's complete (its summary and lineups
+ *   are posted), and completing makes its teams' stats and the pages of
+ *   the players who dressed due right away.
+ *
+ * The current season comes first, then past seasons newest first. Visitors
+ * go through `ensureSynced`, which syncs a page that never was, so every
+ * stored page is processed whoever fetched it, and the tables always match
+ * what's stored.
  */
 export class KHLSyncer {
-	/** When each page whose fetch failed may be tried again */
-	private retryAt = new Map<string, number>()
-	/** When each walked season next has a page due, so others are skipped */
-	private seasonDueAt = new Map<string, number>()
-	/**
-	 * Due times the finished-games check found during a season's walk,
-	 * which the walk's own due time mustn't overwrite
-	 */
-	private noted = new Map<string, number>()
-	private currentSeasonId: string | null = null
-	private lastGameCheckAt = 0
+	/** Syncs in flight, so concurrent syncs of one page share one */
+	private syncing = new Map<string, Promise<void>>()
 
-	constructor(private source: KHLSyncerSource) {}
+	constructor(
+		private db: KHLDatabase,
+		private pages: KHLSyncerPages = KHL_PAGES,
+	) {}
 
 	start() {
+		this.seed()
 		void this.run()
 	}
 
+	/** Queues the league's default teams page, which everything follows from */
+	seed() {
+		this.enqueue({kind: "teams", seasonId: null}, 0)
+	}
+
 	/**
-	 * Checks for current-season games that just finished, then walks every
-	 * season that has a page due, a team at a time, checking again between
-	 * teams, so a refresh after a game never waits for a long walk. Returns
-	 * how many pages it fetched.
+	 * Syncs the next page: first any whose rows an older version of the
+	 * processing built (from storage), then the most urgent due one. Returns
+	 * false if there was nothing to do.
 	 */
-	syncOnce(): Promise<number> {
-		const log: PageLoad[] = []
-		return runInKHLBackground(() =>
-			withPageLoadLog(log, async () => {
-				await this.checkFinishedGames()
-				for await (const _team of this.walkDueSeasons()) {
-					await this.checkFinishedGames()
-				}
-				return log.filter((load) =>
-					matchValue(load.source, {
-						memory: false,
-						stored: false,
-						fetched: true,
-						stale: false,
-					}),
-				).length
-			}),
+	syncNext(): Promise<boolean> {
+		return runInKHLBackground(async () => {
+			const outdated = this.db.league.takeOutdated(PROCESSING_VERSION)
+			const due = outdated ?? this.db.league.takeDue(Date.now())
+			if (!due) {
+				return false
+			}
+			// Failures are recorded on the page and retried; nothing to do here
+			await this.sync(due.page, !outdated).catch(() => {})
+			return true
+		})
+	}
+
+	/**
+	 * Makes sure a page has been synced, syncing it now if it never has
+	 * (from the stored copy, fetched if there isn't one). Visitors call this
+	 * before reading a page's tables. Returns false, without trying again,
+	 * for a page that's never been synced and is waiting to be retried after
+	 * a failure, so visitors don't refetch a page that's failing.
+	 */
+	async ensureSynced(page: SyncPage): Promise<boolean> {
+		const state = this.db.league.getSyncState(
+			getSyncPageUrl(page),
+			Date.now(),
 		)
+		return matchValue(state, {
+			synced: async () => true,
+			waiting: async () => false,
+			unsynced: async () => {
+				await this.sync(page, false)
+				return true
+			},
+		})()
+	}
+
+	/**
+	 * Reads a page (fetched if `fetch`), processes it into tables, and
+	 * schedules it and what follows from it. A failure is recorded on the
+	 * page and rethrown: a failed fetch is retried in 30 minutes (a day for
+	 * past seasons), and a page that didn't parse at its next refresh.
+	 */
+	sync(page: SyncPage, fetch: boolean): Promise<void> {
+		const url = getSyncPageUrl(page)
+		const inFlight = this.syncing.get(url)
+		if (inFlight) {
+			return inFlight
+		}
+		const run = this.syncPage(page, url, fetch).finally(() => {
+			this.syncing.delete(url)
+		})
+		this.syncing.set(url, run)
+		return run
 	}
 
 	private async run() {
 		for (;;) {
 			try {
-				if ((await this.syncOnce()) === 0) {
-					await sleep(CHECK_INTERVAL_MS)
+				if (!(await this.syncNext())) {
+					const nextAt = this.db.league.getNextDueAt() ?? Infinity
+					await sleep(
+						Math.min(
+							Math.max(nextAt - Date.now(), 1000),
+							MAX_IDLE_MS,
+						),
+					)
 				}
 			} catch (error) {
-				// Pages' failures are handled where they're read, so this is a
-				// bug; wait rather than spin
+				// Pages' failures are handled where they're synced, so this
+				// is a bug; wait rather than spin
 				logger.error("run", "sync failed", {error})
-				await sleep(CHECK_INTERVAL_MS)
+				await sleep(MAX_IDLE_MS)
 			}
 		}
 	}
 
-	/** Yields after each team it walks */
-	private async *walkDueSeasons(): AsyncGenerator<void> {
-		let listed: {current: KHLSeason; seasons: KHLSeason[]}
+	private async syncPage(page: SyncPage, url: string, fetch: boolean) {
+		const isCurrent = this.isCurrentSeason(getPageSeasonId(page))
+		this.enqueue(page, 0)
 		try {
-			listed = await this.source.getSeasons()
-		} catch (error) {
-			logger.warn("walkDueSeasons", "couldn't list seasons", {error})
-			return
-		}
-		const {current, seasons} = listed
-		this.currentSeasonId = current.id
-		const ordered = [
-			current,
-			...seasons
-				.filter((s) => s.id !== current.id)
-				.sort((a, b) => Number(b.id) - Number(a.id)),
-		]
-		for (const season of ordered) {
-			if ((this.seasonDueAt.get(season.id) ?? 0) > Date.now()) {
-				continue
-			}
-			const walk = new SeasonWalk(season.id === current.id)
-			const start = Date.now()
-			this.noted.delete(season.id)
-			yield* this.walkSeason(walk, season)
-			const noted = this.noted.get(season.id) ?? Infinity
-			const dueAt = Math.min(walk.dueAt, noted)
-			this.seasonDueAt.set(season.id, dueAt)
-			logger.info("walkDueSeasons", "walked season", {
-				seasonId: season.id,
-				ms: Date.now() - start,
-				nextDueAt: Number.isFinite(dueAt)
-					? new Date(dueAt).toISOString()
-					: null,
+			const nextAt = await this.process(page, fetch)
+			this.db.league.markSynced(url, {
+				nextAt,
+				version: PROCESSING_VERSION,
+				now: Date.now(),
 			})
-		}
-	}
-
-	/** Yields after each team */
-	private async *walkSeason(
-		walk: SeasonWalk,
-		season: KHLSeason,
-	): AsyncGenerator<void> {
-		const teamsPage: SyncPage = {kind: "teams", seasonId: season.id}
-		const fetch = this.isDue(walk, teamsPage, null)
-		const teamIds = await this.attempt(walk, teamsPage, () =>
-			this.source.syncTeams(season.id, fetch),
-		)
-		if (!teamIds) {
-			return
-		}
-		let rosterChanged = false
-		for (const teamId of teamIds) {
-			if (await this.walkTeam(walk, teamId, season.id)) {
-				rosterChanged = true
-			}
-			yield
-		}
-		if (rosterChanged || !this.source.hasPlayerList(season.id)) {
-			try {
-				await this.source.buildPlayerList(season, walk.isCurrentSeason)
-			} catch (error) {
-				logger.error("walkSeason", "couldn't build the player list", {
-					seasonId: season.id,
-					error,
-				})
-			}
-		}
-	}
-
-	/**
-	 * Walks current-season teams with a game that finished recently, at most
-	 * every 5 minutes, from the schedules last recorded. Their pages' due
-	 * rules decide what's fetched, so a team already refreshed fetches
-	 * nothing. When it next has something due counts toward the current
-	 * season's due time.
-	 */
-	private async checkFinishedGames() {
-		const now = Date.now()
-		const seasonId = this.currentSeasonId
-		if (!seasonId || now - this.lastGameCheckAt < CHECK_INTERVAL_MS) {
-			return
-		}
-		this.lastGameCheckAt = now
-		const walk = new SeasonWalk(true)
-		for (const [teamId, games] of this.source.getSeasonSchedules(
-			seasonId,
-		)) {
-			const settleAt = getLatestSettleAt(games)
-			if (settleAt !== null && settleAt > now - GAME_SETTLE_LIMIT_MS) {
-				await this.walkTeam(walk, teamId, seasonId)
-			}
-		}
-		this.noteDue(seasonId, walk.dueAt)
-	}
-
-	/** Brings a season's due time forward, surviving a walk in progress */
-	private noteDue(seasonId: string, at: number) {
-		const min = (prev: number | undefined) => Math.min(prev ?? Infinity, at)
-		this.seasonDueAt.set(seasonId, min(this.seasonDueAt.get(seasonId)))
-		this.noted.set(seasonId, min(this.noted.get(seasonId)))
-	}
-
-	/**
-	 * Walks a team: its schedule, then its finished games, then its stats
-	 * and players, whose pages are due after games complete. Returns whether
-	 * its roster was recorded again.
-	 */
-	private async walkTeam(
-		walk: SeasonWalk,
-		teamId: string,
-		seasonId: string,
-	): Promise<boolean> {
-		// The recorded schedule says which games have ended since the page
-		// was fetched
-		const schedulePage: SyncPage = {kind: "schedule", teamId, seasonId}
-		const ended = getLatestSettleAt(
-			this.source.getSchedule(teamId, seasonId),
-		)
-		await this.sync(walk, schedulePage, ended, (fetch) =>
-			this.source.syncSchedule(teamId, seasonId, fetch),
-		)
-		const schedule = this.source.getSchedule(teamId, seasonId)
-		// The team's pages are next due when its next game settles
-		const now = Date.now()
-		for (const game of schedule) {
-			const settleAt = getSettleAt(game)
-			if (settleAt > now) {
-				walk.dueBy(settleAt)
-			}
-		}
-
-		for (const game of schedule) {
-			if (game.gameId && game.isFinal) {
-				await this.walkGame(walk, game.gameId, game.startsAt)
-			}
-		}
-
-		const completedAt = this.source.getTeamLatestCompletedGame(
-			teamId,
-			seasonId,
-		)
-		const statsPage: SyncPage = {kind: "team-stats", teamId, seasonId}
-		const rosterRecorded = await this.sync(
-			walk,
-			statsPage,
-			completedAt,
-			(fetch) => this.source.syncTeamStats(teamId, seasonId, fetch),
-		)
-
-		const keys = this.source.getTeamRegistrationKeys(teamId, seasonId)
-		const completions = this.source.getLatestCompletedGames(keys)
-		for (const registrationKey of keys) {
-			const page: SyncPage = {kind: "player", registrationKey, seasonId}
-			if (
-				this.isDue(walk, page, completions.get(registrationKey) ?? null)
-			) {
-				await this.attempt(walk, page, () =>
-					this.source.fetchPlayer(registrationKey, seasonId),
-				)
-			}
-		}
-		return rosterRecorded
-	}
-
-	/**
-	 * A finished game's pages are due once it should have settled, if they
-	 * were fetched before then, and again now and then until it's complete
-	 */
-	private async walkGame(walk: SeasonWalk, gameId: string, startsAt: string) {
-		const now = Date.now()
-		const settleAt = getSettleAt({startsAt})
-		if (settleAt > now) {
-			walk.dueBy(settleAt)
-			return
-		}
-		const page: SyncPage = {kind: "game", gameId}
-		const fetchedAt = this.source.getFetchedAt(page)
-		const status = this.source.getGameStatus(gameId)
-		let isDue = fetchedAt === null || fetchedAt < settleAt
-		if (fetchedAt !== null && status) {
-			const recheckAt = getGameRecheckAt({
-				startsAt,
-				isComplete: status.isComplete,
-				lastLookedAt: fetchedAt,
-			})
-			if (recheckAt !== null) {
-				isDue ||= recheckAt <= now
-				walk.dueBy(recheckAt)
-			}
-		}
-		if (isDue) {
-			await this.attempt(walk, page, () =>
-				this.source.syncGame(gameId, true),
-			)
-		} else if (this.source.needsProcessing(page)) {
-			// Stored, but never saved, or saved from a different copy
-			await this.attempt(walk, page, () =>
-				this.source.syncGame(gameId, false),
-			)
-		}
-	}
-
-	/**
-	 * Fetches the page if it's due, or else processes the stored copy if its
-	 * derived rows are missing or out of date. Returns whether either ran.
-	 */
-	private async sync(
-		walk: SeasonWalk,
-		page: SyncPage,
-		changedAt: number | null,
-		sync: (fetch: boolean) => Promise<void>,
-	): Promise<boolean> {
-		const fetch = this.isDue(walk, page, changedAt)
-		if (!fetch && !this.source.needsProcessing(page)) {
-			return false
-		}
-		return (await this.attempt(walk, page, () => sync(fetch))) !== null
-	}
-
-	/** Runs `work`, unless the page is waiting to be retried after a failure */
-	private async attempt<T>(
-		walk: SeasonWalk,
-		page: SyncPage,
-		work: () => Promise<T>,
-	): Promise<T | null> {
-		const key = JSON.stringify(page)
-		const retryAt = this.retryAt.get(key) ?? 0
-		if (retryAt > Date.now()) {
-			walk.dueBy(retryAt)
-			return null
-		}
-		try {
-			const result = await work()
-			this.retryAt.delete(key)
-			// Fetched just now, or earlier: either way it's next due then
-			const fetchedAt = this.source.getFetchedAt(page)
-			if (fetchedAt !== null) {
-				walk.dueBy(
-					fetchedAt +
-						getSeasonPolicy(PAGE_REFRESH_MS, walk.isCurrentSeason),
-				)
-			}
-			return result
 		} catch (error) {
 			// A failed fetch may work soon; a page that didn't parse won't
 			// until it changes, so it waits for its next refresh
-			const retryMs =
-				error instanceof FetchError ? PAGE_RETRY_MS : PAGE_REFRESH_MS
-			const nextAt =
-				Date.now() + getSeasonPolicy(retryMs, walk.isCurrentSeason)
-			this.retryAt.set(key, nextAt)
-			walk.dueBy(nextAt)
-			logger.warn("attempt", "couldn't sync page", {page, error})
-			return null
+			const waitMs =
+				error instanceof FetchError
+					? getSeasonPolicy(RETRY_MS, isCurrent)
+					: getSeasonPolicy(REFRESH_MS[page.kind], isCurrent)
+			this.db.league.markFailed(url, {
+				nextAt: Date.now() + waitMs,
+				error: error instanceof Error ? error.message : String(error),
+			})
+			logger.warn("syncPage", "couldn't sync page", {page, error})
+			throw error
 		}
+	}
+
+	/** Processes a page into tables; returns when it's next due */
+	private process(page: SyncPage, fetch: boolean): Promise<number> {
+		return matchField(page, "kind", {
+			teams: (p) => this.processTeams(p.seasonId, fetch),
+			schedule: (p) => this.processSchedule(p.teamId, p.seasonId, fetch),
+			"team-stats": (p) =>
+				this.processTeamStats(p.teamId, p.seasonId, fetch),
+			player: (p) =>
+				this.processPlayer(p.registrationKey, p.seasonId, fetch),
+			game: (p) => this.processGame(p.gameId, fetch),
+		})
+	}
+
+	private async processTeams(
+		seasonId: string | null,
+		fetch: boolean,
+	): Promise<number> {
+		const page = await this.pages.teams(seasonId, fetch)
+		const isDefault = seasonId === null
+		this.db.league.saveTeamsPage(page, isDefault)
+		if (isDefault) {
+			this.db.league.setCurrentSeason(page.season.id)
+			for (const season of page.seasons) {
+				this.enqueue({kind: "teams", seasonId: season.id}, 0)
+			}
+		}
+		for (const team of page.teams) {
+			const ids = {teamId: team.id, seasonId: team.seasonId}
+			this.enqueue({kind: "schedule", ...ids}, 0)
+			this.enqueue({kind: "team-stats", ...ids}, 0)
+		}
+		return this.refreshAt("teams", page.season.id)
+	}
+
+	private async processSchedule(
+		teamId: string,
+		seasonId: string,
+		fetch: boolean,
+	): Promise<number> {
+		const games = await this.pages.schedule(teamId, seasonId, fetch)
+		this.db.league.saveSchedule(teamId, seasonId, games)
+		const now = Date.now()
+		let nextAt = this.refreshAt("schedule", seasonId)
+		for (const game of games) {
+			const settleAt = getSettleAt(game)
+			if (settleAt > now) {
+				// Due again once each game settles, to see it marked final
+				nextAt = Math.min(nextAt, settleAt)
+			}
+			if (game.id) {
+				this.enqueue(
+					{kind: "game", gameId: game.id},
+					game.isFinal ? 0 : settleAt,
+					seasonId,
+				)
+			}
+		}
+		return nextAt
+	}
+
+	private async processTeamStats(
+		teamId: string,
+		seasonId: string,
+		fetch: boolean,
+	): Promise<number> {
+		const stats = await this.pages.teamStats(teamId, seasonId, fetch)
+		this.db.league.saveTeamStats(stats)
+		const team = this.db.league.getTeam(teamId, seasonId)
+		const goalieIds = new Set(stats.goalies.map((g) => g.playerId))
+		this.db.recordRegistrations(
+			[...stats.skaters, ...stats.goalies].map((row) => ({
+				playerId: row.playerId,
+				name: row.name,
+				position: goalieIds.has(row.playerId) ? "Goalie" : "Skater",
+				teamId,
+				teamName: team?.name ?? teamId,
+				teamLogoUrl: team?.logoUrl ?? null,
+				seasonId,
+			})),
+			"roster",
+		)
+		// A registration's page is read as of its latest season
+		for (const khlPlayerId of this.db.getTeamSeasonLatestPlayerIds(
+			teamId,
+			seasonId,
+		)) {
+			const registrationKey = toRegistrationKey({khlPlayerId, teamId})
+			this.enqueue({kind: "player", registrationKey, seasonId}, 0)
+		}
+		return this.refreshAt("team-stats", seasonId)
+	}
+
+	private async processPlayer(
+		key: RegistrationKey,
+		seasonId: string,
+		fetch: boolean,
+	): Promise<number> {
+		const player = await this.pages.player(key, seasonId, fetch)
+		this.db.league.savePlayerProfile(player)
+		return this.refreshAt("player", seasonId)
+	}
+
+	private async processGame(gameId: string, fetch: boolean): Promise<number> {
+		const boxScore = await this.pages.boxScore(gameId, fetch)
+		const stats = await this.pages
+			.gameStats(gameId, fetch)
+			.catch((error: unknown) => {
+				// The lineups are left unposted, and the game looked at again
+				logger.warn("processGame", "game stats unavailable", {
+					gameId,
+					error,
+				})
+				return null
+			})
+		// Everyone the game names, so its events and lineups read with names
+		this.db.recordRegistrations(
+			getGamePlayers(boxScore, stats),
+			"box-score",
+		)
+		const now = Date.now()
+		const {completedSinceLastSave} = this.db.league.saveGame(
+			boxScore,
+			stats,
+			now,
+		)
+		const saved = this.db.league.getGames([gameId]).get(gameId)
+		if (saved && isGameRecordComplete(saved)) {
+			// Its teams' stats and its players' pages change once it's
+			// posted. Saved incomplete before, it was posted since; if not,
+			// it's taken as posted by the time it settled, so a page synced
+			// since (e.g. earlier in the same first sync) isn't fetched again.
+			const postedBy = completedSinceLastSave
+				? now
+				: getSettleAt(boxScore)
+			for (const team of [boxScore.away, boxScore.home]) {
+				this.enqueue(
+					{
+						kind: "team-stats",
+						teamId: team.id,
+						seasonId: team.seasonId,
+					},
+					now,
+					team.seasonId,
+					postedBy,
+				)
+			}
+			for (const {teamId, khlPlayerId} of this.db.league.getLineupKeys(
+				gameId,
+			)) {
+				const team = [boxScore.away, boxScore.home].find(
+					(t) => t.id === teamId,
+				)!
+				const registrationKey = toRegistrationKey({khlPlayerId, teamId})
+				this.enqueue(
+					{kind: "player", registrationKey, seasonId: team.seasonId},
+					now,
+					team.seasonId,
+					postedBy,
+				)
+			}
+		}
+		const recheckAt = getGameRecheckAt({
+			startsAt: boxScore.startsAt,
+			isComplete: !!saved && isGameRecordComplete(saved),
+			lastLookedAt: now,
+		})
+		return recheckAt ?? now + REFRESH_MS.game.current
 	}
 
 	/**
-	 * Never fetched, past its season's refresh interval, or fetched before
-	 * `changedAt`, when something that changes it happened. Otherwise notes
-	 * when it will be due.
+	 * Queues a page if it isn't. With `ifSyncedBefore`, a queued page last
+	 * synced before then is brought forward to `nextAt`. Pages are ranked by
+	 * how many seasons before the current one they are; teams pages first,
+	 * since every season's teams come from them.
 	 */
-	private isDue(
-		walk: SeasonWalk,
+	private enqueue(
 		page: SyncPage,
-		changedAt: number | null,
-	): boolean {
-		const fetchedAt = this.source.getFetchedAt(page)
-		if (fetchedAt === null) {
-			return true
+		nextAt: number,
+		seasonId: string | null = getPageSeasonId(page),
+		ifSyncedBefore?: number,
+	) {
+		const queuedSeasonId = page.kind === "teams" ? null : seasonId
+		this.db.league.enqueue(
+			getSyncPageUrl(page),
+			page,
+			{
+				seasonId: queuedSeasonId,
+				priority: this.getPriority(queuedSeasonId),
+				nextAt,
+			},
+			ifSyncedBefore,
+		)
+	}
+
+	private getPriority(seasonId: string | null): number {
+		const current = this.db.league.getCurrentSeasonId()
+		if (seasonId === null || current === null) {
+			return 0
 		}
-		const now = Date.now()
-		if (changedAt !== null && changedAt <= now && fetchedAt < changedAt) {
-			return true
-		}
-		const refreshAt =
-			fetchedAt + getSeasonPolicy(PAGE_REFRESH_MS, walk.isCurrentSeason)
-		if (refreshAt <= now) {
-			return true
-		}
-		walk.dueBy(refreshAt)
-		return false
+		return Math.max(0, Number(current) - Number(seasonId))
+	}
+
+	private isCurrentSeason(seasonId: string | null): boolean {
+		return (
+			seasonId === null ||
+			seasonId === this.db.league.getCurrentSeasonId()
+		)
+	}
+
+	private refreshAt(kind: keyof typeof REFRESH_MS, seasonId: string): number {
+		return (
+			Date.now() +
+			getSeasonPolicy(REFRESH_MS[kind], this.isCurrentSeason(seasonId))
+		)
 	}
 }
 
-/** One walk of a season: whether it's current, and when it's next due */
-class SeasonWalk {
-	dueAt = Infinity
-
-	constructor(readonly isCurrentSeason: boolean) {}
-
-	dueBy(at: number) {
-		this.dueAt = Math.min(this.dueAt, at)
-	}
+/** The season a page belongs to, if it says; a game's comes from its schedule */
+function getPageSeasonId(page: SyncPage): string | null {
+	return matchField(page, "kind", {
+		teams: (p) => p.seasonId,
+		schedule: (p) => p.seasonId,
+		"team-stats": (p) => p.seasonId,
+		player: (p) => p.seasonId,
+		game: () => null,
+	})
 }
 
 function getSeasonPolicy(
@@ -517,9 +491,47 @@ function getSeasonPolicy(
 	return isCurrentSeason ? policy.current : policy.past
 }
 
-/** The latest settle time among games that have settled; null if none */
-function getLatestSettleAt(games: ScheduleGame[]): number | null {
-	const now = Date.now()
-	const settled = games.map(getSettleAt).filter((at) => at <= now)
-	return settled.length > 0 ? Math.max(...settled) : null
+/** Everyone a game names: in its goals and penalties, and in its lineups */
+function getGamePlayers(
+	boxScore: KHLBoxScore,
+	stats: KHLGameStats | null,
+): KHLPlayerSearchResult[] {
+	const teams = new Map(
+		[boxScore.away, boxScore.home].map((team) => [team.id, team]),
+	)
+	const named = [
+		...boxScore.goals.flatMap((g) =>
+			[g.scorer, ...g.assists].map((player) => ({
+				player,
+				teamId: g.teamId,
+			})),
+		),
+		...boxScore.penalties.flatMap((p) =>
+			p.player ? [{player: p.player, teamId: p.teamId}] : [],
+		),
+		...(["away", "home"] as const).flatMap((side) => {
+			const lineup = stats?.[side]
+			const teamId = boxScore[side].id
+			return [...(lineup?.skaters ?? []), ...(lineup?.goalies ?? [])].map(
+				(row) => ({player: {id: row.playerId, name: row.name}, teamId}),
+			)
+		}),
+	]
+	return named.flatMap(({player, teamId}) => {
+		const team = teams.get(teamId)
+		if (!team) {
+			return []
+		}
+		return [
+			{
+				playerId: player.id,
+				name: player.name,
+				position: null,
+				teamId: team.id,
+				teamName: team.name,
+				teamLogoUrl: team.logoUrl,
+				seasonId: team.seasonId,
+			},
+		]
+	})
 }

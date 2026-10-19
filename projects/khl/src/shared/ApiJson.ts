@@ -1192,6 +1192,13 @@ export interface PlayersResponse {
 	goalies: LeaguePlayer[]
 	/** Teams missing from the lists because the KHL site errored */
 	unavailableTeams: KHLTeam[]
+	/** Teams missing from the lists because their stats haven't synced */
+	unsyncedTeams: KHLTeam[]
+	/**
+	 * Whether the server's background sync is running, so unsynced teams
+	 * will load on their own (always in production; dev runs it on request)
+	 */
+	isSyncing: boolean
 }
 
 export const PlayersResponseSchema = z.object({
@@ -1201,6 +1208,8 @@ export const PlayersResponseSchema = z.object({
 	skaters: z.array(LeaguePlayerSchema),
 	goalies: z.array(LeaguePlayerSchema),
 	unavailableTeams: z.array(KHLTeamSchema),
+	unsyncedTeams: z.array(KHLTeamSchema),
+	isSyncing: z.boolean(),
 }) satisfies z.ZodType<PlayersResponse>
 
 export interface ListPlayersRequest {
@@ -1364,6 +1373,36 @@ export const GET_MATCHUP_ENDPOINT = {
 	requestSchema: GetMatchupRequestSchema,
 	responseSchema: MatchupResponseSchema,
 } satisfies ApiEndpoint<GetMatchupRequest, MatchupResponse>
+
+export interface HeadToHeadResponse {
+	/** Finished games between the two teams, newest first */
+	headToHead: HeadToHeadGame[]
+}
+
+export const HeadToHeadResponseSchema = z.object({
+	headToHead: z.array(HeadToHeadGameSchema),
+}) satisfies z.ZodType<HeadToHeadResponse>
+
+export interface GetHeadToHeadRequest {
+	a: string
+	b: string
+}
+
+export const GetHeadToHeadRequestSchema = z.object({
+	a: z.string().min(1).describe("KHL team id, from the current season"),
+	b: z.string().min(1).describe("KHL team id, from the current season"),
+}) satisfies z.ZodType<GetHeadToHeadRequest>
+
+export const GET_HEAD_TO_HEAD_ENDPOINT = {
+	method: "GET",
+	uri: "/api/head-to-head",
+	name: "Head-to-head",
+	description:
+		"Finished games between two current-season teams in recent seasons, newest first. The lighter half of the matchup endpoint, for game cards.",
+	exampleRequest: {a: "303", b: "684"},
+	requestSchema: GetHeadToHeadRequestSchema,
+	responseSchema: HeadToHeadResponseSchema,
+} satisfies ApiEndpoint<GetHeadToHeadRequest, HeadToHeadResponse>
 
 export interface RinksResponse {
 	season: KHLSeason
@@ -1627,6 +1666,88 @@ export const JobStatusSchema = z.object({
 	consecutiveFailures: z.number(),
 	nextRunAt: z.string().nullable(),
 }) satisfies z.ZodType<JobStatus>
+/** A kind of KHL page the syncer keeps (see server/SyncPages.ts) */
+export type SyncPageKind =
+	"teams" | "schedule" | "team-stats" | "player" | "game"
+
+export const SyncPageKindSchema = z.enum([
+	"teams",
+	"schedule",
+	"team-stats",
+	"player",
+	"game",
+]) satisfies z.ZodType<SyncPageKind>
+
+/** How far the sync has got with one kind of page */
+export interface SyncKindStatus {
+	kind: SyncPageKind
+	/** Pages queued */
+	total: number
+	/** Pages synced at least once */
+	synced: number
+	/** Pages whose last sync failed, waiting to be retried */
+	failing: number
+	/** Pages due now, waiting their turn */
+	due: number
+	/** Pages queued, synced, and failing for the current season */
+	current: {total: number; synced: number; failing: number}
+}
+
+export const SyncKindStatusSchema = z.object({
+	kind: SyncPageKindSchema,
+	total: z.number(),
+	synced: z.number(),
+	failing: z.number(),
+	due: z.number(),
+	current: z.object({
+		total: z.number(),
+		synced: z.number(),
+		failing: z.number(),
+	}),
+}) satisfies z.ZodType<SyncKindStatus>
+
+/** A page whose last sync failed */
+export interface SyncFailure {
+	kind: SyncPageKind
+	/** The KHL page */
+	url: string
+	/** The last error, cut short if it's long */
+	error: string
+	/** Failures in a row */
+	attempts: number
+	/** When it's tried again, ISO 8601 */
+	retryAt: string
+}
+
+export const SyncFailureSchema = z.object({
+	kind: SyncPageKindSchema,
+	url: z.string(),
+	error: z.string(),
+	attempts: z.number(),
+	retryAt: z.string(),
+}) satisfies z.ZodType<SyncFailure>
+
+/** How the synced copy of the league is doing */
+export interface SyncStatus {
+	/** Null until the league's default teams page has synced */
+	currentSeason: {id: string; name: string} | null
+	/** Each kind of page that's queued */
+	kinds: SyncKindStatus[]
+	/** When a page last synced, ISO 8601; null if none has */
+	lastSyncedAt: string | null
+	/** When the next page that isn't due yet is, ISO 8601; null if none */
+	nextDueAt: string | null
+	/** The most urgent failing pages (all of them are counted in `kinds`) */
+	failures: SyncFailure[]
+}
+
+export const SyncStatusSchema = z.object({
+	currentSeason: z.object({id: z.string(), name: z.string()}).nullable(),
+	kinds: z.array(SyncKindStatusSchema),
+	lastSyncedAt: z.string().nullable(),
+	nextDueAt: z.string().nullable(),
+	failures: z.array(SyncFailureSchema),
+}) satisfies z.ZodType<SyncStatus>
 
 export interface StatusResponse {
 	/** The days the history covers, oldest first ("yyyy-MM-dd") */
@@ -1635,6 +1756,7 @@ export interface StatusResponse {
 	intervalMinutes: number
 	components: StatusComponent[]
 	jobs: JobStatus[]
+	sync: SyncStatus
 	deploy: DeployInfo
 }
 
@@ -1643,6 +1765,7 @@ export const StatusResponseSchema = z.object({
 	intervalMinutes: z.number(),
 	components: z.array(StatusComponentSchema),
 	jobs: z.array(JobStatusSchema),
+	sync: SyncStatusSchema,
 	deploy: DeployInfoSchema,
 }) satisfies z.ZodType<StatusResponse>
 
@@ -1657,7 +1780,7 @@ export const GET_STATUS_ENDPOINT = {
 	uri: "/api/status",
 	name: "Get site status",
 	description:
-		"The site's health: each component's latest check and daily history, and which build is running.",
+		"The site's health: each component's latest check and daily history, how far the sync with the KHL has got, and which build is running.",
 	exampleRequest: {},
 	requestSchema: GetStatusRequestSchema,
 	responseSchema: StatusResponseSchema,
@@ -1832,6 +1955,99 @@ export const RUN_BENCHMARK_ENDPOINT = {
 	responseSchema: BenchmarkResponseSchema,
 } satisfies ApiEndpoint<RunBenchmarkRequest, BenchmarkResponse>
 
+export interface DevSettings {
+	offline: boolean
+}
+
+export const DevSettingsSchema = z.object({
+	offline: z
+		.boolean()
+		.describe(
+			"Never fetch from the KHL or LiveBarn; serve only stored pages",
+		),
+}) satisfies z.ZodType<DevSettings>
+
+export interface DevSettingsResponse extends DevSettings {
+	/** Whether the background sync loop runs (KHL_SYNC; always in production) */
+	syncLoop: boolean
+}
+
+export const DevSettingsResponseSchema = DevSettingsSchema.extend({
+	syncLoop: z.boolean(),
+}) satisfies z.ZodType<DevSettingsResponse>
+
+export type GetDevSettingsRequest = Record<string, never>
+
+export const GetDevSettingsRequestSchema = z.object(
+	{},
+) satisfies z.ZodType<GetDevSettingsRequest>
+
+export const GET_DEV_SETTINGS_ENDPOINT = {
+	method: "GET",
+	uri: "/api/admin/settings",
+	name: "Get dev settings",
+	description:
+		"Dev only: whether the server is in offline mode, and whether the background sync loop runs.",
+	exampleRequest: {},
+	requestSchema: GetDevSettingsRequestSchema,
+	responseSchema: DevSettingsResponseSchema,
+} satisfies ApiEndpoint<GetDevSettingsRequest, DevSettingsResponse>
+
+export const UPDATE_DEV_SETTINGS_ENDPOINT = {
+	method: "PUT",
+	uri: "/api/admin/settings",
+	name: "Update dev settings",
+	description:
+		"Dev only: turns offline mode on or off. Kept in data/dev-settings.json, so it survives restarts.",
+	exampleRequest: {offline: true},
+	requestSchema: DevSettingsSchema,
+	responseSchema: DevSettingsResponseSchema,
+} satisfies ApiEndpoint<DevSettings, DevSettingsResponse>
+
+export interface PullProdDataRequest {
+	sources: boolean
+}
+
+export const PullProdDataRequestSchema = z.object({
+	sources: z
+		.boolean()
+		.describe(
+			"Also pull every stored page (1.5-3 GB), to reprocess after a parser change",
+		),
+}) satisfies z.ZodType<PullProdDataRequest>
+
+export interface PulledDatabase {
+	name: "khl" | "sources"
+	/** The snapshot's size, in megabytes */
+	mb: number
+}
+
+export interface PullProdDataResponse {
+	pulled: PulledDatabase[]
+	/** Where the dev database was backed up before it was replaced */
+	backupPath: string
+	ms: number
+}
+
+export const PullProdDataResponseSchema = z.object({
+	pulled: z.array(
+		z.object({name: z.enum(["khl", "sources"]), mb: z.number()}),
+	),
+	backupPath: z.string(),
+	ms: z.number(),
+}) satisfies z.ZodType<PullProdDataResponse>
+
+export const PULL_PROD_DATA_ENDPOINT = {
+	method: "POST",
+	uri: "/api/admin/pull-prod-data",
+	name: "Pull production's data",
+	description:
+		"Dev only: replaces the dev server's league tables and player ids (and, with sources, its stored pages) with snapshots of production's. Takes a minute or more.",
+	exampleRequest: {sources: false},
+	requestSchema: PullProdDataRequestSchema,
+	responseSchema: PullProdDataResponseSchema,
+} satisfies ApiEndpoint<PullProdDataRequest, PullProdDataResponse>
+
 export interface ApiDocsSection {
 	title: string
 	endpoints: ApiEndpoint<ApiRequest, unknown>[]
@@ -1849,6 +2065,7 @@ export const API_DOCS_SECTIONS: ApiDocsSection[] = [
 			LIST_GAMES_ENDPOINT,
 			GET_GAME_ENDPOINT,
 			GET_MATCHUP_ENDPOINT,
+			GET_HEAD_TO_HEAD_ENDPOINT,
 		],
 	},
 	{

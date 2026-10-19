@@ -2,6 +2,7 @@ import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {afterEach, describe, expect, setSystemTime, test} from "bun:test"
 import {openDatabase} from "./Database.js"
 import {KHLSyncer, KHLSyncerPages} from "./KHLSyncer.js"
+import {isOfflineMode, OfflineError, setOfflineMode} from "./PageStore.js"
 import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
 import {parseRegistrationKey, toRegistrationKey} from "../shared/ApiJson.js"
 import {KHLGame, KHLGameTeamStats} from "../shared/KHLJson.js"
@@ -85,6 +86,12 @@ const createLeague = ({fetchMs = 0}: {fetchMs?: number} = {}) => {
 	const failing = new Set<string>()
 	const unparseable = new Set<string>()
 	const read = <T>(key: string, fetch: boolean, value: () => T): T => {
+		if (isOfflineMode()) {
+			if (!stored.has(key)) {
+				throw new OfflineError(key)
+			}
+			return value()
+		}
 		if (fetch || !stored.has(key)) {
 			if (failing.has(key)) {
 				throw new FetchError("KHL 403", "GET", key, 403)
@@ -285,6 +292,7 @@ const page = {
 describe("KHLSyncer", () => {
 	afterEach(() => {
 		setSystemTime()
+		setOfflineMode(false)
 	})
 
 	test("syncs everything once, the current season first, then nothing until due", async () => {
@@ -516,6 +524,26 @@ describe("KHLSyncer", () => {
 		league.unparseable.add(page.schedule("11", "100"))
 		await expect(league.syncer.ensureSynced(schedule)).rejects.toThrow()
 		expect(await league.syncer.ensureSynced(schedule)).toBe(false)
+		expect(league.takeFetches()).toEqual([page.schedule("11", "100")])
+	})
+
+	test("offline, a page that isn't stored is left unsynced, and syncs once back online", async () => {
+		setSystemTime(START)
+		const league = createLeague()
+		const schedule: SyncPage = {
+			kind: "schedule",
+			teamId: "11",
+			seasonId: "100",
+		}
+		setOfflineMode(true)
+		await expect(league.syncer.ensureSynced(schedule)).rejects.toThrow(
+			OfflineError,
+		)
+		expect(league.takeFetches()).toEqual([])
+
+		// Not marked failed, so it isn't left waiting out a retry
+		setOfflineMode(false)
+		expect(await league.syncer.ensureSynced(schedule)).toBe(true)
 		expect(league.takeFetches()).toEqual([page.schedule("11", "100")])
 	})
 

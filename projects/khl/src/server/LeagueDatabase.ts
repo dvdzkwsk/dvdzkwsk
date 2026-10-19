@@ -8,6 +8,8 @@ import {
 	ActivityEvent,
 	parseRegistrationKey,
 	RegistrationKey,
+	SyncPageKind,
+	SyncPageKindSchema,
 } from "../shared/ApiJson.js"
 import {
 	KHLBoxScore,
@@ -1232,6 +1234,96 @@ export class LeagueDatabase {
 		)
 	}
 
+	/**
+	 * How far the sync has got, by kind of page: queued, synced at least
+	 * once, failing (the last sync failed), and due now, overall and for
+	 * the current season. A teams page's season is the one it lists; the
+	 * league's default one, a second copy of the current season's, has none.
+	 */
+	getQueueSummary(now: number): QueueSummary {
+		const kinds = this.db
+			.query<
+				{
+					kind: string
+					total: number
+					synced: number
+					failing: number
+					due: number
+					current_total: number
+					current_synced: number
+					current_failing: number
+				},
+				{now: number}
+			>(
+				`WITH queue AS (
+					SELECT *, json_extract(page, '$.kind') AS kind,
+						coalesce(season_id, json_extract(page, '$.seasonId'))
+							= current.id AS is_current
+					FROM fetch_queue
+					LEFT JOIN (
+						SELECT season_id AS id FROM seasons WHERE is_current = 1
+					) current
+				)
+				SELECT kind, count(*) AS total,
+					count(processed_version) AS synced,
+					count(last_error) AS failing,
+					coalesce(sum(next_at <= $now), 0) AS due,
+					coalesce(sum(is_current IS 1), 0) AS current_total,
+					coalesce(sum(is_current IS 1 AND processed_version IS NOT NULL), 0)
+						AS current_synced,
+					coalesce(sum(is_current IS 1 AND last_error IS NOT NULL), 0)
+						AS current_failing
+				FROM queue GROUP BY kind`,
+			)
+			.all({now})
+			.map((row) => ({
+				kind: parseStored(SyncPageKindSchema, row.kind),
+				total: row.total,
+				synced: row.synced,
+				failing: row.failing,
+				due: row.due,
+				current: {
+					total: row.current_total,
+					synced: row.current_synced,
+					failing: row.current_failing,
+				},
+			}))
+		const times = this.db
+			.query<
+				{last_synced_at: number | null; next_due_at: number | null},
+				{now: number}
+			>(
+				`SELECT max(synced_at) AS last_synced_at,
+					min(CASE WHEN next_at > $now THEN next_at END) AS next_due_at
+				FROM fetch_queue`,
+			)
+			.get({now})
+		return {
+			kinds,
+			lastSyncedAt: times?.last_synced_at ?? null,
+			nextDueAt: times?.next_due_at ?? null,
+		}
+	}
+
+	/** Pages whose last sync failed, the most urgent first */
+	getFailingPages(limit: number): FailingPage[] {
+		return this.db
+			.query<
+				QueueRow & {last_error: string; next_at: number},
+				{limit: number}
+			>(
+				`SELECT url, page, season_id, attempts, last_error, next_at
+				FROM fetch_queue WHERE last_error IS NOT NULL
+				ORDER BY priority, next_at, rowid LIMIT $limit`,
+			)
+			.all({limit})
+			.map((row) => ({
+				...this.toQueuedPage(row)!,
+				error: row.last_error,
+				nextAt: row.next_at,
+			}))
+	}
+
 	private toQueuedPage(row: QueueRow | null): QueuedPage | null {
 		if (!row) {
 			return null
@@ -1243,6 +1335,26 @@ export class LeagueDatabase {
 			attempts: row.attempts,
 		}
 	}
+}
+
+export interface QueueSummary {
+	kinds: {
+		kind: SyncPageKind
+		total: number
+		synced: number
+		failing: number
+		due: number
+		current: {total: number; synced: number; failing: number}
+	}[]
+	/** When a page last synced; null if none has */
+	lastSyncedAt: number | null
+	/** The soonest a page that isn't due yet is; null if none is queued */
+	nextDueAt: number | null
+}
+
+export interface FailingPage extends QueuedPage {
+	error: string
+	nextAt: number
 }
 
 interface QueueRow {
@@ -1344,9 +1456,14 @@ export function toPlaceholders(values: unknown[]): string {
 
 /** A JSON column, checked against what it should hold */
 function parseJson<T>(schema: z.ZodType<T>, text: string): T {
-	const result = schema.safeParse(JSON.parse(text))
+	return parseStored(schema, JSON.parse(text))
+}
+
+/** A stored value, checked against what it should be */
+function parseStored<T>(schema: z.ZodType<T>, value: unknown): T {
+	const result = schema.safeParse(value)
 	if (!result.success) {
-		throw logger.newError("parseJson", "stored JSON doesn't match", {
+		throw logger.newError("parseStored", "stored value doesn't match", {
 			issues: z.prettifyError(result.error),
 		})
 	}

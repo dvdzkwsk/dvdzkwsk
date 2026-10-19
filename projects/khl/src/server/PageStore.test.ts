@@ -1,9 +1,11 @@
-import {beforeEach, describe, expect, test} from "bun:test"
+import {afterEach, beforeEach, describe, expect, test} from "bun:test"
 import {
+	OfflineError,
 	openPageStore,
 	PageLoad,
 	PageStore,
 	readPage,
+	setOfflineMode,
 	setPageStore,
 	withPageLoadLog,
 	withPageReadPolicy,
@@ -57,6 +59,33 @@ describe("readPage", () => {
 		store = openPageStore(":memory:")
 		setPageStore(store)
 		fetches = 0
+	})
+
+	afterEach(() => {
+		setOfflineMode(false)
+	})
+
+	test("offline, serves the stored copy however old, and fetches nothing", async () => {
+		await readPage("khl", URL, fetchNext, parse)
+		setOfflineMode(true)
+		const log: PageLoad[] = []
+		const page = await withPageLoadLog(log, () =>
+			readPage("khl", URL, fetchNext, parse),
+		)
+		expect(page).toBe("<page 1>")
+		expect(log.map((l) => l.source)).toEqual(["stored"])
+		expect(fetches).toBe(1)
+	})
+
+	test("offline, a page that isn't stored fails without fetching", async () => {
+		setOfflineMode(true)
+		await expect(readPage("khl", URL, fetchNext, parse)).rejects.toThrow(
+			OfflineError,
+		)
+		await expect(
+			readPage("khl", URL, fetchNext, parse, {store: false}),
+		).rejects.toThrow(OfflineError)
+		expect(fetches).toBe(0)
 	})
 
 	test("reads a stored page within the max age instead of fetching", async () => {

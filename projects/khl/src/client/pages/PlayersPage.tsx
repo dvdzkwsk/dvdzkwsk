@@ -297,11 +297,35 @@ const PlayerGroups = ({
 					onRetry={onRetry}
 				/>
 			)}
+			{data.unsyncedTeams.length > 0 && (
+				<Warnings
+					summary={`${
+						data.unsyncedTeams.length === 1
+							? "A team hasn't"
+							: `${data.unsyncedTeams.length} teams haven't`
+					} loaded yet, so some players are missing`}
+					detail={
+						data.isSyncing
+							? "Their stats are still being loaded from the league's site. Reload in a few minutes to see their players."
+							: "This server isn't syncing in the background, and loads a team's stats only when you open its page. Pull production's data from /admin to fill in every team."
+					}
+					items={data.unsyncedTeams.map((team) => ({
+						key: team.id,
+						label: (
+							<TeamLink team={team} seasonId={team.seasonId} />
+						),
+					}))}
+					onRetry={onRetry}
+				/>
+			)}
 			{groups.length === 0 && (
 				<div className="GameList-empty">
 					{name
 						? `No ${label} match “${name}”.`
-						: `No ${label} have played in ${data.season.name} yet.`}
+						: data.teams.length === 0 &&
+							  data.unsyncedTeams.length > 0
+							? `No team's ${label} have loaded yet.`
+							: `No ${label} have played in ${data.season.name} yet.`}
 				</div>
 			)}
 			{groups.map((group) => (

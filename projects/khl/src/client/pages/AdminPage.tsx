@@ -10,9 +10,15 @@ import {
 	BenchmarkSummary,
 	BenchmarkTiming,
 	DEFAULT_BENCHMARK_NAMES,
+	DevSettingsResponse,
+	GET_DEV_SETTINGS_ENDPOINT,
+	PULL_PROD_DATA_ENDPOINT,
+	PullProdDataResponse,
 	RUN_BENCHMARK_ENDPOINT,
+	UPDATE_DEV_SETTINGS_ENDPOINT,
 } from "../../shared/ApiJson.js"
 import {
+	AsyncContent,
 	Card,
 	ErrorState,
 	Hint,
@@ -30,6 +36,7 @@ import {
 	Route,
 	SIMULATED_LOADING_DELAY_MS,
 	SimulatedLoading,
+	useAsync,
 	writeSimulatedLoading,
 } from "../Util.js"
 
@@ -40,11 +47,161 @@ const AdminPage = () => {
 		<PageShell>
 			<div className="Admin">
 				<h1>Admin</h1>
+				<KHLAccessCard />
+				<ProdDataCard />
 				<StatesDemo />
 				<SimulatedLoadingPicker />
 				<BenchmarkRunner />
 			</div>
 		</PageShell>
+	)
+}
+
+type KHLAccess = "online" | "offline"
+
+const KHL_ACCESS_OPTIONS: {value: KHLAccess; label: string}[] = [
+	{value: "online", label: "Online"},
+	{value: "offline", label: "Offline"},
+]
+
+/** Offline mode, and whether the background sync loop runs */
+const KHLAccessCard = () => {
+	const state = useAsync(() => doRequest(GET_DEV_SETTINGS_ENDPOINT, {}), [])
+	return (
+		<Card title="KHL access">
+			<AsyncContent
+				state={state}
+				size="inline"
+				errorTitle="Couldn't load dev settings"
+			>
+				{(settings) => <KHLAccessPicker initial={settings} />}
+			</AsyncContent>
+		</Card>
+	)
+}
+
+const KHLAccessPicker = ({initial}: {initial: DevSettingsResponse}) => {
+	const [settings, setSettings] = React.useState(initial)
+	const [error, setError] = React.useState<Error | null>(null)
+	const update = (access: KHLAccess) => {
+		setError(null)
+		doRequest(UPDATE_DEV_SETTINGS_ENDPOINT, {
+			offline: matchValue(access, {online: false, offline: true}),
+		}).then(setSettings, (cause) => setError(toError(cause)))
+	}
+	return (
+		<>
+			<p className="Admin-note">
+				Offline, the server never fetches from the KHL or LiveBarn: it
+				serves pages it has stored, and a page it hasn't comes back as
+				unavailable. Kept across restarts.
+			</p>
+			<p className="Admin-note">
+				{settings.syncLoop
+					? "The background sync loop is running (KHL_SYNC=1). It pauses while offline."
+					: "The background sync loop is off; set KHL_SYNC=1 to run it. Pages still sync when they're first viewed."}
+			</p>
+			<SegmentedControl<KHLAccess>
+				label="KHL access"
+				options={KHL_ACCESS_OPTIONS}
+				value={settings.offline ? "offline" : "online"}
+				onChange={update}
+			/>
+			{error && (
+				<ErrorState
+					title="Couldn't update dev settings"
+					error={error}
+					size="inline"
+				/>
+			)}
+		</>
+	)
+}
+
+type ProdDataScope = "tables" | "everything"
+
+const PROD_DATA_SCOPE_OPTIONS: {value: ProdDataScope; label: string}[] = [
+	{value: "tables", label: "League tables"},
+	{value: "everything", label: "Tables and pages"},
+]
+
+type PullState =
+	| {kind: "idle"}
+	| {kind: "running"}
+	| {kind: "done"; result: PullProdDataResponse}
+	| {kind: "error"; error: Error}
+
+/** Replaces dev's data with production's, so dev needn't fetch it */
+const ProdDataCard = () => {
+	const [scope, setScope] = React.useState<ProdDataScope>("tables")
+	const [state, setState] = React.useState<PullState>({kind: "idle"})
+	const pull = () => {
+		setState({kind: "running"})
+		doRequest(PULL_PROD_DATA_ENDPOINT, {
+			sources: matchValue(scope, {tables: false, everything: true}),
+		}).then(
+			(result) => setState({kind: "done", result}),
+			(error) => setState({kind: "error", error: toError(error)}),
+		)
+	}
+	const isRunning = matchValue(state.kind, {
+		idle: false,
+		running: true,
+		done: false,
+		error: false,
+	})
+	const outcome = matchField(state, "kind", {
+		idle: () => null,
+		running: () => (
+			<div className="Admin-preview">
+				<InlineLoader label="Pulling production's data…" />
+			</div>
+		),
+		error: ({error}) => (
+			<ErrorState
+				title="Couldn't pull production's data"
+				error={error}
+				onRetry={pull}
+				size="inline"
+			/>
+		),
+		done: ({result}) => (
+			<p className="Admin-note">
+				Pulled{" "}
+				{result.pulled
+					.map((db) => `${db.name}.sqlite (${db.mb} MB)`)
+					.join(" and ")}{" "}
+				in {formatSeconds(result.ms)}. The previous dev database is at{" "}
+				<code>{result.backupPath}</code>.
+			</p>
+		),
+	})
+	return (
+		<Card title="Production data">
+			<p className="Admin-note">
+				Replaces this server's data with a snapshot of production's,
+				through your <code>fly auth login</code> session. The league
+				tables and player ids are a few MB. The stored pages are 1.5–3
+				GB and are only needed to reprocess after a parser change.
+			</p>
+			<SegmentedControl<ProdDataScope>
+				label="What to pull"
+				options={PROD_DATA_SCOPE_OPTIONS}
+				value={scope}
+				onChange={setScope}
+			/>
+			<div className="Admin-actions">
+				<button
+					type="button"
+					className="FilterPill"
+					disabled={isRunning}
+					onClick={pull}
+				>
+					Pull production's data
+				</button>
+			</div>
+			{outcome}
+		</Card>
 	)
 }
 

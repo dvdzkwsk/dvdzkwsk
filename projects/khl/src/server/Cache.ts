@@ -94,6 +94,14 @@ export class KHLCache {
 	}
 
 	/**
+	 * Drops every entry, e.g. once the stored pages they came from are
+	 * replaced; the next loads read the stored pages again
+	 */
+	clear() {
+		this.entries.clear()
+	}
+
+	/**
 	 * Drops an entry, so the next `cached(key, ...)` fetches it again, with
 	 * no fallback to a stored page
 	 */

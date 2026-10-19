@@ -5,7 +5,12 @@ import {getGitRevision} from "@dvdzkwsk/util/GitUtil"
 import {KHLDatabase} from "./Database.js"
 import {JobDefinition, JobRunner} from "./Jobs.js"
 import {LIVEBARN_VENUES_URL} from "./LiveBarn.js"
-import {DeployInfo, StatusCheck, StatusResponse} from "../shared/ApiJson.js"
+import {
+	DeployInfo,
+	StatusCheck,
+	StatusResponse,
+	SyncStatus,
+} from "../shared/ApiJson.js"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {getLeagueDayKey, MINUTE_MS} from "../shared/LeagueTime.js"
 
@@ -19,6 +24,10 @@ const HISTORY_DAYS = 90
 const SLOW_MS = 5_000
 /** A check slower than this counts as down */
 const TIMEOUT_MS = 15_000
+/** How many failing pages the status page lists */
+const SYNC_FAILURES_SHOWN = 5
+/** Errors longer than this are cut short (a parse error can quote HTML) */
+const SYNC_ERROR_LENGTH = 300
 
 interface Component {
 	id: string
@@ -166,8 +175,46 @@ export function getStatus(db: KHLDatabase, jobs: JobRunner): StatusResponse {
 			days: days.get(id) ?? [],
 		})),
 		jobs: jobs.getStatuses(),
+		sync: getSyncStatus(db),
 		deploy: DEPLOY_INFO,
 	}
+}
+
+function getSyncStatus(db: KHLDatabase): SyncStatus {
+	const summary = db.league.getQueueSummary(Date.now())
+	const currentSeasonId = db.league.getCurrentSeasonId()
+	const currentSeason = db.league
+		.getSeasons()
+		.find((s) => s.id === currentSeasonId)
+	return {
+		currentSeason: currentSeason ?? null,
+		kinds: summary.kinds,
+		lastSyncedAt: toIsoOrNull(summary.lastSyncedAt),
+		nextDueAt: toIsoOrNull(summary.nextDueAt),
+		failures: db.league
+			.getFailingPages(SYNC_FAILURES_SHOWN)
+			.map(({page, url, error, attempts, nextAt}) => ({
+				kind: page.kind,
+				url,
+				error: shortenSyncError(error, url),
+				attempts,
+				retryAt: new Date(nextAt).toISOString(),
+			})),
+	}
+}
+
+/** Without the page's URL, which parse errors start with, and cut short */
+function shortenSyncError(error: string, url: string): string {
+	const message = error.startsWith(`${url}: `)
+		? error.slice(url.length + 2)
+		: error
+	return message.length > SYNC_ERROR_LENGTH
+		? `${message.slice(0, SYNC_ERROR_LENGTH)}…`
+		: message
+}
+
+function toIsoOrNull(ms: number | null): string | null {
+	return ms === null ? null : new Date(ms).toISOString()
 }
 
 /** The last HISTORY_DAYS league-local days, oldest first, ending today */

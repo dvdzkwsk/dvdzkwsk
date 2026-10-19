@@ -8,7 +8,7 @@ import {
 	parseRegistrationKey,
 	RegistrationKey,
 	StatusCheck,
-	StatusDay,
+	StatusBucket,
 	StatusLevel,
 	toRegistrationKey,
 } from "../shared/ApiJson.js"
@@ -701,36 +701,57 @@ export class KHLDatabase {
 		)
 	}
 
-	/** Check counts by component and day, from `fromDay` on */
-	getStatusDays(fromDay: string): Map<string, StatusDay[]> {
+	/**
+	 * Check counts by component and bucket: `bucketMinutes`-long stretches
+	 * back to back from `from` (an ISO instant)
+	 */
+	getStatusBuckets(
+		from: string,
+		bucketMinutes: number,
+	): Map<string, StatusBucket[]> {
+		const fromMs = Date.parse(from)
+		const bucketMs = bucketMinutes * 60_000
 		const rows = this.db
 			.query<
 				{
 					component: string
-					day: string
+					bucket: number
 					checks: number
 					degraded: number
 					outages: number
 				},
-				{fromDay: string}
+				{from: string; fromSeconds: number; bucketSeconds: number}
 			>(
-				`SELECT component, day, count(*) AS checks,
+				`SELECT component,
+					(unixepoch(checked_at) - $fromSeconds) / $bucketSeconds AS bucket,
+					count(*) AS checks,
 					sum(status = 'degraded') AS degraded,
 					sum(status = 'outage') AS outages
-				FROM status_checks WHERE day >= $fromDay
-				GROUP BY component, day ORDER BY day`,
+				FROM status_checks WHERE checked_at >= $from
+				GROUP BY component, bucket ORDER BY bucket`,
 			)
-			.all({fromDay})
-		const days = new Map<string, StatusDay[]>()
-		for (const {component, ...day} of rows) {
-			days.set(component, [...(days.get(component) ?? []), day])
+			.all({
+				from,
+				fromSeconds: fromMs / 1000,
+				bucketSeconds: bucketMs / 1000,
+			})
+		const buckets = new Map<string, StatusBucket[]>()
+		for (const {component, bucket, ...counts} of rows) {
+			const start = new Date(fromMs + bucket * bucketMs).toISOString()
+			buckets.set(component, [
+				...(buckets.get(component) ?? []),
+				{start, ...counts},
+			])
 		}
-		return days
+		return buckets
 	}
 
-	/** Drops checks from before `day`, which the status page no longer shows */
-	pruneStatusChecks(day: string): void {
-		this.db.query("DELETE FROM status_checks WHERE day < $day").run({day})
+	/** Drops checks from before `before` (an ISO instant), which the status
+	    page no longer shows */
+	pruneStatusChecks(before: string): void {
+		this.db
+			.query("DELETE FROM status_checks WHERE checked_at < $before")
+			.run({before})
 	}
 
 	/** The player a KHL player id is attached to, if we've recorded it */

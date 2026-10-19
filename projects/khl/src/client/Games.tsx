@@ -11,6 +11,7 @@ import {
 	CityDot,
 	Hint,
 	HomeAwayBadge,
+	InfoPopover,
 	Link,
 	LIVEBARN_TITLES,
 	LiveBarnBadge,
@@ -1346,7 +1347,9 @@ export const GameTable = ({
 	// Once any game here has a score, it sits between the teams like a
 	// scoreboard: "ESB [logo] 3 – 8 [logo] ALTP". Upcoming-only tables don't
 	// need it.
-	const scoreboard = rows.some((row) => row.score)
+	const scoreboard = rows.some(
+		(row) => row.score || isAwaitingScore(row, now),
+	)
 	// Both team columns as wide as the longest name here, so a table of short
 	// names doesn't spread them out
 	const teamChars = scoreboard ? getTeamColumnChars(rows) : null
@@ -1468,7 +1471,25 @@ export const GameTable = ({
 						className: "GameTable-col--score",
 						sortable: false,
 						render: (row: GameTableRow) =>
-							row.score && <GameTableScore row={row} />,
+							row.score ? (
+								<GameTableScore row={row} />
+							) : (
+								isAwaitingScore(row, now) && (
+									<InfoPopover
+										trigger={
+											<button
+												type="button"
+												className="GameTable-score-pending"
+											>
+												Score pending
+											</button>
+										}
+									>
+										Over; waiting on the league to post the
+										score
+									</InfoPopover>
+								)
+							),
 					},
 				]
 			: []),
@@ -1546,6 +1567,23 @@ export const GameTable = ({
 			}
 			columns={columns}
 		/>
+	)
+}
+
+/** How long after its slot ends a score-less game still reads as pending */
+const SCORE_PENDING_MS = 2 * DAY_MS
+
+/**
+ * Past its ice slot without a score, recently enough that the league likely
+ * just hasn't posted it yet. Older score-less games are left blank.
+ */
+function isAwaitingScore(row: GameTableRow, now: Date): boolean {
+	const endsAt = getGameEndsAt(row).getTime()
+	return (
+		!row.score &&
+		!row.live &&
+		now.getTime() >= endsAt &&
+		now.getTime() - endsAt < SCORE_PENDING_MS
 	)
 }
 

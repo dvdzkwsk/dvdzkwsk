@@ -1,7 +1,7 @@
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
-import {getBadgesHref, Route} from "../Util.js"
+import {getAchievementsHref, Route} from "../Util.js"
 
 // --- /about: what the site adds on top of the league's
 
@@ -24,15 +24,15 @@ const FEATURES: Feature[] = [
 		art: PlayerArt,
 	},
 	{
-		title: "Player badges",
+		title: "Player achievements",
 		text: (
 			<>
-				Badges on your profile celebrate your time in the KHL. The more
-				you play, the more you collect.{" "}
-				<Link href={getBadgesHref()}>See every badge</Link>.
+				Achievements on your profile celebrate your time in the KHL. The
+				more you play, the more you collect.{" "}
+				<Link href={getAchievementsHref()}>See every achievement</Link>.
 			</>
 		),
-		art: BadgesArt,
+		art: AchievementsArt,
 	},
 	{
 		title: "Activity feed",
@@ -624,9 +624,9 @@ function BoxScoreArt() {
 	)
 }
 
-/** A player's card with a row of badges */
-function BadgesArt() {
-	const badges: [x: number, emoji: string][] = [
+/** A player's card with a row of achievements */
+function AchievementsArt() {
+	const achievements: [x: number, emoji: string][] = [
 		[54, "🏒"],
 		[102, "💯"],
 		[150, "😇"],
@@ -658,7 +658,7 @@ function BadgesArt() {
 				height="4"
 				rx="2"
 			/>
-			{badges.map(([x, emoji]) => (
+			{achievements.map(([x, emoji]) => (
 				<g key={x}>
 					<rect
 						className="AboutArt-tile"

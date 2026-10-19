@@ -9,28 +9,33 @@ import {
 	GET_STATUS_ENDPOINT,
 	JobHealth,
 	JobStatus,
+	StatusBucket,
 	StatusComponent,
-	StatusDay,
 	StatusLevel,
 	StatusResponse,
 	SyncFailure,
 	SyncPageKind,
 	SyncStatus,
 } from "../../shared/ApiJson.js"
-import {STRINGS, URLS} from "../../shared/KHLConfig.js"
+import {STATUS_HISTORY, STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {MINUTE_MS} from "../../shared/LeagueTime.js"
 import {Card, Hint, Link, PageLoader, PageShell} from "../Components.js"
-import {formatDayKey} from "../Games.js"
-import {formatRelative, formatSeconds, Route, useNow} from "../Util.js"
+import {
+	formatGameDate,
+	formatGameTime,
+	formatRelative,
+	formatSeconds,
+	Route,
+	useNow,
+} from "../Util.js"
 
-// --- /status: each component's health now and over the last 90 days
+// --- /status: each component's health now and over the last
+// STATUS_HISTORY.DAYS, a bar per few hours
 
 const logger = new Logger("StatusPage")
 
 /** How often the page refetches while open */
 const REFRESH_MS = MINUTE_MS
-/** Days of history shown on narrow screens, where 90 bars don't fit */
-const NARROW_DAYS = 30
 
 const LEVEL_LABELS: Record<StatusLevel, string> = {
 	operational: "Operational",
@@ -74,7 +79,12 @@ const StatusPage = () => {
 											<ComponentRow
 												key={component.id}
 												component={component}
-												historyDays={status.historyDays}
+												historyBuckets={
+													status.historyBuckets
+												}
+												bucketMinutes={
+													status.bucketMinutes
+												}
 												now={now}
 											/>
 										))}
@@ -219,16 +229,21 @@ function getWorstLevel(levels: StatusLevel[]): StatusLevel {
 
 const ComponentRow = ({
 	component,
-	historyDays,
+	historyBuckets,
+	bucketMinutes,
 	now,
 }: {
 	component: StatusComponent
-	historyDays: string[]
+	historyBuckets: string[]
+	bucketMinutes: number
 	now: Date
 }) => {
 	const {latest} = component
-	const daysByKey = new Map(component.days.map((d) => [d.day, d]))
-	const uptime = getUptime(component.days)
+	const bucketsByStart = new Map(component.buckets.map((b) => [b.start, b]))
+	const uptime = getUptime(component.buckets)
+	const days = Math.round((historyBuckets.length * bucketMinutes) / (24 * 60))
+	// Narrow screens show only the latest NARROW_DAYS of bars
+	const narrowBuckets = (STATUS_HISTORY.NARROW_DAYS * 24 * 60) / bucketMinutes
 	return (
 		<li className="StatusComponent">
 			<div className="StatusComponent-head">
@@ -266,57 +281,65 @@ const ComponentRow = ({
 					<span className="StatusPill">No checks yet</span>
 				)}
 			</div>
-			<div className="UptimeBars" role="list" aria-label="Daily history">
-				{historyDays.map((day, i) => (
+			<div className="UptimeBars" role="list" aria-label="History">
+				{historyBuckets.map((start, i) => (
 					<UptimeBar
-						key={day}
-						day={day}
-						data={daysByKey.get(day)}
-						early={i < historyDays.length - NARROW_DAYS}
+						key={start}
+						start={start}
+						bucketMinutes={bucketMinutes}
+						data={bucketsByStart.get(start)}
+						now={now}
+						early={i < historyBuckets.length - narrowBuckets}
 					/>
 				))}
 			</div>
 			<div className="UptimeBars-axis">
 				<span>
-					<span className="UptimeBars-wide">
-						{historyDays.length} days ago
-					</span>
+					<span className="UptimeBars-wide">{days} days ago</span>
 					<span className="UptimeBars-narrow">
-						{NARROW_DAYS} days ago
+						{STATUS_HISTORY.NARROW_DAYS} days ago
 					</span>
 				</span>
 				<span className="UptimeBars-uptime">
 					{uptime === null ? "No data yet" : `${uptime} uptime`}
 				</span>
-				<span>Today</span>
+				<span>Now</span>
 			</div>
 		</li>
 	)
 }
 
 /** "100%" or "99.82%" of checks that got an answer; null without any */
-function getUptime(days: StatusDay[]): string | null {
-	const checks = days.reduce((n, d) => n + d.checks, 0)
+function getUptime(buckets: StatusBucket[]): string | null {
+	const checks = buckets.reduce((n, b) => n + b.checks, 0)
 	if (checks === 0) {
 		return null
 	}
-	const up = checks - days.reduce((n, d) => n + d.outages, 0)
+	const up = checks - buckets.reduce((n, b) => n + b.outages, 0)
 	const percent = (up / checks) * 100
 	return up === checks ? "100%" : `${Math.min(percent, 99.99).toFixed(2)}%`
 }
 
 const UptimeBar = ({
-	day,
+	start,
+	bucketMinutes,
 	data,
+	now,
 	early,
 }: {
-	day: string
-	data: StatusDay | undefined
+	start: string
+	bucketMinutes: number
+	data: StatusBucket | undefined
+	now: Date
 	/** Hidden on narrow screens */
 	early: boolean
 }) => {
-	const level = data ? getDayLevel(data) : null
-	const label = `${formatDayKey(day)} · ${describeDay(data)}`
+	const level = data ? getBucketLevel(data) : null
+	const end = new Date(
+		Date.parse(start) + bucketMinutes * MINUTE_MS,
+	).toISOString()
+	// "Sun, Oct 18 · 6:00 PM – 8:00 PM · No issues (24 checks)"
+	const label = `${formatGameDate(start, now)} · ${formatGameTime(start)} – ${formatGameTime(end)} · ${describeBucket(data)}`
 	return (
 		<Hint label={label}>
 			<span
@@ -332,24 +355,24 @@ const UptimeBar = ({
 	)
 }
 
-function getDayLevel(day: StatusDay): StatusLevel {
-	if (day.outages > 0) {
+function getBucketLevel(bucket: StatusBucket): StatusLevel {
+	if (bucket.outages > 0) {
 		return "outage"
 	}
-	return day.degraded > 0 ? "degraded" : "operational"
+	return bucket.degraded > 0 ? "degraded" : "operational"
 }
 
-function describeDay(day: StatusDay | undefined): string {
-	if (!day) {
+function describeBucket(bucket: StatusBucket | undefined): string {
+	if (!bucket) {
 		return "No data"
 	}
 	const problems = [
-		day.outages > 0 && plural(day.outages, "failed check"),
-		day.degraded > 0 && plural(day.degraded, "slow check"),
+		bucket.outages > 0 && plural(bucket.outages, "failed check"),
+		bucket.degraded > 0 && plural(bucket.degraded, "slow check"),
 	].filter(Boolean)
 	return problems.length > 0
-		? `${problems.join(", ")} of ${day.checks}`
-		: `No issues (${plural(day.checks, "check")})`
+		? `${problems.join(", ")} of ${bucket.checks}`
+		: `No issues (${plural(bucket.checks, "check")})`
 }
 
 function plural(n: number, noun: string): string {

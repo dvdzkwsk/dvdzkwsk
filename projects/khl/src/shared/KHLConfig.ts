@@ -60,6 +60,19 @@ export const LEAGUE = {
 	STOP_TIME_FACTOR: 1.25,
 }
 
+/**
+ * The status page's history: how far back it goes, and how much time each bar
+ * covers. Checks older than DAYS are pruned, so lengthening it only shows more
+ * once that much has been recorded.
+ */
+export const STATUS_HISTORY = {
+	DAYS: 7,
+	/** Divides a day evenly, so bars start on the same hours every day */
+	BUCKET_HOURS: 2,
+	/** The most recent part of it narrow screens show, where every bar won't fit */
+	NARROW_DAYS: 3,
+}
+
 export const LIMITS = {
 	/** How many differences a cache check lists (it counts them all) */
 	CACHE_CHECK_DIFFERENCES: 50,
@@ -76,11 +89,11 @@ export const LIMITS = {
 	MATCHUP_HEAD_TO_HEAD_GAMES: 5,
 	/**
 	 * How many days of a player's games, back from their latest, the Angel and
-	 * Devil badges judge
+	 * Devil achievements judge
 	 */
-	BADGE_TREND_LOOKBACK_DAYS: 365,
-	/** The fewest games in that window for the Angel or Devil badge */
-	BADGE_TREND_MIN_GAMES: 10,
+	ACHIEVEMENT_TREND_LOOKBACK_DAYS: 365,
+	/** The fewest games in that window for the Angel or Devil achievement */
+	ACHIEVEMENT_TREND_MIN_GAMES: 10,
 	/**
 	 * How many goals, assists, and penalties an activity request returns by
 	 * default (what the feed shows), and the most it can ask for

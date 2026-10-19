@@ -4,16 +4,16 @@ import {ActivityEvent, ActivityResponse} from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {normalizePlayerName} from "../shared/KHLJson.js"
 
-/** Penalties a player took in their latest games, for the trend badges */
+/** Penalties a player took in their latest games, for the trend achievements */
 export interface RecentPenalties {
-	/** Games the player dressed for in LIMITS.BADGE_TREND_LOOKBACK_DAYS */
+	/** Games the player dressed for in LIMITS.ACHIEVEMENT_TREND_LOOKBACK_DAYS */
 	games: number
 	penalties: number
 }
 
 /**
  * Counts the penalties in an activity response that has every game the player
- * dressed for in LIMITS.BADGE_TREND_LOOKBACK_DAYS ("played"), with penalties
+ * dressed for in LIMITS.ACHIEVEMENT_TREND_LOOKBACK_DAYS ("played"), with penalties
  */
 export function toRecentPenalties(activity: ActivityResponse): RecentPenalties {
 	const played = activity.games.filter((g) =>
@@ -35,8 +35,8 @@ export function toRecentPenalties(activity: ActivityResponse): RecentPenalties {
 	}
 }
 
-/** What a player's badges are judged on */
-export interface BadgeStats {
+/** What a player's achievements are judged on */
+export interface AchievementStats {
 	name: string
 	/** Career games */
 	gamesPlayed: number
@@ -44,23 +44,23 @@ export interface BadgeStats {
 	recentPenalties: RecentPenalties | null
 }
 
-export interface Badge {
+export interface Achievement {
 	id: string
 	/** An emoji, or an inline SVG where an emoji doesn't render everywhere */
 	icon: React.ReactNode
 	label: string
 	description: string
-	/** Hand-given badges: who has it, by name, once per time given */
+	/** Hand-given achievements: who has it, by name, once per time given */
 	players?: string[]
-	earned: (stats: BadgeStats) => boolean
-	/** How many times they have it, for badges given more than once */
-	count?: (stats: BadgeStats) => number
+	earned: (stats: AchievementStats) => boolean
+	/** How many times they have it, for achievements given more than once */
+	count?: (stats: AchievementStats) => number
 }
 
 /** Windows draws the 🇯🇵 emoji as the letters "JP", so the flag is drawn here */
 function JapanFlag() {
 	return (
-		<svg className="BadgeIcon-flag" viewBox="0 0 30 20">
+		<svg className="AchievementIcon-flag" viewBox="0 0 30 20">
 			<rect
 				x="0.5"
 				y="0.5"
@@ -75,27 +75,27 @@ function JapanFlag() {
 	)
 }
 
-const {BADGE_TREND_LOOKBACK_DAYS, BADGE_TREND_MIN_GAMES} = LIMITS
+const {ACHIEVEMENT_TREND_LOOKBACK_DAYS, ACHIEVEMENT_TREND_MIN_GAMES} = LIMITS
 
 /** Penalties per game over the trend window, once it has enough games */
-function getPenaltiesPerGame(stats: BadgeStats): number | null {
+function getPenaltiesPerGame(stats: AchievementStats): number | null {
 	const recent = stats.recentPenalties
-	if (!recent || recent.games < BADGE_TREND_MIN_GAMES) {
+	if (!recent || recent.games < ACHIEVEMENT_TREND_MIN_GAMES) {
 		return null
 	}
 	return recent.penalties / recent.games
 }
 
-const TREND_MONTHS = Math.round(BADGE_TREND_LOOKBACK_DAYS / 30.4)
+const TREND_MONTHS = Math.round(ACHIEVEMENT_TREND_LOOKBACK_DAYS / 30.4)
 
-const TREND_NOTE = `over their last ${TREND_MONTHS} months of games (at least ${BADGE_TREND_MIN_GAMES} played)`
+const TREND_NOTE = `over their last ${TREND_MONTHS} months of games (at least ${ACHIEVEMENT_TREND_MIN_GAMES} played)`
 
 const gamesMilestone = (
 	games: number,
 	icon: string,
 	label: string,
 	description: string,
-): Badge => ({
+): Achievement => ({
 	id: `games-${games}`,
 	icon,
 	label,
@@ -105,18 +105,18 @@ const gamesMilestone = (
 
 /** Given out by hand, matched on the player's name. List a name again for
     each extra time they've earned it. */
-const customBadge = (
+const customAchievement = (
 	id: string,
 	icon: React.ReactNode,
 	label: string,
 	description: string,
 	players: string[],
-): Badge => {
+): Achievement => {
 	const counts = new Map<string, number>()
 	for (const name of players.map(normalizePlayerName)) {
 		counts.set(name, (counts.get(name) ?? 0) + 1)
 	}
-	const getCount = (stats: BadgeStats) => {
+	const getCount = (stats: AchievementStats) => {
 		return counts.get(normalizePlayerName(stats.name)) ?? 0
 	}
 	return {
@@ -130,19 +130,19 @@ const customBadge = (
 	}
 }
 
-/** Every badge, in the order they're shown */
-export const BADGES: Badge[] = [
-	customBadge(
+/** Every achievement, in the order they're shown */
+export const ACHIEVEMENTS: Achievement[] = [
+	customAchievement(
 		"red-gloves-gang",
 		"🥊",
 		"Red Gloves Gang",
 		"A founding member of the Red Gloves Gang.",
 		["Gabey Lucas", "David Zukowski", "Emily Olan"],
 	),
-	customBadge("japanese", <JapanFlag />, "日本語", "Speaks Japanese.", [
+	customAchievement("japanese", <JapanFlag />, "日本語", "Speaks Japanese.", [
 		"Emily Sorg",
 	]),
-	customBadge(
+	customAchievement(
 		"broken-bone",
 		"🦴",
 		"Broken Bone",
@@ -155,7 +155,7 @@ export const BADGES: Badge[] = [
 			"Patrick Austin",
 		],
 	),
-	customBadge(
+	customAchievement(
 		"concussion",
 		"🤕",
 		"Concussion",
@@ -187,50 +187,54 @@ export const BADGES: Badge[] = [
 	gamesMilestone(500, "🏆", "500 Games", "Played 500 career games."),
 ]
 
-export interface EarnedBadge {
-	badge: Badge
+export interface EarnedAchievement {
+	achievement: Achievement
 	/** 1, unless it was given more than once */
 	count: number
 }
 
-export function getBadges(stats: BadgeStats): EarnedBadge[] {
-	return BADGES.filter((badge) => badge.earned(stats)).map((badge) => ({
-		badge,
-		count: badge.count?.(stats) ?? 1,
-	}))
+export function getAchievements(stats: AchievementStats): EarnedAchievement[] {
+	return ACHIEVEMENTS.filter((achievement) => achievement.earned(stats)).map(
+		(achievement) => ({
+			achievement,
+			count: achievement.count?.(stats) ?? 1,
+		}),
+	)
 }
 
-/** A badge's emoji in a rounded tile, with "×2" in the corner if earned twice */
-export const BadgeIcon = ({
-	badge,
+/** An achievement's emoji in a rounded tile, with "×2" in the corner if earned twice */
+export const AchievementIcon = ({
+	achievement,
 	count = 1,
 }: {
-	badge: Badge
+	achievement: Achievement
 	count?: number
 }) => {
 	return (
-		<span className="BadgeIcon" aria-hidden>
-			{badge.icon}
-			{count > 1 && <span className="BadgeIcon-count">×{count}</span>}
+		<span className="AchievementIcon" aria-hidden>
+			{achievement.icon}
+			{count > 1 && (
+				<span className="AchievementIcon-count">×{count}</span>
+			)}
 		</span>
 	)
 }
 
-/** A badge's name and how it's earned, for a popover */
-export const BadgeHint = ({
-	badge,
+/** An achievement's name and how it's earned, for a popover */
+export const AchievementHint = ({
+	achievement,
 	count = 1,
 }: {
-	badge: Badge
+	achievement: Achievement
 	count?: number
 }) => {
 	return (
-		<span className="BadgeHint">
-			<strong className="BadgeHint-label">
-				{badge.label}
+		<span className="AchievementHint">
+			<strong className="AchievementHint-label">
+				{achievement.label}
 				{count > 1 && ` ×${count}`}
 			</strong>
-			{badge.description}
+			{achievement.description}
 		</span>
 	)
 }

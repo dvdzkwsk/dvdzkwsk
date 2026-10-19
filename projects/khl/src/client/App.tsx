@@ -15,9 +15,9 @@ import {
 } from "./Components.js"
 import {STRINGS, URLS} from "../shared/KHLConfig.js"
 import {AboutRoute} from "./pages/AboutPage.js"
+import {AchievementsRoute} from "./pages/AchievementsPage.js"
 import {AdminRoute} from "./pages/AdminPage.js"
 import {ApiRoute} from "./pages/ApiPage.js"
-import {BadgesRoute} from "./pages/BadgesPage.js"
 import {GameRoute} from "./pages/GamePage.js"
 import {HelpRoute} from "./pages/HelpPage.js"
 import {GamesRoute, HomeRoute} from "./pages/HomePage.js"
@@ -59,7 +59,8 @@ const ROUTES: Route[] = [
 	GameRoute,
 	PlayersRoute,
 	PlayerRoute,
-	BadgesRoute,
+	AchievementsRoute,
+	redirectRoute("/badges", AchievementsRoute.path),
 	TeamsRoute,
 	TeamRoute,
 	RinkRoute,

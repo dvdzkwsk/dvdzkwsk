@@ -4,7 +4,7 @@ import * as React from "react"
 import {
 	LeaguePlayer,
 	LIST_PLAYERS_ENDPOINT,
-	PlayersResponse,
+	ListPlayersResponse,
 	PlayersTeam,
 } from "../../shared/ApiJson.js"
 import {normalizePlayerName} from "../../shared/KHLJson.js"
@@ -100,7 +100,7 @@ const PlayersPage = ({query}: RouteProps) => {
 	)
 	// The latest players that loaded, for the filters' seasons and divisions
 	const [toolbarData, setToolbarData] =
-		React.useState<PlayersResponse | null>(null)
+		React.useState<ListPlayersResponse | null>(null)
 	React.useEffect(() => {
 		matchField(state, "status", {
 			loading: () => {},
@@ -237,7 +237,7 @@ const PlayerGroups = ({
 	name,
 	onRetry,
 }: {
-	data: PlayersResponse
+	data: ListPlayersResponse
 	position: Position
 	groupBy: GroupBy
 	/** Division names; empty means every division */

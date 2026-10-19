@@ -3,7 +3,7 @@ import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 import {
-	GameResponse,
+	GetGameResponse,
 	SeasonSummary,
 	GET_GAME_ENDPOINT,
 } from "../../shared/ApiJson.js"
@@ -103,7 +103,7 @@ type GameView = "preview" | "result"
  * The view picked in the URL, else the one that fits the game. A result can
  * only be shown once the game has a final score.
  */
-function getGameView(game: GameResponse, query: URLSearchParams): GameView {
+function getGameView(game: GetGameResponse, query: URLSearchParams): GameView {
 	const isFinal = game.score !== null
 	const picked = query.get("view")
 	if (picked === "preview") {
@@ -115,7 +115,13 @@ function getGameView(game: GameResponse, query: URLSearchParams): GameView {
 	return isFinal ? "result" : "preview"
 }
 
-const GameViewToggle = ({game, view}: {game: GameResponse; view: GameView}) => {
+const GameViewToggle = ({
+	game,
+	view,
+}: {
+	game: GetGameResponse
+	view: GameView
+}) => {
 	const {history} = React.useContext(AppContext)
 	const defaultView = game.score ? "result" : "preview"
 	return (
@@ -146,7 +152,7 @@ const GameViewToggle = ({game, view}: {game: GameResponse; view: GameView}) => {
 }
 
 /** Scoring by period, the timeline, and who played with their stats. */
-const ResultView = ({game}: {game: GameResponse}) => {
+const ResultView = ({game}: {game: GetGameResponse}) => {
 	// The scoreboard can have the final score before the scoresheet is
 	// posted: say what's missing, and show who's on each team meanwhile
 	if (!game.boxScore.hasSummary) {
@@ -198,7 +204,7 @@ const ResultView = ({game}: {game: GameResponse}) => {
 }
 
 /** The teams' seasons, their history against each other, and rosters. */
-const PreviewView = ({game, now}: {game: GameResponse; now: Date}) => {
+const PreviewView = ({game, now}: {game: GetGameResponse; now: Date}) => {
 	return (
 		<>
 			{/* How the teams compare this season, then their previous meetings */}
@@ -233,7 +239,7 @@ const GameHeader = ({
 	view,
 	now,
 }: {
-	game: GameResponse
+	game: GetGameResponse
 	view: GameView
 	now: Date
 }) => {
@@ -338,7 +344,7 @@ const GameHeader = ({
 
 type GameState = "upcoming" | "live" | "final"
 
-function getGameState(game: GameResponse, now: Date): GameState {
+function getGameState(game: GetGameResponse, now: Date): GameState {
 	const startsAt = Date.parse(game.boxScore.startsAt)
 	if (game.score) {
 		return "final"
@@ -350,7 +356,7 @@ function getGameState(game: GameResponse, now: Date): GameState {
 }
 
 /** The rink's feed before and during the game, then the game's replay. */
-const GameLiveBarnLinks = ({game, now}: {game: GameResponse; now: Date}) => {
+const GameLiveBarnLinks = ({game, now}: {game: GetGameResponse; now: Date}) => {
 	const {livebarn} = game
 	if (livebarn.length === 0) {
 		return <NotOnLiveBarn />
@@ -409,7 +415,7 @@ const HeaderTeam = ({
 }
 
 /** Goals and shots per period, one row per team. */
-const PeriodTotals = ({game}: {game: GameResponse}) => {
+const PeriodTotals = ({game}: {game: GetGameResponse}) => {
 	const {away, home, periods} = game.boxScore
 	const columns = (
 		stat: "goals" | "shots",
@@ -456,7 +462,7 @@ type TimelineEvent =
 	| {kind: "penalty"; penalty: KHLPenalty}
 
 /** Goals and penalties period by period, in the order they happened. */
-const Timeline = ({game}: {game: GameResponse}) => {
+const Timeline = ({game}: {game: GetGameResponse}) => {
 	const {away, home, goals, penalties} = game.boxScore
 	const teams = new Map([away, home].map((t) => [t.id, t]))
 

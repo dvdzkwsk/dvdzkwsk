@@ -1,6 +1,6 @@
 import {matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
-import {ActivityEvent, ActivityResponse} from "../shared/ApiJson.js"
+import {ActivityEvent, ActivityResult} from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {normalizePlayerName} from "../shared/KHLJson.js"
 
@@ -15,7 +15,7 @@ export interface RecentPenalties {
  * Counts the penalties in an activity response that has every game the player
  * dressed for in LIMITS.ACHIEVEMENT_TREND_LOOKBACK_DAYS ("played"), with penalties
  */
-export function toRecentPenalties(activity: ActivityResponse): RecentPenalties {
+export function toRecentPenalties(activity: ActivityResult): RecentPenalties {
 	const played = activity.games.filter((g) =>
 		matchValue(g.attendance, {played: true, skipped: false}),
 	)

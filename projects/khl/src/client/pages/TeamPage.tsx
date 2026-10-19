@@ -5,7 +5,7 @@ import {
 	GET_TEAM_ACTIVITY_ENDPOINT,
 	GET_TEAM_ENDPOINT,
 	RosterPlayer,
-	TeamResponse,
+	GetTeamResponse,
 } from "../../shared/ApiJson.js"
 import {getGoalsByTeam} from "../../shared/KHLJson.js"
 import {ActivityFeed, useActivityRefresh} from "../Activity.js"
@@ -89,7 +89,7 @@ const TeamPage = ({params, query}: RouteProps) => {
 	)
 }
 
-const TeamHeader = ({team}: {team: TeamResponse}) => {
+const TeamHeader = ({team}: {team: GetTeamResponse}) => {
 	const finals = team.games.filter((g) => g.game.isFinal && g.game.result)
 	const count = (...results: string[]) => {
 		return finals.filter((g) => results.includes(g.game.result!)).length
@@ -161,7 +161,7 @@ const TeamHeader = ({team}: {team: TeamResponse}) => {
 	)
 }
 
-const SeasonPicker = ({team}: {team: TeamResponse}) => {
+const SeasonPicker = ({team}: {team: GetTeamResponse}) => {
 	const {history} = React.useContext(AppContext)
 	return (
 		<Picker
@@ -209,7 +209,7 @@ const LEADERS_PER_CATEGORY = 3
 /** Top skaters and goalies in a few categories, from the roster's stats. */
 type LeaderKind = "skaters" | "goalies"
 
-const TeamLeaders = ({roster}: {roster: TeamResponse["roster"]}) => {
+const TeamLeaders = ({roster}: {roster: GetTeamResponse["roster"]}) => {
 	const [kind, setKind] = React.useState<LeaderKind>("skaters")
 	if (roster.skaters.length === 0 && roster.goalies.length === 0) {
 		return null
@@ -319,7 +319,7 @@ const LeaderCard = ({
 	)
 }
 
-const Roster = ({team}: {team: TeamResponse}) => {
+const Roster = ({team}: {team: GetTeamResponse}) => {
 	const {skaters, goalies} = team.roster
 	return (
 		<Card title={`Roster · ${skaters.length + goalies.length}`}>

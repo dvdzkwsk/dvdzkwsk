@@ -11,7 +11,7 @@ import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn} from "@dvdzkwsk/util/MatchUtil"
 import {History, Location} from "history"
 import * as React from "react"
-import {ClientLog, LOG_ENDPOINT} from "../shared/ApiJson.js"
+import {ClientLog, SEND_LOGS_ENDPOINT} from "../shared/ApiJson.js"
 import {LEAGUE, URLS} from "../shared/KHLConfig.js"
 import {DAY_MS, getLeagueDayKey, MINUTE_MS} from "../shared/LeagueTime.js"
 
@@ -51,6 +51,10 @@ export function getPlayerHref(playerId: string): string {
 
 export function getAchievementsHref(): string {
 	return "/achievements"
+}
+
+export function getApiHref(): string {
+	return "/api"
 }
 
 export function getGameHref(gameId: string): string {
@@ -488,7 +492,7 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
 // --- Logging
 //
 // Every client log goes to the console and, batched, to the server
-// (LOG_ENDPOINT), which writes them to its own log output.
+// (SEND_LOGS_ENDPOINT), which writes them to its own log output.
 
 const LOG_FLUSH_INTERVAL_MS = 5_000
 const LOG_MAX_RETRY_INTERVAL_MS = 60_000
@@ -534,7 +538,7 @@ class BatchingLogTransport implements LoggerTransport {
 		this.sending = true
 		try {
 			await doRequest(
-				LOG_ENDPOINT,
+				SEND_LOGS_ENDPOINT,
 				{
 					sessionId: this.sessionId,
 					userAgent: navigator.userAgent,

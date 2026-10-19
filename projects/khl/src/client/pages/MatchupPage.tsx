@@ -9,9 +9,9 @@ import {
 	GET_MATCHUP_ENDPOINT,
 	LIST_TEAM_SEASONS_ENDPOINT,
 	LIST_TEAMS_ENDPOINT,
-	MatchupResponse,
+	GetMatchupResponse,
 	MatchupTeam,
-	TeamsResponse,
+	ListTeamsResponse,
 } from "../../shared/ApiJson.js"
 import {KHLSeason, KHLTeam} from "../../shared/KHLJson.js"
 import {Comparison} from "../Compare.js"
@@ -209,7 +209,7 @@ type RecentComparison = z.infer<typeof RecentComparisonSchema>
 
 const recentLogger = new Logger("RecentComparisons")
 
-function toRecentSide(team: KHLTeam, teams: TeamsResponse): RecentSide {
+function toRecentSide(team: KHLTeam, teams: ListTeamsResponse): RecentSide {
 	return {
 		id: team.id,
 		seasonId: team.seasonId,
@@ -323,7 +323,7 @@ const RecentTeam = ({side}: {side: RecentSide}) => {
 	)
 }
 
-function useTeams(seasonId: string | null): AsyncState<TeamsResponse> {
+function useTeams(seasonId: string | null): AsyncState<ListTeamsResponse> {
 	return useAsync(
 		() => doRequest(LIST_TEAMS_ENDPOINT, {season: seasonId ?? undefined}),
 		[seasonId],
@@ -359,7 +359,7 @@ function getLoadedData<T>(state: AsyncState<T>): T | null {
 }
 
 function findTeam(
-	teams: AsyncState<TeamsResponse>,
+	teams: AsyncState<ListTeamsResponse>,
 	teamId: string | null,
 ): KHLTeam | null {
 	const data = getLoadedData(teams)
@@ -376,7 +376,7 @@ const MatchupContent = ({
 	state,
 	now,
 }: {
-	state: AsyncState<MatchupResponse | null>
+	state: AsyncState<GetMatchupResponse | null>
 	now: Date
 }) => {
 	return (
@@ -447,7 +447,7 @@ const MatchupSide = ({
 }: {
 	/** Which color the side is keyed with in the comparison below */
 	side: "a" | "b"
-	teams: AsyncState<TeamsResponse>
+	teams: AsyncState<ListTeamsResponse>
 	team: KHLTeam | null
 	/** The seasons `team` played; null while loading or without a team */
 	teamSeasons: KHLSeason[] | null
@@ -525,7 +525,7 @@ const SeasonPicker = ({
 	onChange,
 }: {
 	/** Null while loading */
-	teams: TeamsResponse | null
+	teams: ListTeamsResponse | null
 	/** The seasons to offer; null for every league season */
 	seasons: KHLSeason[] | null
 	onChange: (seasonId: string) => void
@@ -588,7 +588,7 @@ const TeamPicker = ({
 	onChange,
 }: {
 	/** Null while loading */
-	teams: TeamsResponse | null
+	teams: ListTeamsResponse | null
 	value: KHLTeam | null
 	disabledId: string | null
 	onChange: (teamId: string) => void

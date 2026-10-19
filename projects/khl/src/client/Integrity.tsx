@@ -23,7 +23,7 @@ import {
 	useNow,
 } from "./Util.js"
 import {
-	CacheCheckResponse,
+	CheckCacheResponse,
 	CHECK_CACHE_ENDPOINT,
 	GET_CACHE_ENTRY_ENDPOINT,
 	GET_PLAYER_INTEGRITY_ENDPOINT,
@@ -34,7 +34,7 @@ import {
 	IntegritySource,
 	IntegrityUnlinked,
 	JsonDifference,
-	PlayerIntegrityResponse,
+	IntegrityReport,
 	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
 	RESYNC_PLAYER_ENDPOINT,
 } from "../shared/ApiJson.js"
@@ -80,7 +80,7 @@ interface ActionState {
 	running: IntegrityAction | null
 	failed: {error: Error; action: IntegrityAction} | null
 	/** The latest action's report, which replaces the first load's */
-	report: PlayerIntegrityResponse | null
+	report: IntegrityReport | null
 }
 
 /** Our stored profile compared with the KHL's search and player pages */
@@ -145,7 +145,7 @@ const IntegrityHeader = ({
 	action,
 	onRun,
 }: {
-	report: PlayerIntegrityResponse
+	report: IntegrityReport
 	action: ActionState
 	onRun: (action: IntegrityAction) => void
 }) => {
@@ -577,7 +577,7 @@ function getUnlinkedIntegrity(u: IntegrityUnlinked): IntegrityStatus {
 // --- Cache checks
 
 type CacheCheckState =
-	{status: "checking"} | {status: "error"; error: Error} | CacheCheckResponse
+	{status: "checking"} | {status: "error"; error: Error} | CheckCacheResponse
 
 /** At most this many checks at once, so "Check all" doesn't burst the KHL */
 const limitChecks = createConcurrencyLimiter(2)
@@ -669,7 +669,7 @@ function getSelectionId(s: Selection): string {
 
 /** Everything the graph and inspector read, derived once per render */
 interface ReportModel {
-	report: PlayerIntegrityResponse
+	report: IntegrityReport
 	checks: CacheChecks
 	search: IntegrityCacheEntry | undefined
 	pages: Map<string, PageNode>
@@ -677,7 +677,7 @@ interface ReportModel {
 }
 
 function useReportModel(
-	report: PlayerIntegrityResponse,
+	report: IntegrityReport,
 	checks: CacheChecks,
 ): ReportModel {
 	const entries = new Map(report.cache.map((e) => [e.key, e]))
@@ -905,7 +905,7 @@ const IntegrityExplorer = ({
 	selection,
 	onSelect,
 }: {
-	report: PlayerIntegrityResponse
+	report: IntegrityReport
 	selection: Selection | null
 	onSelect: (selection: Selection | null) => void
 }) => {
@@ -2138,7 +2138,7 @@ const RegistrationDetail = ({
 }
 
 /** Fields that differ across the profile's registrations */
-function countDifferences(report: PlayerIntegrityResponse): number {
+function countDifferences(report: IntegrityReport): number {
 	return report.registrations.reduce(
 		(total, r) => total + r.differences.length,
 		0,

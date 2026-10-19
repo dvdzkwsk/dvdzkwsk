@@ -5,12 +5,12 @@ import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	BENCHMARK_SITE_LABELS,
-	BenchmarkResponse,
+	RunBenchmarkResponse,
 	BenchmarkRun,
 	BenchmarkSummary,
 	BenchmarkTiming,
 	DEFAULT_BENCHMARK_NAMES,
-	DevSettingsResponse,
+	DevSettingsState,
 	GET_DEV_SETTINGS_ENDPOINT,
 	PULL_PROD_DATA_ENDPOINT,
 	PullProdDataResponse,
@@ -80,7 +80,7 @@ const KHLAccessCard = () => {
 	)
 }
 
-const KHLAccessPicker = ({initial}: {initial: DevSettingsResponse}) => {
+const KHLAccessPicker = ({initial}: {initial: DevSettingsState}) => {
 	const [settings, setSettings] = React.useState(initial)
 	const [error, setError] = React.useState<Error | null>(null)
 	const update = (access: KHLAccess) => {
@@ -385,7 +385,7 @@ const SimulatedLoadingPicker = () => {
 type BenchmarkState =
 	| {kind: "idle"}
 	| {kind: "running"}
-	| {kind: "done"; result: BenchmarkResponse}
+	| {kind: "done"; result: RunBenchmarkResponse}
 	| {kind: "error"; error: Error}
 
 /** One column per step, for both the medians and the individual runs. */

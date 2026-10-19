@@ -119,11 +119,11 @@ describe("getEndpointDocs", () => {
 	})
 
 	test("declares the response type first, then the types it uses", () => {
-		expect(docs.response.name).toBe("ActivityResponse")
+		expect(docs.response.name).toBe("GetPlayerActivityResponse")
 		expect(docs.response.declarations[0]).toEqual({
-			name: "ActivityResponse",
+			name: "GetPlayerActivityResponse",
 			code: [
-				"interface ActivityResponse {",
+				"interface GetPlayerActivityResponse {",
 				"  games: ActivityGame[]",
 				"  playerIds: Record<string, string>",
 				"  pendingGames: number",
@@ -145,13 +145,16 @@ describe("getEndpointDocs", () => {
 		const usedBy = (name: string) =>
 			index.find((e) => e.name === name)?.usedBy.map((d) => d.id)
 		expect(usedBy("LiveBarnLink")).toEqual([docs.id, team.id])
-		expect(usedBy("TeamResponse")).toEqual([team.id])
+		expect(usedBy("GetTeamResponse")).toEqual([team.id])
 	})
 
 	test("sends a POST request's params as its JSON body", () => {
-		const log = getEndpointDocs(ApiJson.LOG_ENDPOINT, "https://example.com")
+		const log = getEndpointDocs(
+			ApiJson.SEND_LOGS_ENDPOINT,
+			"https://example.com",
+		)
 		expect(log.params.every((p) => p.location === "body")).toBe(true)
-		expect(log.body?.name).toBe("LogRequest")
+		expect(log.body?.name).toBe("SendLogsRequest")
 		expect(log.curl).toStartWith(
 			"curl -X POST 'https://example.com/api/logs' \\\n  -H \"Authorization: Bearer $KHL_API_TOKEN\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{",
 		)

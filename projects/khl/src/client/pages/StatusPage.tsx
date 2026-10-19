@@ -12,7 +12,7 @@ import {
 	StatusBucket,
 	StatusComponent,
 	StatusLevel,
-	StatusResponse,
+	GetStatusResponse,
 	SyncFailure,
 	SyncPageKind,
 	SyncStatus,
@@ -108,10 +108,10 @@ const StatusPage = () => {
  * response on screen. A failed fetch means our own server isn't answering.
  */
 function usePolledStatus(): {
-	status: StatusResponse | null
+	status: GetStatusResponse | null
 	error: Error | null
 } {
-	const [status, setStatus] = React.useState<StatusResponse | null>(null)
+	const [status, setStatus] = React.useState<GetStatusResponse | null>(null)
 	const [error, setError] = React.useState<Error | null>(null)
 	React.useEffect(() => {
 		let current = true
@@ -151,7 +151,7 @@ const OverallBanner = ({
 	error,
 	now,
 }: {
-	status: StatusResponse | null
+	status: GetStatusResponse | null
 	error: Error | null
 	now: Date
 }) => {
@@ -184,7 +184,7 @@ const OverallBanner = ({
 }
 
 function getOverall(
-	status: StatusResponse | null,
+	status: GetStatusResponse | null,
 	error: Error | null,
 ): {level: StatusLevel; title: string} {
 	if (error) {

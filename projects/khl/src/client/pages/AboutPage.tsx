@@ -1,7 +1,7 @@
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
-import {getAchievementsHref, Route} from "../Util.js"
+import {getAchievementsHref, getApiHref, Route} from "../Util.js"
 
 // --- /about: what the site adds on top of the league's
 
@@ -68,6 +68,17 @@ const FEATURES: Feature[] = [
 		title: "Improved filters",
 		text: "Filter games by location, and pick several locations or divisions at once.",
 		art: FiltersArt,
+	},
+	{
+		title: "Build on the data",
+		text: (
+			<>
+				Every schedule, score, and stat on the site comes from a free,
+				read-only JSON API you can call from your own scripts.{" "}
+				<Link href={getApiHref()}>Read the API docs</Link>.
+			</>
+		),
+		art: ApiArt,
 	},
 ]
 
@@ -777,6 +788,76 @@ function SearchArt() {
 					/>
 				</g>
 			))}
+		</Art>
+	)
+}
+
+/** An API response: a GET request above a JSON object's fields */
+function ApiArt() {
+	const fields: [y: number, kind: string, w: number][] = [
+		[64, "player", 72],
+		[76, "team", 56],
+		[88, "rink", 64],
+	]
+	return (
+		<Art>
+			<rect
+				className="AboutArt-card"
+				x="16"
+				y="8"
+				width="208"
+				height="104"
+				rx="8"
+			/>
+			<rect
+				className="AboutArt-ink"
+				x="30"
+				y="20"
+				width="28"
+				height="12"
+				rx="6"
+			/>
+			<rect
+				className="AboutArt-muted"
+				x="66"
+				y="24"
+				width="96"
+				height="4"
+				rx="2"
+			/>
+			<rect
+				className="AboutArt-track"
+				x="16"
+				y="42"
+				width="208"
+				height="1"
+			/>
+			<text className="AboutArt-key" x="30" y="58">
+				{"{"}
+			</text>
+			{fields.map(([y, kind, w]) => (
+				<g key={y}>
+					<rect
+						className={`AboutArt-kind-${kind}`}
+						x="44"
+						y={y}
+						width="28"
+						height="6"
+						rx="3"
+					/>
+					<rect
+						className="AboutArt-muted"
+						x="80"
+						y={y + 1}
+						width={w}
+						height="4"
+						rx="2"
+					/>
+				</g>
+			))}
+			<text className="AboutArt-key" x="30" y="106">
+				{"}"}
+			</text>
 		</Art>
 	)
 }

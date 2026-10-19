@@ -7,6 +7,8 @@ import * as React from "react"
 import {
 	DeployInfo,
 	GET_STATUS_ENDPOINT,
+	JobHealth,
+	JobStatus,
 	StatusComponent,
 	StatusDay,
 	StatusLevel,
@@ -16,7 +18,7 @@ import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {MINUTE_MS} from "../../shared/LeagueTime.js"
 import {Card, Hint, Link, PageLoader, PageShell} from "../Components.js"
 import {formatDayKey} from "../Games.js"
-import {formatRelative, Route, useNow} from "../Util.js"
+import {formatRelative, formatSeconds, Route, useNow} from "../Util.js"
 
 // --- /status: each component's health now and over the last 90 days
 
@@ -76,6 +78,7 @@ const StatusPage = () => {
 									</ul>
 									<Legend />
 								</Card>
+								<JobsPanel jobs={status.jobs} now={now} />
 								<DeployPanel deploy={status.deploy} now={now} />
 							</>
 						)}
@@ -384,6 +387,84 @@ const StatusIcon = ({level, size}: {level: StatusLevel; size: number}) => {
 			})}
 		</svg>
 	)
+}
+
+// --- Background jobs
+
+const JOB_HEALTH: Record<JobHealth, {level: StatusLevel; label: string}> = {
+	ok: {level: "operational", label: "Healthy"},
+	failing: {level: "degraded", label: "Failing"},
+	stalled: {level: "outage", label: "Stalled"},
+}
+
+const JobsPanel = ({jobs, now}: {jobs: JobStatus[]; now: Date}) => {
+	return (
+		<Card title="Background jobs">
+			<ul className="StatusJobs">
+				{jobs.map((job) => (
+					<JobRow key={job.id} job={job} now={now} />
+				))}
+			</ul>
+		</Card>
+	)
+}
+
+const JobRow = ({job, now}: {job: JobStatus; now: Date}) => {
+	const {level, label} = JOB_HEALTH[job.health]
+	return (
+		<li className="StatusJob">
+			<div className="StatusJob-head">
+				<div>
+					<h3 className="StatusJob-name">{job.name}</h3>
+					<p className="StatusJob-description">{job.description}</p>
+				</div>
+				<span className={cx("StatusPill", `StatusPill--${level}`)}>
+					<StatusIcon level={level} size={14} />
+					{label}
+				</span>
+			</div>
+			<p className="StatusJob-meta">{describeJob(job, now)}</p>
+			{job.lastError && (
+				<code className="StatusJob-error">
+					{job.consecutiveFailures > 1 &&
+						`${plural(job.consecutiveFailures, "failure")} in a row: `}
+					{job.lastError}
+				</code>
+			)}
+		</li>
+	)
+}
+
+/** "Last ran just now · took 1.20s · next run in 4 minutes · 12 runs" */
+function describeJob(job: JobStatus, now: Date): string {
+	const parts = [
+		job.running
+			? "Running now"
+			: job.lastStartedAt
+				? `Last ran ${formatJobTime(job.lastStartedAt, now)}`
+				: "Hasn't run yet",
+		!job.running &&
+			job.lastDurationMs !== null &&
+			`took ${formatSeconds(job.lastDurationMs)}`,
+		job.nextRunAt &&
+			(Date.parse(job.nextRunAt) > now.getTime()
+				? `next run ${formatJobTime(job.nextRunAt, now)}`
+				: "next run due now"),
+		job.runs > 0 && `${plural(job.runs, "run")} since the server started`,
+	]
+	return parts.filter(Boolean).join(" · ")
+}
+
+/**
+ * Like formatRelative, but a job can run every few seconds, so "just now"
+ * and "within a minute" rather than rounding to a minute
+ */
+function formatJobTime(iso: string, now: Date): string {
+	const diffMs = Date.parse(iso) - now.getTime()
+	if (Math.abs(diffMs) < MINUTE_MS) {
+		return diffMs > 0 ? "within a minute" : "just now"
+	}
+	return formatRelative(iso, now)
 }
 
 // --- Deployment

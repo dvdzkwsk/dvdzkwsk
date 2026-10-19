@@ -22,6 +22,7 @@ import {
 	reconcileRegistration,
 	toIntegrityRecord,
 } from "./Integrity.js"
+import {JobRunner} from "./Jobs.js"
 import {
 	getKHLArena,
 	getKHLGamePreviewStats,
@@ -45,7 +46,7 @@ import {
 	setPageStore,
 	withPageLoadLog,
 } from "./PageStore.js"
-import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
+import {createStatusCheckJob, DEPLOY_INFO, getStatus} from "./Status.js"
 import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
 import {
 	ActivityAttendance,
@@ -181,6 +182,10 @@ const app = express()
 const cache = new KHLCache()
 // Keeps the league's tables in sync with the KHL; endpoints read the tables
 const syncer = new KHLSyncer(db)
+// Every background job runs through here, so the status page can show it
+const jobs = new JobRunner()
+jobs.register(createStatusCheckJob(db, jobs))
+jobs.register(syncer.createJob())
 
 // The league-wide players list is ~700kb of JSON, ~150kb gzipped
 app.use(compression())
@@ -214,7 +219,7 @@ app.get("/api/health", (_req, res) => {
 	res.json({ok: true, commit: DEPLOY_INFO.commit, dirty: DEPLOY_INFO.dirty})
 })
 
-registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db))
+registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db, jobs))
 
 // Dev only: drives headless Chrome, which the deployed image doesn't have.
 // Imported by path at request time so puppeteer stays out of the bundle.
@@ -1660,13 +1665,27 @@ app.use(
 	},
 )
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
 	logger.info("listen", `server listening on http://localhost:${PORT}`, {
 		commit: DEPLOY_INFO.commit,
 	})
-	startStatusChecks(db)
-	syncer.start()
+	syncer.seed()
+	jobs.start()
 })
+
+/**
+ * Fly stops a machine with SIGINT and kills it 5 seconds later, so stop the
+ * jobs (rather than cut a sync off mid-page) and exit within that
+ */
+const SHUTDOWN_WAIT_MS = 4_000
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	process.once(signal, () => {
+		logger.info("shutdown", "stopping", {signal})
+		server.close()
+		void jobs.stop(SHUTDOWN_WAIT_MS).finally(() => process.exit(0))
+	})
+}
 
 const PAGE_LOAD_LABELS: Record<PageLoadSource, string> = {
 	memory: "from memory",

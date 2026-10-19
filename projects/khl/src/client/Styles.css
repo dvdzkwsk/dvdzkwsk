@@ -7594,6 +7594,60 @@ a.Compare-chip:hover {
 	height: 14px;
 }
 
+.StatusJobs {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.StatusJob {
+	padding: calc(var(--spacing) * 3) 0;
+	border-top: 1px solid var(--panel-border);
+}
+
+.StatusJob:first-child {
+	padding-top: 0;
+	border-top: none;
+}
+
+.StatusJob-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 3);
+}
+
+.StatusJob-name {
+	margin: 0;
+	font-size: var(--text-base);
+	font-weight: var(--weight-semibold);
+}
+
+.StatusJob-description {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+}
+
+.StatusJob-meta {
+	margin: calc(var(--spacing) * 2) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.StatusJob-error {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
+	margin-top: calc(var(--spacing) * 1);
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	color: var(--prose-fg);
+	overflow-wrap: anywhere;
+}
+
 .StatusDeploy-list {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));

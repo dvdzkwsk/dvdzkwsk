@@ -13,7 +13,12 @@ import {History, Location} from "history"
 import * as React from "react"
 import {ClientLog, LOG_ENDPOINT} from "../shared/ApiJson.js"
 import {LEAGUE, URLS} from "../shared/KHLConfig.js"
-import {DAY_MS, getLeagueDayKey, MINUTE_MS} from "../shared/LeagueTime.js"
+import {
+	addDaysToKey,
+	DAY_MS,
+	getLeagueDayKey,
+	MINUTE_MS,
+} from "../shared/LeagueTime.js"
 
 // --- App context and routes
 
@@ -214,16 +219,9 @@ export function formatGameDay(startsAt: string, now: Date): string {
 	return formatGameDate(startsAt, now)
 }
 
-const weekdayFormat = new Intl.DateTimeFormat("en-US", {
-	timeZone: LEAGUE.TIME_ZONE,
-	weekday: "short",
-})
-
-/** League-local day key of the Sunday ending the week containing `now` */
-export function getEndOfWeekDayKey(now: Date): string {
-	const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-	const daysLeft = 6 - weekdays.indexOf(weekdayFormat.format(now))
-	return getLeagueDayKey(new Date(now.getTime() + daysLeft * DAY_MS))
+/** League-local day key of the last day of the 7 days starting today */
+export function getEndOfWeekAheadDayKey(now: Date): string {
+	return addDaysToKey(getLeagueDayKey(now), 6)
 }
 
 // --- Hooks

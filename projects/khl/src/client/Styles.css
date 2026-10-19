@@ -5554,6 +5554,14 @@ a.Compare-chip:hover {
 	color: var(--subtle-fg);
 }
 
+/* Over, but the league hasn't posted the score yet */
+.GameTable-score-pending {
+	font-size: var(--text-xs);
+	font-style: italic;
+	color: var(--muted-fg);
+	white-space: nowrap;
+}
+
 /* Every goal count the same box, highlighted or not (and "10" or "3"), so
    the dash lines up across rows */
 .GameTable-goals {

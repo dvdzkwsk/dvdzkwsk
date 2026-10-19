@@ -361,26 +361,27 @@ export function StatsTable<T>({
 							{columns.map((column, index) => {
 								const sorted =
 									sort?.column === index ? sort : null
+								// The hint goes on what's inside the th, so the th
+								// stays a column header. A tap on a sort button
+								// sorts and says what the abbreviation means.
 								return (
-									<Hint
+									<th
 										key={column.header}
-										label={column.title}
+										className={cx(
+											column.isLabel &&
+												"StatsTable-label",
+											column.className,
+										)}
+										aria-sort={
+											sorted
+												? sorted.ascending
+													? "ascending"
+													: "descending"
+												: undefined
+										}
 									>
-										<th
-											className={cx(
-												column.isLabel &&
-													"StatsTable-label",
-												column.className,
-											)}
-											aria-sort={
-												sorted
-													? sorted.ascending
-														? "ascending"
-														: "descending"
-													: undefined
-											}
-										>
-											{isSortable(column) ? (
+										{isSortable(column) ? (
+											<Hint label={column.title} tap>
 												<button
 													type="button"
 													className={cx(
@@ -402,11 +403,13 @@ export function StatsTable<T>({
 															: "↓"}
 													</span>
 												</button>
-											) : (
-												column.header
-											)}
-										</th>
-									</Hint>
+											</Hint>
+										) : (
+											<Hint label={column.title}>
+												<span>{column.header}</span>
+											</Hint>
+										)}
+									</th>
 								)
 							})}
 						</tr>
@@ -1427,7 +1430,7 @@ export interface SegmentedOption<V extends string> {
 	value: V
 	label: React.ReactNode
 	disabled?: boolean
-	/** Tooltip, e.g. why it's disabled */
+	/** Shown on hover or tap, e.g. why it's disabled */
 	hint?: string
 }
 
@@ -1457,22 +1460,30 @@ export function SegmentedControl<V extends string>({
 			aria-label={label}
 			value={value === null ? [] : [value]}
 			onValueChange={([next]) => {
-				if (next) {
-					onChange(next as V)
+				const picked = options.find((option) => option.value === next)
+				if (picked && !picked.disabled) {
+					onChange(picked.value)
 				}
 			}}
 		>
-			{options.map((option) => (
-				<Hint key={option.value} label={option.hint}>
-					<Toggle
-						className="Segmented-item"
-						value={option.value}
-						disabled={option.disabled}
-					>
-						{option.label}
-					</Toggle>
-				</Hint>
-			))}
+			{options.map((option) => {
+				// A disabled button gets no taps, so one with a hint saying
+				// why stays enabled, marked aria-disabled, and picking it
+				// does nothing
+				const hinted = option.disabled && !!option.hint
+				return (
+					<Hint key={option.value} label={option.hint} tap>
+						<Toggle
+							className="Segmented-item"
+							value={option.value}
+							disabled={option.disabled && !hinted}
+							aria-disabled={hinted || undefined}
+						>
+							{option.label}
+						</Toggle>
+					</Hint>
+				)
+			})}
 			{children}
 		</ToggleGroup>
 	)
@@ -2580,20 +2591,41 @@ const IconLink = ({
 	)
 }
 
+/** Elements that do something when tapped */
+const INTERACTIVE_TAGS = new Set(["a", "button", "input", "select", "textarea"])
+
+/** A plain element (a span, a th), rather than a control or a component */
+function isPlainElement(element: React.ReactElement): boolean {
+	return (
+		typeof element.type === "string" && !INTERACTIVE_TAGS.has(element.type)
+	)
+}
+
 /**
  * A tooltip on `children`, the element that triggers it. Use this instead of
  * a native `title` so every tooltip in the app looks the same. Without a
  * `label`, renders `children` alone.
+ *
+ * Phones have no hover, so on a plain element (a span, a th) the label opens
+ * on tap too, as an InfoPopover. On a link or button, a tap does what it
+ * says, so the label stays hover-only; pass `tap` when it says something the
+ * control doesn't (e.g. what an abbreviated sort header stands for), and a
+ * tap shows it as well.
  */
 export const Hint = ({
 	label,
 	children,
+	tap,
 }: {
 	label: React.ReactNode
 	children: React.ReactElement
+	tap?: boolean
 }) => {
 	if (!label) {
 		return children
+	}
+	if (tap || isPlainElement(children)) {
+		return <InfoPopover trigger={children}>{label}</InfoPopover>
 	}
 	return (
 		<Tooltip.Root>
@@ -2814,7 +2846,9 @@ const ReplayDialog = ({
 
 /**
  * A popover explaining `trigger`, the element that opens it: on hover, and on
- * tap where there's no hover.
+ * tap where there's no hover. A plain trigger (a span, a th) becomes a button
+ * for it, raised above a card's or row's stretched link, and its tap doesn't
+ * also follow a link it sits in.
  */
 export const InfoPopover = ({
 	trigger,
@@ -2823,9 +2857,17 @@ export const InfoPopover = ({
 	trigger: React.ReactElement
 	children: React.ReactNode
 }) => {
+	const plain = isPlainElement(trigger)
 	return (
 		<Popover.Root>
-			<Popover.Trigger openOnHover delay={100} render={trigger} />
+			<Popover.Trigger
+				openOnHover
+				delay={100}
+				render={trigger}
+				nativeButton={!plain}
+				className={plain ? "InfoPopover-trigger" : undefined}
+				onClick={plain ? (e) => e.preventDefault() : undefined}
+			/>
 			<Popover.Portal>
 				<Popover.Positioner className="Positioner" sideOffset={6}>
 					<Popover.Popup className="InfoPopup">

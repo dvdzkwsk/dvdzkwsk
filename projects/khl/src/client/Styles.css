@@ -1452,13 +1452,19 @@ table {
 	inset: 0;
 }
 
-/* A card's or row's other links and buttons sit above its stretched link,
-   so they click (and show their tooltips) on their own */
-.GameTable-row :is(a, button):not(.StretchedLink),
-.RinkCard :is(a, button):not(.StretchedLink),
-.RinkRoute-status :is(a, button):not(.StretchedLink) {
+/* A card's or row's other links and buttons, and labels that explain
+   themselves on tap, sit above its stretched link, so they click (and show
+   their tooltips) on their own */
+.GameTable-row :is(a, button, .InfoPopover-trigger):not(.StretchedLink),
+.RinkCard :is(a, button, .InfoPopover-trigger):not(.StretchedLink),
+.RinkRoute-status :is(a, button, .InfoPopover-trigger):not(.StretchedLink) {
 	position: relative;
 	z-index: 1;
+}
+
+/* A plain label that explains itself on hover or tap */
+.InfoPopover-trigger {
+	cursor: help;
 }
 
 .InlineLink {
@@ -1736,7 +1742,8 @@ table {
 	color: var(--site-fg);
 }
 
-.Segmented-item:disabled {
+.Segmented-item:disabled,
+.Segmented-item[aria-disabled="true"] {
 	color: var(--subtle-fg);
 	cursor: default;
 }

@@ -3182,6 +3182,13 @@ table {
 	color: var(--info-fg);
 }
 
+/* Centered on the title's first line */
+.Notice-loader {
+	flex: none;
+	display: flex;
+	margin-top: 6px;
+}
+
 .Notice-body {
 	display: flex;
 	flex-direction: column;

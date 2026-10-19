@@ -5,6 +5,7 @@ import {
 	AsyncContent,
 	Card,
 	Hint,
+	InlineLoader,
 	Link,
 	LiveBarnBadge,
 	PlayerName,
@@ -38,16 +39,20 @@ const EVENT_LABELS: Record<ActivityEvent["kind"], string> = {
 /**
  * A player's or team's latest goals, assists, and penalties, newest first, as
  * one stream: each event names its game on a second line. Loaded apart from
- * the page, since it reads a box score per game.
+ * the page, since it reads a box score per game. Games still loading
+ * (`pendingGames`) get a note above the feed, unless `pendingNote` is false
+ * because the page says so in its own banner.
  */
 export const ActivityFeed = ({
 	state,
 	subject,
 	now,
+	pendingNote = true,
 }: {
 	state: AsyncState<ActivityResponse>
 	subject: ActivitySubject
 	now: Date
+	pendingNote?: boolean
 }) => {
 	return (
 		<Card
@@ -70,7 +75,7 @@ export const ActivityFeed = ({
 				>
 					{(activity) => (
 						<>
-							{activity.pendingGames > 0 && (
+							{pendingNote && activity.pendingGames > 0 && (
 								<ActivityPending
 									count={activity.pendingGames}
 								/>
@@ -90,9 +95,15 @@ export const ActivityFeed = ({
 										)),
 									)}
 								</ol>
+							) : activity.pendingGames === 0 ? (
+								<ActivityEmpty subject={subject} />
 							) : (
-								activity.pendingGames === 0 && (
-									<ActivityEmpty subject={subject} />
+								!pendingNote && (
+									// The page's banner already says why
+									<InlineLoader
+										label="Loading recent games"
+										slowNote=""
+									/>
 								)
 							)}
 						</>

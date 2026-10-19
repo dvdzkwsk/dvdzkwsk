@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as url from "url"
+import crossSpawn from "cross-spawn"
 import {
 	ConsoleTransport,
 	Logger,
@@ -91,4 +92,60 @@ export function getEnvVar(name: string, required = true): string {
 		}
 	}
 	return value ?? ""
+}
+
+/** Runs a command to completion, throwing if it fails. */
+export function runCommand(
+	command: string,
+	args: string[],
+	options: {cwd?: string; env?: Record<string, string>} = {},
+) {
+	const result = crossSpawn.sync(command, args, {
+		stdio: "inherit",
+		cwd: options.cwd,
+		env: {...process.env, ...options.env},
+	})
+	if (result.error || result.status !== 0) {
+		throw logger.newError("runCommand", "command failed", {
+			command: [command, ...args].join(" "),
+			status: result.status,
+			error: result.error,
+		})
+	}
+}
+
+/**
+ * Runs a command to completion without blocking, e.g. from a server, and
+ * rejects if it fails. Its output goes to this process's.
+ */
+export function runCommandAsync(
+	command: string,
+	args: string[],
+): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const child = crossSpawn(command, args, {
+			stdio: "inherit",
+			env: process.env,
+		})
+		child.on("error", (error) => {
+			reject(
+				logger.newError("runCommandAsync", "command failed", {
+					command: [command, ...args].join(" "),
+					error,
+				}),
+			)
+		})
+		child.on("exit", (status) => {
+			if (status === 0) {
+				resolve()
+				return
+			}
+			reject(
+				logger.newError("runCommandAsync", "command failed", {
+					command: [command, ...args].join(" "),
+					status,
+				}),
+			)
+		})
+	})
 }

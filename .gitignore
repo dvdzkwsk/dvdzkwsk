@@ -20,3 +20,8 @@ _generated
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite.bak*
+*.sqlite.download
+
+# dev settings toggled from KHL+'s /admin
+projects/khl/data/dev-settings.json

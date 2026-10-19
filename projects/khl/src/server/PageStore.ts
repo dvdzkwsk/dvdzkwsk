@@ -2,7 +2,9 @@ import {AsyncLocalStorage} from "async_hooks"
 import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
+import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {Database as SQLiteDatabase} from "bun:sqlite"
+import {replaceDatabaseContents} from "./DatabaseSnapshot.js"
 
 const logger = new Logger("PageStore")
 
@@ -71,6 +73,17 @@ interface PageRow {
  */
 export class PageStore {
 	constructor(private db: SQLiteDatabase) {}
+
+	/** Replaces every page with a snapshot's, migrating the snapshot first */
+	replaceWith(snapshotPath: string) {
+		const snapshot = new SQLiteDatabase(snapshotPath, {strict: true})
+		try {
+			migrate(snapshot)
+		} finally {
+			snapshot.close()
+		}
+		replaceDatabaseContents(this.db, snapshotPath)
+	}
 
 	get(source: PageSource, url: string): StoredPage | null {
 		const row = this.db
@@ -183,6 +196,11 @@ export function openPageStore(filepath: string): PageStore {
 	fs.mkdirSync(path.dirname(filepath), {recursive: true})
 	const db = new SQLiteDatabase(filepath, {create: true, strict: true})
 	db.exec("PRAGMA journal_mode = WAL")
+	migrate(db)
+	return new PageStore(db)
+}
+
+function migrate(db: SQLiteDatabase) {
 	const {user_version: version} = db
 		.query<{user_version: number}, []>("PRAGMA user_version")
 		.get()!
@@ -191,9 +209,8 @@ export function openPageStore(filepath: string): PageStore {
 			db.exec(MIGRATIONS[i]!)
 			db.exec(`PRAGMA user_version = ${i + 1}`)
 		})()
-		logger.info("openPageStore", "applied migration", {version: i + 1})
+		logger.info("migrate", "applied migration", {version: i + 1})
 	}
-	return new PageStore(db)
 }
 
 let pageStore: PageStore | null = null
@@ -220,6 +237,33 @@ export function getPageLastFetchedAt(
 	url: string,
 ): number | null {
 	return pageStore?.getLastFetchedAt(source, url) ?? null
+}
+
+let offline = false
+
+/**
+ * In offline mode nothing is fetched: a read gets the stored copy however
+ * old it is, and fails with an OfflineError if there isn't one. For dev, so
+ * working on the site doesn't load the KHL.
+ */
+export function setOfflineMode(value: boolean) {
+	offline = value
+}
+
+export function isOfflineMode(): boolean {
+	return offline
+}
+
+/**
+ * A read in offline mode of a page that isn't stored. A FetchError, so it's
+ * handled like the site being down (a 502, or an extra left out), though the
+ * syncer doesn't count it as a failure (see KHLSyncer.syncPage).
+ */
+export class OfflineError extends FetchError {
+	constructor(url: string) {
+		super("offline mode: page isn't stored", "GET", url, null)
+		this.name = "OfflineError"
+	}
 }
 
 /** How a read uses stored pages */
@@ -348,6 +392,14 @@ export async function readPage<T>(
 		}
 	}
 	const info = pages?.getInfo(source, url) ?? null
+	if (offline) {
+		const stored = readStored()
+		if (!stored) {
+			throw new OfflineError(url)
+		}
+		recordPageLoad({source: "stored", key: url, ms: 0, hash: stored.hash})
+		return stored.value
+	}
 	if (pages && info && Date.now() - info.fetchedAt < policy.maxAgeMs) {
 		const stored = readStored()
 		if (stored) {

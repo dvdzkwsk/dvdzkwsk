@@ -17,7 +17,7 @@ import {
 	getKHLTeamStats,
 	runInKHLBackground,
 } from "./KHL.js"
-import {withPageReadPolicy} from "./PageStore.js"
+import {isOfflineMode, OfflineError, withPageReadPolicy} from "./PageStore.js"
 import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
 import {RegistrationKey, toRegistrationKey} from "../shared/ApiJson.js"
 import {
@@ -56,6 +56,8 @@ const REFRESH_MS = {
 const RETRY_MS = {current: 30 * MINUTE_MS, past: DAY_MS}
 /** The longest the loop sleeps when nothing is due */
 const MAX_IDLE_MS = 5 * MINUTE_MS
+/** How often a paused loop (in offline mode) checks whether to resume */
+const OFFLINE_POLL_MS = 5000
 
 /**
  * Reads a page for the syncer, parsed: fetched if `fetch`, or else the
@@ -211,6 +213,12 @@ export class KHLSyncer {
 
 	private async run() {
 		for (;;) {
+			// Due pages would only be read from storage, and pushed back
+			// as if they'd been fetched
+			if (isOfflineMode()) {
+				await sleep(OFFLINE_POLL_MS)
+				continue
+			}
 			try {
 				if (!(await this.syncNext())) {
 					const nextAt = this.db.league.getNextDueAt() ?? Infinity
@@ -241,6 +249,12 @@ export class KHLSyncer {
 				now: Date.now(),
 			})
 		} catch (error) {
+			if (error instanceof OfflineError) {
+				// Not a failure: left unsynced, so it syncs once back online
+				// rather than waiting out a retry
+				logger.warn("syncPage", "page isn't stored (offline)", {page})
+				throw error
+			}
 			// A failed fetch may work soon; a page that didn't parse won't
 			// until it changes, so it waits for its next refresh
 			const waitMs =

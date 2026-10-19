@@ -7,6 +7,7 @@ import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import compression from "compression"
 import express from "express"
+import {z} from "zod"
 import {
 	ArenaMapping,
 	getArenaName,
@@ -39,9 +40,11 @@ import {KHLSyncer} from "./KHLSyncer.js"
 import {GameRecord, GameRecordTeam, RosterStatRow} from "./LeagueDatabase.js"
 import {getLivebarnVenues} from "./LiveBarn.js"
 import {
+	isOfflineMode,
 	openPageStore,
 	PageLoad,
 	PageLoadSource,
+	setOfflineMode,
 	setPageStore,
 	withPageLoadLog,
 } from "./PageStore.js"
@@ -56,10 +59,14 @@ import {
 	CacheCheckResponse,
 	CHECK_CACHE_ENDPOINT,
 	DEFAULT_ACTIVITY_KINDS,
+	DevSettings,
+	DevSettingsResponse,
+	DevSettingsSchema,
 	FeedGame,
 	GameResponse,
 	GamesResponse,
 	GET_CACHE_ENTRY_ENDPOINT,
+	GET_DEV_SETTINGS_ENDPOINT,
 	GET_GAME_ENDPOINT,
 	GET_HEAD_TO_HEAD_ENDPOINT,
 	GET_MATCHUP_ENDPOINT,
@@ -95,6 +102,8 @@ import {
 	PlayerResponse,
 	PlayerSearchGroup,
 	PlayersResponse,
+	PULL_PROD_DATA_ENDPOINT,
+	PulledDatabase,
 	RecentGame,
 	RecentRinkGame,
 	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
@@ -116,6 +125,7 @@ import {
 	TeamsResponse,
 	toRecentGame,
 	UnavailableSchedule,
+	UPDATE_DEV_SETTINGS_ENDPOINT,
 	UpcomingGame,
 } from "../shared/ApiJson.js"
 import {getCity} from "../shared/Cities.js"
@@ -174,7 +184,8 @@ const db = openDatabase(DB_PATH)
 const SOURCES_DB_PATH =
 	process.env.KHL_SOURCES_DB_PATH ??
 	path.join(PROJECT_DIR, "data/sources.sqlite")
-setPageStore(openPageStore(SOURCES_DB_PATH))
+const pageStore = openPageStore(SOURCES_DB_PATH)
+setPageStore(pageStore)
 
 const app = express()
 
@@ -183,6 +194,13 @@ const app = express()
 const cache = new KHLCache()
 // Keeps the league's tables in sync with the KHL; endpoints read the tables
 const syncer = new KHLSyncer(db)
+// The background loop crawls the whole league, so dev runs it only when
+// asked (KHL_SYNC=1). Without it, a page still syncs when it's first viewed.
+const SYNC_LOOP =
+	process.env.NODE_ENV === "production" || process.env.KHL_SYNC === "1"
+// Dev settings toggled from /admin, in a file so they survive the restart
+// `bun --watch` makes on every edit
+const DEV_SETTINGS_PATH = path.join(PROJECT_DIR, "data/dev-settings.json")
 
 // The league-wide players list is ~700kb of JSON, ~150kb gzipped
 app.use(compression())
@@ -218,9 +236,70 @@ app.get("/api/health", (_req, res) => {
 
 registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db))
 
-// Dev only: drives headless Chrome, which the deployed image doesn't have.
-// Imported by path at request time so puppeteer stays out of the bundle.
 if (process.env.NODE_ENV !== "production") {
+	setOfflineMode(readDevSettings().offline)
+	const toDevSettingsResponse = (): DevSettingsResponse => ({
+		offline: isOfflineMode(),
+		syncLoop: SYNC_LOOP,
+	})
+	registerEndpoint(app, GET_DEV_SETTINGS_ENDPOINT, async () =>
+		toDevSettingsResponse(),
+	)
+	registerEndpoint(app, UPDATE_DEV_SETTINGS_ENDPOINT, async (settings) => {
+		fs.mkdirSync(path.dirname(DEV_SETTINGS_PATH), {recursive: true})
+		fs.writeFileSync(
+			DEV_SETTINGS_PATH,
+			JSON.stringify(settings, null, "\t"),
+		)
+		setOfflineMode(settings.offline)
+		logger.info("updateDevSettings", "updated dev settings", settings)
+		return toDevSettingsResponse()
+	})
+
+	// Fly's CLI isn't in the deployed image either; imported like the
+	// benchmark below, to keep it out of the bundle
+	let pullRunning = false
+	registerEndpoint(app, PULL_PROD_DATA_ENDPOINT, async ({sources}) => {
+		if (pullRunning) {
+			throw new ApiError(409, "a pull is already running")
+		}
+		pullRunning = true
+		const start = Date.now()
+		const dir = path.join(path.dirname(DB_PATH), "prod-snapshots")
+		try {
+			const pullPath = path.join(PROJECT_DIR, "tools/PullProdData.ts")
+			const {downloadProdSnapshots} = (await import(
+				pullPath
+			)) as typeof import("../../tools/PullProdData.js")
+			const downloaded = await downloadProdSnapshots(
+				sources ? ["khl", "sources"] : ["khl"],
+				dir,
+			)
+			const pulled: PulledDatabase[] = []
+			const backupPath = `${DB_PATH}.bak`
+			if (downloaded.khl) {
+				pulled.push({name: "khl", mb: getSizeMb(downloaded.khl)})
+				db.replaceWith(downloaded.khl, backupPath)
+			}
+			if (downloaded.sources) {
+				pulled.push({
+					name: "sources",
+					mb: getSizeMb(downloaded.sources),
+				})
+				pageStore.replaceWith(downloaded.sources)
+			}
+			// Parsed from the pages just replaced
+			cache.clear()
+			logger.info("pullProdData", "pulled production's data", {pulled})
+			return {pulled, backupPath, ms: Date.now() - start}
+		} finally {
+			fs.rmSync(dir, {recursive: true, force: true})
+			pullRunning = false
+		}
+	})
+
+	// Drives headless Chrome, which the deployed image doesn't have.
+	// Imported by path at request time so puppeteer stays out of the bundle.
 	let benchmarkRunning = false
 	registerEndpoint(app, RUN_BENCHMARK_ENDPOINT, async ({names}) => {
 		if (benchmarkRunning) {
@@ -1248,15 +1327,26 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 	const teamsPage =
 		seasonId === current.season.id ? current : await getTeamsPage(seasonId)
 	const rosters = db.league.getSeasonRosters(seasonId)
-	if (rosters.size === 0) {
-		throw new ApiError(
-			503,
-			"this season's players are still loading; try again in a few minutes",
-		)
-	}
-	// Teams whose stats page isn't synced yet, or failed, are left out and
-	// listed
-	const loaded = teamsPage.teams.filter((team) => rosters.has(team.id))
+	// Read only from the tables: syncing every missing team's stats page
+	// would be a request per team (~175 a season). Teams whose page failed,
+	// or hasn't synced yet, are left out and listed; one synced with an
+	// empty roster is just a team without players.
+	const now = Date.now()
+	const states = new Map(
+		teamsPage.teams
+			.filter((team) => !rosters.has(team.id))
+			.map((team) => {
+				const url = getSyncPageUrl({
+					kind: "team-stats",
+					teamId: team.id,
+					seasonId: team.seasonId,
+				})
+				return [team.id, db.league.getSyncState(url, now)]
+			}),
+	)
+	const loaded = teamsPage.teams.filter(
+		(team) => rosters.has(team.id) || states.get(team.id) === "synced",
+	)
 	// Registered players who haven't played (backups, most goalies) have no
 	// stats to compare, and would be a third of the list
 	const toRows = (team: KHLTeam, players: RosterPlayer[]) => {
@@ -1289,8 +1379,12 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 		skaters: loaded.flatMap((team) => toRows(team, rosterOf(team).skaters)),
 		goalies: loaded.flatMap((team) => toRows(team, rosterOf(team).goalies)),
 		unavailableTeams: teamsPage.teams.filter(
-			(team) => !rosters.has(team.id),
+			(team) => states.get(team.id) === "waiting",
 		),
+		unsyncedTeams: teamsPage.teams.filter(
+			(team) => states.get(team.id) === "unsynced",
+		),
+		isSyncing: SYNC_LOOP,
 	}
 	return response
 })
@@ -1686,8 +1780,38 @@ app.listen(PORT, () => {
 		commit: DEPLOY_INFO.commit,
 	})
 	startStatusChecks(db)
-	syncer.start()
+	if (SYNC_LOOP) {
+		syncer.start()
+	}
 })
+
+function getSizeMb(filepath: string): number {
+	return Math.round(fs.statSync(filepath).size / 1e6)
+}
+
+/** The settings in DEV_SETTINGS_PATH; all off if there's no file */
+function readDevSettings(): DevSettings {
+	if (!fs.existsSync(DEV_SETTINGS_PATH)) {
+		return {offline: false}
+	}
+	let json: unknown
+	try {
+		json = JSON.parse(fs.readFileSync(DEV_SETTINGS_PATH, "utf8"))
+	} catch (error) {
+		throw logger.newError("readDevSettings", "couldn't read dev settings", {
+			path: DEV_SETTINGS_PATH,
+			error,
+		})
+	}
+	const result = DevSettingsSchema.safeParse(json)
+	if (!result.success) {
+		throw logger.newError("readDevSettings", "unexpected dev settings", {
+			path: DEV_SETTINGS_PATH,
+			issues: z.prettifyError(result.error),
+		})
+	}
+	return result.data
+}
 
 const PAGE_LOAD_LABELS: Record<PageLoadSource, string> = {
 	memory: "from memory",

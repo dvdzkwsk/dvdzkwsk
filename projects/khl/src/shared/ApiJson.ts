@@ -1192,6 +1192,13 @@ export interface PlayersResponse {
 	goalies: LeaguePlayer[]
 	/** Teams missing from the lists because the KHL site errored */
 	unavailableTeams: KHLTeam[]
+	/** Teams missing from the lists because their stats haven't synced */
+	unsyncedTeams: KHLTeam[]
+	/**
+	 * Whether the server's background sync is running, so unsynced teams
+	 * will load on their own (always in production; dev runs it on request)
+	 */
+	isSyncing: boolean
 }
 
 export const PlayersResponseSchema = z.object({
@@ -1201,6 +1208,8 @@ export const PlayersResponseSchema = z.object({
 	skaters: z.array(LeaguePlayerSchema),
 	goalies: z.array(LeaguePlayerSchema),
 	unavailableTeams: z.array(KHLTeamSchema),
+	unsyncedTeams: z.array(KHLTeamSchema),
+	isSyncing: z.boolean(),
 }) satisfies z.ZodType<PlayersResponse>
 
 export interface ListPlayersRequest {
@@ -1809,6 +1818,99 @@ export const RUN_BENCHMARK_ENDPOINT = {
 	requestSchema: RunBenchmarkRequestSchema,
 	responseSchema: BenchmarkResponseSchema,
 } satisfies ApiEndpoint<RunBenchmarkRequest, BenchmarkResponse>
+
+export interface DevSettings {
+	offline: boolean
+}
+
+export const DevSettingsSchema = z.object({
+	offline: z
+		.boolean()
+		.describe(
+			"Never fetch from the KHL or LiveBarn; serve only stored pages",
+		),
+}) satisfies z.ZodType<DevSettings>
+
+export interface DevSettingsResponse extends DevSettings {
+	/** Whether the background sync loop runs (KHL_SYNC; always in production) */
+	syncLoop: boolean
+}
+
+export const DevSettingsResponseSchema = DevSettingsSchema.extend({
+	syncLoop: z.boolean(),
+}) satisfies z.ZodType<DevSettingsResponse>
+
+export type GetDevSettingsRequest = Record<string, never>
+
+export const GetDevSettingsRequestSchema = z.object(
+	{},
+) satisfies z.ZodType<GetDevSettingsRequest>
+
+export const GET_DEV_SETTINGS_ENDPOINT = {
+	method: "GET",
+	uri: "/api/admin/settings",
+	name: "Get dev settings",
+	description:
+		"Dev only: whether the server is in offline mode, and whether the background sync loop runs.",
+	exampleRequest: {},
+	requestSchema: GetDevSettingsRequestSchema,
+	responseSchema: DevSettingsResponseSchema,
+} satisfies ApiEndpoint<GetDevSettingsRequest, DevSettingsResponse>
+
+export const UPDATE_DEV_SETTINGS_ENDPOINT = {
+	method: "PUT",
+	uri: "/api/admin/settings",
+	name: "Update dev settings",
+	description:
+		"Dev only: turns offline mode on or off. Kept in data/dev-settings.json, so it survives restarts.",
+	exampleRequest: {offline: true},
+	requestSchema: DevSettingsSchema,
+	responseSchema: DevSettingsResponseSchema,
+} satisfies ApiEndpoint<DevSettings, DevSettingsResponse>
+
+export interface PullProdDataRequest {
+	sources: boolean
+}
+
+export const PullProdDataRequestSchema = z.object({
+	sources: z
+		.boolean()
+		.describe(
+			"Also pull every stored page (1.5-3 GB), to reprocess after a parser change",
+		),
+}) satisfies z.ZodType<PullProdDataRequest>
+
+export interface PulledDatabase {
+	name: "khl" | "sources"
+	/** The snapshot's size, in megabytes */
+	mb: number
+}
+
+export interface PullProdDataResponse {
+	pulled: PulledDatabase[]
+	/** Where the dev database was backed up before it was replaced */
+	backupPath: string
+	ms: number
+}
+
+export const PullProdDataResponseSchema = z.object({
+	pulled: z.array(
+		z.object({name: z.enum(["khl", "sources"]), mb: z.number()}),
+	),
+	backupPath: z.string(),
+	ms: z.number(),
+}) satisfies z.ZodType<PullProdDataResponse>
+
+export const PULL_PROD_DATA_ENDPOINT = {
+	method: "POST",
+	uri: "/api/admin/pull-prod-data",
+	name: "Pull production's data",
+	description:
+		"Dev only: replaces the dev server's league tables and player ids (and, with sources, its stored pages) with snapshots of production's. Takes a minute or more.",
+	exampleRequest: {sources: false},
+	requestSchema: PullProdDataRequestSchema,
+	responseSchema: PullProdDataResponseSchema,
+} satisfies ApiEndpoint<PullProdDataRequest, PullProdDataResponse>
 
 export interface ApiDocsSection {
 	title: string

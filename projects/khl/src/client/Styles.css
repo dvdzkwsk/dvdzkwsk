@@ -7692,15 +7692,52 @@ a.Compare-chip:hover {
 	font-weight: var(--weight-semibold);
 }
 
+.StatusJobs,
 .StatusSync-failures {
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
+.StatusJob,
 .StatusSync-failure {
 	padding: calc(var(--spacing) * 3) 0;
 	border-top: 1px solid var(--panel-border);
+}
+
+.StatusJob:first-child {
+	padding-top: 0;
+	border-top: none;
+}
+
+.StatusJob-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: calc(var(--spacing) * 3);
+}
+
+.StatusJob-name {
+	margin: 0;
+	font-size: var(--text-base);
+	font-weight: var(--weight-semibold);
+}
+
+.StatusJob-description {
+	margin: calc(var(--spacing) * 1) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+}
+
+.StatusJob-meta {
+	margin: calc(var(--spacing) * 2) 0 0;
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+	font-variant-numeric: tabular-nums;
+}
+
+.StatusJob-error {
+	margin-top: calc(var(--spacing) * 1);
 }
 
 .StatusSync-failureHead {
@@ -7721,6 +7758,7 @@ a.Compare-chip:hover {
 	color: var(--muted-fg);
 }
 
+.StatusJob-error,
 .StatusSync-error {
 	display: -webkit-box;
 	-webkit-box-orient: vertical;

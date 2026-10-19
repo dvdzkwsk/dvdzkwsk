@@ -1,5 +1,4 @@
 import {Logger} from "@dvdzkwsk/logger"
-import {sleep} from "@dvdzkwsk/util/AsyncUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {KHLDatabase} from "./Database.js"
@@ -8,6 +7,7 @@ import {
 	getSettleAt,
 	isGameRecordComplete,
 } from "./GameRecords.js"
+import {JobDefinition} from "./Jobs.js"
 import {
 	getKHLBoxScore,
 	getKHLGameStats,
@@ -54,7 +54,7 @@ const REFRESH_MS = {
 }
 /** How long a page whose fetch failed waits before it's tried again */
 const RETRY_MS = {current: 30 * MINUTE_MS, past: DAY_MS}
-/** The longest the loop sleeps when nothing is due */
+/** The longest the sync job waits for its next run when nothing is due */
 const MAX_IDLE_MS = 5 * MINUTE_MS
 /** How often a paused loop (in offline mode) checks whether to resume */
 const OFFLINE_POLL_MS = 5000
@@ -142,9 +142,38 @@ export class KHLSyncer {
 		private pages: KHLSyncerPages = KHL_PAGES,
 	) {}
 
-	start() {
-		this.seed()
-		void this.run()
+	/**
+	 * The sync loop as a background job: each run syncs one page, and the
+	 * next starts right away, or when the next page is due if none is
+	 */
+	createJob(): JobDefinition {
+		return {
+			id: "sync",
+			name: "League sync",
+			description:
+				"Fetches each page behind the site from the KHL when it's due.",
+			// A page is a few fetches, each timed out at 15 seconds, waiting
+			// their turn in the background lane
+			timeoutMs: 5 * MINUTE_MS,
+			// Pages' failures are handled where they're synced, so a failed
+			// run is a bug; wait rather than spin
+			retryMs: MAX_IDLE_MS,
+			run: async () => {
+				// Due pages would only be read from storage, and pushed back
+				// as if they'd been fetched
+				if (isOfflineMode()) {
+					return OFFLINE_POLL_MS
+				}
+				if (await this.syncNext()) {
+					return 0
+				}
+				const nextAt = this.db.league.getNextDueAt() ?? Infinity
+				return Math.min(
+					Math.max(nextAt - Date.now(), 1000),
+					MAX_IDLE_MS,
+				)
+			},
+		}
 	}
 
 	/** Queues the league's default teams page, which everything follows from */
@@ -209,33 +238,6 @@ export class KHLSyncer {
 		})
 		this.syncing.set(url, run)
 		return run
-	}
-
-	private async run() {
-		for (;;) {
-			// Due pages would only be read from storage, and pushed back
-			// as if they'd been fetched
-			if (isOfflineMode()) {
-				await sleep(OFFLINE_POLL_MS)
-				continue
-			}
-			try {
-				if (!(await this.syncNext())) {
-					const nextAt = this.db.league.getNextDueAt() ?? Infinity
-					await sleep(
-						Math.min(
-							Math.max(nextAt - Date.now(), 1000),
-							MAX_IDLE_MS,
-						),
-					)
-				}
-			} catch (error) {
-				// Pages' failures are handled where they're synced, so this
-				// is a bug; wait rather than spin
-				logger.error("run", "sync failed", {error})
-				await sleep(MAX_IDLE_MS)
-			}
-		}
 	}
 
 	private async syncPage(page: SyncPage, url: string, fetch: boolean) {

@@ -23,6 +23,7 @@ import {
 	reconcileRegistration,
 	toIntegrityRecord,
 } from "./Integrity.js"
+import {JobRunner} from "./Jobs.js"
 import {
 	getKHLArena,
 	getKHLGamePreviewStats,
@@ -48,7 +49,7 @@ import {
 	setPageStore,
 	withPageLoadLog,
 } from "./PageStore.js"
-import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
+import {createStatusCheckJob, DEPLOY_INFO, getStatus} from "./Status.js"
 import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
 import {
 	ActivityAttendance,
@@ -198,6 +199,12 @@ const syncer = new KHLSyncer(db)
 // asked (KHL_SYNC=1). Without it, a page still syncs when it's first viewed.
 const SYNC_LOOP =
 	process.env.NODE_ENV === "production" || process.env.KHL_SYNC === "1"
+// Every background job runs through here, so the status page can show it
+const jobs = new JobRunner()
+jobs.register(createStatusCheckJob(db, jobs))
+if (SYNC_LOOP) {
+	jobs.register(syncer.createJob())
+}
 // Dev settings toggled from /admin, in a file so they survive the restart
 // `bun --watch` makes on every edit
 const DEV_SETTINGS_PATH = path.join(PROJECT_DIR, "data/dev-settings.json")
@@ -234,7 +241,7 @@ app.get("/api/health", (_req, res) => {
 	res.json({ok: true, commit: DEPLOY_INFO.commit, dirty: DEPLOY_INFO.dirty})
 })
 
-registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db))
+registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db, jobs))
 
 if (process.env.NODE_ENV !== "production") {
 	setOfflineMode(readDevSettings().offline)
@@ -1775,15 +1782,29 @@ app.use(
 	},
 )
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
 	logger.info("listen", `server listening on http://localhost:${PORT}`, {
 		commit: DEPLOY_INFO.commit,
 	})
-	startStatusChecks(db)
 	if (SYNC_LOOP) {
-		syncer.start()
+		syncer.seed()
 	}
+	jobs.start()
 })
+
+/**
+ * Fly stops a machine with SIGINT and kills it 5 seconds later, so stop the
+ * jobs (rather than cut a sync off mid-page) and exit within that
+ */
+const SHUTDOWN_WAIT_MS = 4_000
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	process.once(signal, () => {
+		logger.info("shutdown", "stopping", {signal})
+		server.close()
+		void jobs.stop(SHUTDOWN_WAIT_MS).finally(() => process.exit(0))
+	})
+}
 
 function getSizeMb(filepath: string): number {
 	return Math.round(fs.statSync(filepath).size / 1e6)

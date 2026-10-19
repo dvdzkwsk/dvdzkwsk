@@ -50,3 +50,8 @@ function getTimeZoneOffsetMs(date: Date, timeZone: string): number {
 	)
 	return zonedAsUtc - Math.floor(date.getTime() / 1000) * 1000
 }
+
+/** An epoch-ms time as ISO 8601, or null for null */
+export function toIsoOrNull(ms: number | null): string | null {
+	return ms === null ? null : new Date(ms).toISOString()
+}

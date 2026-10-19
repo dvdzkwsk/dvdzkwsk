@@ -3,6 +3,7 @@ import {Logger} from "@dvdzkwsk/logger"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {getGitRevision} from "@dvdzkwsk/util/GitUtil"
 import {KHLDatabase} from "./Database.js"
+import {JobDefinition, JobRunner} from "./Jobs.js"
 import {LIVEBARN_VENUES_URL} from "./LiveBarn.js"
 import {
 	DeployInfo,
@@ -33,10 +34,10 @@ interface Component {
 	name: string
 	description: string
 	/** Throws if the component is down */
-	check: () => Promise<void>
+	check: (signal: AbortSignal) => Promise<void>
 }
 
-function getComponents(db: KHLDatabase): Component[] {
+function getComponents(db: KHLDatabase, jobs: JobRunner): Component[] {
 	return [
 		{
 			id: "app",
@@ -48,33 +49,61 @@ function getComponents(db: KHLDatabase): Component[] {
 			id: "league",
 			name: "Kraken Hockey League site",
 			description: `${new URL(URLS.KHL).host}, where every schedule, score, and stat comes from.`,
-			check: () => checkUrl(URLS.KHL),
+			check: (signal) => checkUrl(URLS.KHL, signal),
 		},
 		{
 			id: "livebarn",
 			name: "LiveBarn",
 			description: "Where live feeds and replays are linked to.",
-			check: () => checkUrl(LIVEBARN_VENUES_URL),
+			check: (signal) => checkUrl(LIVEBARN_VENUES_URL, signal),
+		},
+		{
+			id: "jobs",
+			name: "Background jobs",
+			description:
+				"Syncing the league from the KHL site, and these checks.",
+			check: async () => checkJobs(jobs),
 		},
 	]
 }
 
+/** Throws if any job's last run failed, or it has stalled */
+function checkJobs(jobs: JobRunner) {
+	const unhealthy = jobs.getStatuses().filter((job) => job.health !== "ok")
+	if (unhealthy.length > 0) {
+		// The message is what the status page shows, e.g. "League sync stalled"
+		const message = unhealthy
+			.map((job) => `${job.name} ${job.health}`)
+			.join(", ")
+		throw logger.newError("checkJobs", message, {
+			jobs: unhealthy.map(({id, health, lastError}) => ({
+				id,
+				health,
+				lastError,
+			})),
+		})
+	}
+}
+
 /** HEAD, so a check doesn't download the page (LiveBarn's venues are MBs) */
-async function checkUrl(url: string): Promise<void> {
+async function checkUrl(url: string, signal: AbortSignal): Promise<void> {
 	const response = await fetch(url, {
 		method: "HEAD",
-		signal: AbortSignal.timeout(TIMEOUT_MS),
+		signal: AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]),
 	})
 	if (!response.ok) {
 		throw new Error(`HTTP ${response.status}`)
 	}
 }
 
-async function runCheck(component: Component): Promise<StatusCheck> {
+async function runCheck(
+	component: Component,
+	signal: AbortSignal,
+): Promise<StatusCheck> {
 	const checkedAt = new Date()
 	const start = performance.now()
 	try {
-		await component.check()
+		await component.check(signal)
 		const latencyMs = Math.round(performance.now() - start)
 		return {
 			checkedAt: checkedAt.toISOString(),
@@ -99,47 +128,53 @@ async function runCheck(component: Component): Promise<StatusCheck> {
 }
 
 /**
- * Checks every component now and every few minutes after, recording each
- * result so the status page has history across restarts.
+ * Checks every component on start and every few minutes after, recording
+ * each result so the status page has history across restarts.
  */
-export function startStatusChecks(db: KHLDatabase) {
-	const components = getComponents(db)
-	const runAll = async () => {
-		const results = await Promise.all(components.map(runCheck))
-		results.forEach((check, i) => {
-			db.recordStatusCheck({
-				...check,
-				component: components[i]!.id,
-				day: getLeagueDayKey(new Date(check.checkedAt)),
+export function createStatusCheckJob(
+	db: KHLDatabase,
+	jobs: JobRunner,
+): JobDefinition {
+	const components = getComponents(db, jobs)
+	return {
+		id: "status-checks",
+		name: "Status checks",
+		description: `Checks each component above every ${CHECK_INTERVAL_MINUTES} minutes.`,
+		// Each check times out on its own well before this
+		timeoutMs: 2 * TIMEOUT_MS,
+		retryMs: CHECK_INTERVAL_MINUTES * MINUTE_MS,
+		run: async (signal) => {
+			const results = await Promise.all(
+				components.map((component) => runCheck(component, signal)),
+			)
+			results.forEach((check, i) => {
+				db.recordStatusCheck({
+					...check,
+					component: components[i]!.id,
+					day: getLeagueDayKey(new Date(check.checkedAt)),
+				})
 			})
-		})
-		db.pruneStatusChecks(getHistoryDays(new Date())[0]!)
+			db.pruneStatusChecks(getHistoryDays(new Date())[0]!)
+			return CHECK_INTERVAL_MINUTES * MINUTE_MS
+		},
 	}
-	const tick = () => {
-		runAll().catch((error) => {
-			logger.error("startStatusChecks", "status checks failed", {
-				error: toError(error),
-			})
-		})
-	}
-	tick()
-	setInterval(tick, CHECK_INTERVAL_MINUTES * MINUTE_MS)
 }
 
-export function getStatus(db: KHLDatabase): StatusResponse {
+export function getStatus(db: KHLDatabase, jobs: JobRunner): StatusResponse {
 	const historyDays = getHistoryDays(new Date())
 	const latest = db.getLatestStatusChecks()
 	const days = db.getStatusDays(historyDays[0]!)
 	return {
 		historyDays,
 		intervalMinutes: CHECK_INTERVAL_MINUTES,
-		components: getComponents(db).map(({id, name, description}) => ({
+		components: getComponents(db, jobs).map(({id, name, description}) => ({
 			id,
 			name,
 			description,
 			latest: latest.get(id) ?? null,
 			days: days.get(id) ?? [],
 		})),
+		jobs: jobs.getStatuses(),
 		sync: getSyncStatus(db),
 		deploy: DEPLOY_INFO,
 	}

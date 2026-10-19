@@ -1617,6 +1617,55 @@ export const DeployInfoSchema = z.object({
 	startedAt: z.string(),
 }) satisfies z.ZodType<DeployInfo>
 
+/**
+ * How a background job is doing: failing once its last run failed, stalled
+ * once a run is well past its timeout or the next one is well overdue
+ */
+export type JobHealth = "ok" | "failing" | "stalled"
+
+export const JobHealthSchema = z.enum([
+	"ok",
+	"failing",
+	"stalled",
+]) satisfies z.ZodType<JobHealth>
+
+/** A background job on the server (see server/Jobs.ts) */
+export interface JobStatus {
+	id: string
+	name: string
+	description: string
+	health: JobHealth
+	/** Whether a run is in flight */
+	running: boolean
+	/** Runs since the server started */
+	runs: number
+	/** ISO 8601; null until it first runs */
+	lastStartedAt: string | null
+	/** ISO 8601; null until a run finishes */
+	lastFinishedAt: string | null
+	lastDurationMs: number | null
+	/** The last run's error; null if it succeeded */
+	lastError: string | null
+	/** Failed runs in a row */
+	consecutiveFailures: number
+	/** ISO 8601; null while a run is in flight */
+	nextRunAt: string | null
+}
+
+export const JobStatusSchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	description: z.string(),
+	health: JobHealthSchema,
+	running: z.boolean(),
+	runs: z.number(),
+	lastStartedAt: z.string().nullable(),
+	lastFinishedAt: z.string().nullable(),
+	lastDurationMs: z.number().nullable(),
+	lastError: z.string().nullable(),
+	consecutiveFailures: z.number(),
+	nextRunAt: z.string().nullable(),
+}) satisfies z.ZodType<JobStatus>
 /** A kind of KHL page the syncer keeps (see server/SyncPages.ts) */
 export type SyncPageKind =
 	"teams" | "schedule" | "team-stats" | "player" | "game"
@@ -1706,6 +1755,7 @@ export interface StatusResponse {
 	/** How often each component is checked */
 	intervalMinutes: number
 	components: StatusComponent[]
+	jobs: JobStatus[]
 	sync: SyncStatus
 	deploy: DeployInfo
 }
@@ -1714,6 +1764,7 @@ export const StatusResponseSchema = z.object({
 	historyDays: z.array(z.string()),
 	intervalMinutes: z.number(),
 	components: z.array(StatusComponentSchema),
+	jobs: z.array(JobStatusSchema),
 	sync: SyncStatusSchema,
 	deploy: DeployInfoSchema,
 }) satisfies z.ZodType<StatusResponse>

@@ -8,7 +8,7 @@ import {
 	TeamResponse,
 } from "../../shared/ApiJson.js"
 import {getGoalsByTeam} from "../../shared/KHLJson.js"
-import {ActivityFeed} from "../Activity.js"
+import {ActivityFeed, useActivityRefresh} from "../Activity.js"
 import {
 	AsyncContent,
 	Card,
@@ -44,6 +44,7 @@ const TeamPage = ({params, query}: RouteProps) => {
 		() => doRequest(GET_TEAM_ACTIVITY_ENDPOINT, {teamId, season: seasonId}),
 		[teamId, seasonId],
 	)
+	useActivityRefresh(activity)
 	const now = useNow()
 
 	return (

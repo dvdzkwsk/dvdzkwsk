@@ -20,12 +20,13 @@ import {
 	RecentPenalties,
 	toRecentPenalties,
 } from "../Achievements.js"
-import {ActivityFeed, toActivityFeed} from "../Activity.js"
+import {ActivityFeed, toActivityFeed, useActivityRefresh} from "../Activity.js"
 import {
 	AsyncContent,
 	Card,
 	InfoPopover,
 	Link,
+	Notice,
 	PageShell,
 	PageTitle,
 	Picker,
@@ -100,6 +101,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 			...PLAYER_PAGE_ACTIVITY,
 		})
 	}, [playerId])
+	useActivityRefresh(activity)
 	const feed: AsyncState<ActivityResponse> = matchField(activity, "status", {
 		loading: (s) => s,
 		error: (s) => s,
@@ -123,11 +125,20 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 					.map((g) => g.gameId),
 			),
 	})
-	// Until they load (or if they fail), the Angel and Devil achievements are left out
+	// Games still being loaded from the KHL site, left out of the activity
+	const pendingGames = matchField(activity, "status", {
+		loading: () => 0,
+		error: () => 0,
+		success: (s) => s.data.pendingGames,
+	})
+	// Until they load (or if they fail), the Angel and Devil achievements are
+	// left out, and while some games are pending, since the trend would be
+	// missing them
 	const recentPenalties = matchField(activity, "status", {
 		loading: () => null,
 		error: () => null,
-		success: (s) => toRecentPenalties(s.data),
+		success: (s) =>
+			s.data.pendingGames > 0 ? null : toRecentPenalties(s.data),
 	})
 	const now = useNow()
 
@@ -190,6 +201,21 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 								skipped={skipped}
 								recentPenalties={recentPenalties}
 							/>
+							{pendingGames > 0 && (
+								<Notice
+									loading
+									title={`Still loading ${pendingGames} ${
+										pendingGames === 1 ? "game" : "games"
+									} from the KHL site`}
+								>
+									Recent activity, skipped games, and the
+									Angel and Devil achievements will fill in as{" "}
+									{pendingGames === 1
+										? "it loads"
+										: "they load"}
+									, usually within a minute or two.
+								</Notice>
+							)}
 							{player.unavailableSchedules.length > 0 && (
 								<Warnings
 									summary={`${
@@ -251,6 +277,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 									state={feed}
 									subject="player"
 									now={now}
+									pendingNote={false}
 								/>
 							</div>
 							<PlayerStats player={player} selected={selected} />

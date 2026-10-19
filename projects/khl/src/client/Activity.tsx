@@ -5,6 +5,7 @@ import {
 	AsyncContent,
 	Card,
 	Hint,
+	InlineLoader,
 	Link,
 	LiveBarnBadge,
 	PlayerName,
@@ -38,16 +39,20 @@ const EVENT_LABELS: Record<ActivityEvent["kind"], string> = {
 /**
  * A player's or team's latest goals, assists, and penalties, newest first, as
  * one stream: each event names its game on a second line. Loaded apart from
- * the page, since it reads a box score per game.
+ * the page, since it reads a box score per game. Games still loading
+ * (`pendingGames`) get a note above the feed, unless `pendingNote` is false
+ * because the page says so in its own banner.
  */
 export const ActivityFeed = ({
 	state,
 	subject,
 	now,
+	pendingNote = true,
 }: {
 	state: AsyncState<ActivityResponse>
 	subject: ActivitySubject
 	now: Date
+	pendingNote?: boolean
 }) => {
 	return (
 		<Card
@@ -59,7 +64,7 @@ export const ActivityFeed = ({
 				error: false,
 				success: false,
 			})}
-			slowNote="Still working. This is the first time we're loading these scoresheets, so it will take a little bit longer."
+			slowNote="Still working. This is taking longer than usual."
 		>
 			{/* Scrolls once it's taller than the past games beside it */}
 			<div className="Activity-scroll">
@@ -68,26 +73,41 @@ export const ActivityFeed = ({
 					size="inline"
 					errorTitle="Couldn't load recent activity"
 				>
-					{(activity) =>
-						activity.games.length === 0 ? (
-							<ActivityEmpty subject={subject} />
-						) : (
-							<ol className="Activity-events">
-								{activity.games.flatMap((game) =>
-									game.events.map((event, i) => (
-										<ActivityEventItem
-											key={`${game.gameId}:${i}`}
-											game={game}
-											event={event}
-											subject={subject}
-											playerIds={activity.playerIds}
-											now={now}
-										/>
-									)),
-								)}
-							</ol>
-						)
-					}
+					{(activity) => (
+						<>
+							{pendingNote && activity.pendingGames > 0 && (
+								<ActivityPending
+									count={activity.pendingGames}
+								/>
+							)}
+							{activity.games.length > 0 ? (
+								<ol className="Activity-events">
+									{activity.games.flatMap((game) =>
+										game.events.map((event, i) => (
+											<ActivityEventItem
+												key={`${game.gameId}:${i}`}
+												game={game}
+												event={event}
+												subject={subject}
+												playerIds={activity.playerIds}
+												now={now}
+											/>
+										)),
+									)}
+								</ol>
+							) : activity.pendingGames === 0 ? (
+								<ActivityEmpty subject={subject} />
+							) : (
+								!pendingNote && (
+									// The page's banner already says why
+									<InlineLoader
+										label="Loading recent games"
+										slowNote=""
+									/>
+								)
+							)}
+						</>
+					)}
 				</AsyncContent>
 			</div>
 		</Card>
@@ -106,6 +126,56 @@ export function toActivityFeed(activity: ActivityResponse): ActivityResponse {
 		return events.length > 0 ? [{...game, events}] : []
 	})
 	return {...activity, games}
+}
+
+/** How often to look again while some games are still loading */
+const PENDING_REFRESH_MS = 10_000
+/** Looks again for at most 5 minutes */
+const MAX_PENDING_REFRESHES = 30
+
+/**
+ * While some of the activity's games are still being loaded from the KHL site
+ * (`pendingGames`), looks again every PENDING_REFRESH_MS behind what's shown,
+ * so they appear as they're loaded. Pass the full response's state, not the
+ * feed's share of it.
+ */
+export function useActivityRefresh(state: AsyncState<ActivityResponse>) {
+	const data = matchField(state, "status", {
+		loading: () => null,
+		error: () => null,
+		success: (s) => s.data,
+	})
+	const {refresh} = state
+	const refreshes = React.useRef(0)
+	React.useEffect(() => {
+		if (!data) {
+			// A new load (another player, or a retry) starts the count over
+			refreshes.current = 0
+			return
+		}
+		if (
+			data.pendingGames === 0 ||
+			refreshes.current >= MAX_PENDING_REFRESHES
+		) {
+			return
+		}
+		const timer = setTimeout(() => {
+			refreshes.current++
+			refresh()
+		}, PENDING_REFRESH_MS)
+		return () => clearTimeout(timer)
+	}, [data, refresh])
+}
+
+/** Above the feed while some of its games are still loading */
+const ActivityPending = ({count}: {count: number}) => {
+	return (
+		<p className="Activity-pending">
+			Loading {count} more {count === 1 ? "game" : "games"} from the KHL
+			site. {count === 1 ? "It'll" : "They'll"} show up here in a minute
+			or two.
+		</p>
+	)
 }
 
 /** How far back the feed looks, e.g. 6 */

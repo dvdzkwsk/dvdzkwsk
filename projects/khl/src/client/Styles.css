@@ -3182,6 +3182,13 @@ table {
 	color: var(--info-fg);
 }
 
+/* Centered on the title's first line */
+.Notice-loader {
+	flex: none;
+	display: flex;
+	margin-top: 6px;
+}
+
 .Notice-body {
 	display: flex;
 	flex-direction: column;
@@ -3849,6 +3856,12 @@ table {
 	overflow: auto;
 	overscroll-behavior: contain;
 	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
+}
+
+.Activity-pending {
+	margin: 0 0 calc(var(--spacing) * 3);
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
 }
 
 .Activity-events {

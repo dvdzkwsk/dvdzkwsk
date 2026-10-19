@@ -54,6 +54,9 @@ const REFRESH_MS = {
 }
 /** How long a page whose fetch failed waits before it's tried again */
 const RETRY_MS = {current: 30 * MINUTE_MS, past: DAY_MS}
+/** The sync loop's id among the server's background jobs */
+export const SYNC_JOB_ID = "sync"
+
 /** The longest the sync job waits for its next run when nothing is due */
 const MAX_IDLE_MS = 5 * MINUTE_MS
 /** How often a paused loop (in offline mode) checks whether to resume */
@@ -148,7 +151,7 @@ export class KHLSyncer {
 	 */
 	createJob(): JobDefinition {
 		return {
-			id: "sync",
+			id: SYNC_JOB_ID,
 			name: "League sync",
 			description:
 				"Fetches each page behind the site from the KHL when it's due.",
@@ -219,6 +222,36 @@ export class KHLSyncer {
 				return true
 			},
 		})()
+	}
+
+	/**
+	 * Of `pages`, those that have never been synced, put ahead of the rest of
+	 * the queue for the loop to sync next. For a visitor who'd otherwise wait
+	 * on a fetch per page (at the visitor rate, minutes for a season of
+	 * games): they read what's synced now, and the rest shortly. A page
+	 * that's failing and waiting to be retried isn't brought forward. If any
+	 * are returned, run the sync job now (JobRunner.runNow), so it isn't
+	 * left idling until the next page it knew of is due.
+	 */
+	requestSync(pages: SyncPage[]): SyncPage[] {
+		const now = Date.now()
+		const unsynced = pages.filter((page) => {
+			const state = this.db.league.getSyncState(getSyncPageUrl(page), now)
+			return matchValue(state, {
+				synced: false,
+				waiting: false,
+				unsynced: true,
+			})
+		})
+		for (const page of unsynced) {
+			this.db.league.request(
+				getSyncPageUrl(page),
+				page,
+				this.getQueueRank(page, getPageSeasonId(page)),
+				now,
+			)
+		}
+		return unsynced
 	}
 
 	/**
@@ -453,17 +486,24 @@ export class KHLSyncer {
 		seasonId: string | null = getPageSeasonId(page),
 		ifSyncedBefore?: number,
 	) {
-		const queuedSeasonId = page.kind === "teams" ? null : seasonId
 		this.db.league.enqueue(
 			getSyncPageUrl(page),
 			page,
-			{
-				seasonId: queuedSeasonId,
-				priority: this.getPriority(queuedSeasonId),
-				nextAt,
-			},
+			{...this.getQueueRank(page, seasonId), nextAt},
 			ifSyncedBefore,
 		)
+	}
+
+	/** The season a page is queued under, and its priority from that */
+	private getQueueRank(
+		page: SyncPage,
+		seasonId: string | null,
+	): {seasonId: string | null; priority: number} {
+		const queuedSeasonId = page.kind === "teams" ? null : seasonId
+		return {
+			seasonId: queuedSeasonId,
+			priority: this.getPriority(queuedSeasonId),
+		}
 	}
 
 	private getPriority(seasonId: string | null): number {

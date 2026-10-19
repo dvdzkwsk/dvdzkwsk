@@ -1560,17 +1560,28 @@ const WarningIcon = () => {
 
 // --- Notice
 
-/** A banner above a page's content: what's missing or changed, and why. */
+/**
+ * A banner above a page's content: what's missing or changed, and why. With
+ * `loading`, for something still on its way, its icon is the loader's.
+ */
 export const Notice = ({
 	title,
+	loading = false,
 	children,
 }: {
 	title: string
+	loading?: boolean
 	children?: React.ReactNode
 }) => {
 	return (
 		<div className="Notice" role="status">
-			<InfoIcon />
+			{loading ? (
+				<span className="Notice-loader">
+					<PuckDots />
+				</span>
+			) : (
+				<InfoIcon />
+			)}
 			<div className="Notice-body">
 				<strong className="Notice-title">{title}</strong>
 				{children && <p className="Notice-text">{children}</p>}

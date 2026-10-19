@@ -31,6 +31,21 @@ describe("JobRunner", () => {
 		await jobs.stop(100)
 	})
 
+	test("runNow starts a waiting job's next run at once", async () => {
+		const jobs = new JobRunner()
+		let runs = 0
+		jobs.register(job({run: async () => (++runs, 60_000)}))
+		jobs.start()
+		await sleep(5)
+		expect(runs).toBe(1)
+		jobs.runNow("test")
+		await sleep(5)
+		expect(runs).toBe(2)
+		// Unknown ids are ignored
+		jobs.runNow("missing")
+		await jobs.stop(100)
+	})
+
 	test("records a failed run, and retries it after retryMs", async () => {
 		const jobs = new JobRunner()
 		let runs = 0

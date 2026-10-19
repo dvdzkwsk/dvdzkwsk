@@ -1096,13 +1096,35 @@ export class LeagueDatabase {
 			})
 	}
 
-	/** The most urgent page that's due; null if none is */
+	/**
+	 * Puts a page a visitor is waiting on ahead of the rest of the queue,
+	 * due now, until it's synced or fails (see markSynced and markFailed)
+	 */
+	request(
+		url: string,
+		page: SyncPage,
+		{seasonId, priority}: {seasonId: string | null; priority: number},
+		now: number,
+	): void {
+		this.db
+			.query(
+				`INSERT INTO fetch_queue
+					(url, page, season_id, priority, next_at, requested)
+				VALUES ($url, $page, $seasonId, $priority, $now, 1)
+				ON CONFLICT (url) DO UPDATE SET requested = 1,
+					next_at = min(next_at, excluded.next_at)`,
+			)
+			.run({url, page: JSON.stringify(page), seasonId, priority, now})
+	}
+
+	/** The most urgent page that's due, requested ones first; null if none is */
 	takeDue(now: number): QueuedPage | null {
 		return this.toQueuedPage(
 			this.db
 				.query<QueueRow, {now: number}>(
 					`SELECT url, page, season_id, attempts FROM fetch_queue
-					WHERE next_at <= $now ORDER BY priority, next_at, rowid LIMIT 1`,
+					WHERE next_at <= $now
+					ORDER BY requested DESC, priority, next_at, rowid LIMIT 1`,
 				)
 				.get({now}),
 		)
@@ -1188,7 +1210,8 @@ export class LeagueDatabase {
 		this.db
 			.query(
 				`UPDATE fetch_queue SET next_at = $nextAt, attempts = 0,
-					last_error = NULL, synced_at = $now, processed_version = $version
+					last_error = NULL, synced_at = $now, processed_version = $version,
+					requested = 0
 				WHERE url = $url`,
 			)
 			.run({url, nextAt, version, now})
@@ -1201,7 +1224,7 @@ export class LeagueDatabase {
 		this.db
 			.query(
 				`UPDATE fetch_queue SET next_at = $nextAt, attempts = attempts + 1,
-					last_error = $error
+					last_error = $error, requested = 0
 				WHERE url = $url`,
 			)
 			.run({url, nextAt, error})

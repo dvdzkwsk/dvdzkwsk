@@ -235,6 +235,11 @@ export type AsyncState<T> = (
 ) & {
 	/** Runs `load` again, e.g. from a "Try again" button */
 	reload: () => void
+	/**
+	 * Runs `load` again behind what's shown, which stays until the new
+	 * result replaces it (or, if the load fails, stays)
+	 */
+	refresh: () => void
 }
 
 const asyncLogger = new Logger("useAsync")
@@ -253,13 +258,29 @@ export function useAsync<T>(
 		| {status: "success"; data: T}
 	const [result, setResult] = React.useState<Result>({status: "loading"})
 	const [attempt, setAttempt] = React.useState(0)
+	// Set by refresh for the load it starts; any other load shows loading
+	const quiet = React.useRef(false)
 	React.useEffect(() => {
 		let current = true
-		setResult({status: "loading"})
+		const isRefresh = quiet.current
+		quiet.current = false
+		if (!isRefresh) {
+			setResult({status: "loading"})
+		}
 		;(IS_DEV ? withSimulatedLoading(load) : load()).then(
 			(data) => current && setResult({status: "success", data}),
 			(cause: unknown) => {
 				const error = toError(cause)
+				if (isRefresh) {
+					asyncLogger.warn(
+						"refresh",
+						"refresh failed; kept what's shown",
+						{
+							error,
+						},
+					)
+					return
+				}
 				asyncLogger.error("load", "load failed", {error})
 				if (current) {
 					setResult({status: "error", error})
@@ -271,7 +292,11 @@ export function useAsync<T>(
 		}
 	}, [...deps, attempt])
 	const reload = React.useCallback(() => setAttempt((n) => n + 1), [])
-	return {...result, reload}
+	const refresh = React.useCallback(() => {
+		quiet.current = true
+		setAttempt((n) => n + 1)
+	}, [])
+	return {...result, reload, refresh}
 }
 
 // --- Dev tools

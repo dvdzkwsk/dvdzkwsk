@@ -126,6 +126,20 @@ export class JobRunner {
 		}
 	}
 
+	/**
+	 * Starts a job's next run now, rather than when its last run said. A
+	 * job that's running already is left to schedule its own next run.
+	 */
+	runNow(id: string) {
+		const job = this.jobs.get(id)
+		if (!job?.timer) {
+			return
+		}
+		clearTimeout(job.timer)
+		job.timer = null
+		this.schedule(job, 0)
+	}
+
 	/** Every job's state, in the order they were registered */
 	getStatuses(now = Date.now()): JobStatus[] {
 		return [...this.jobs.values()].map((job) => ({

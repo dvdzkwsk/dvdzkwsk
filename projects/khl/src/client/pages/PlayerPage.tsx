@@ -20,7 +20,7 @@ import {
 	RecentPenalties,
 	toRecentPenalties,
 } from "../Achievements.js"
-import {ActivityFeed, toActivityFeed} from "../Activity.js"
+import {ActivityFeed, toActivityFeed, useActivityRefresh} from "../Activity.js"
 import {
 	AsyncContent,
 	Card,
@@ -100,6 +100,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 			...PLAYER_PAGE_ACTIVITY,
 		})
 	}, [playerId])
+	useActivityRefresh(activity)
 	const feed: AsyncState<ActivityResponse> = matchField(activity, "status", {
 		loading: (s) => s,
 		error: (s) => s,

@@ -37,7 +37,7 @@ import {
 	KHL_ALL_SEASONS,
 	searchKHLPlayers,
 } from "./KHL.js"
-import {KHLSyncer} from "./KHLSyncer.js"
+import {KHLSyncer, SYNC_JOB_ID} from "./KHLSyncer.js"
 import {GameRecord, GameRecordTeam, RosterStatRow} from "./LeagueDatabase.js"
 import {getLivebarnVenues} from "./LiveBarn.js"
 import {
@@ -973,7 +973,7 @@ interface ActivityRow {
  * The subject's final games from the `lookbackDays` before their latest one
  * that have a requested event or attendance (see ActivityKind), newest first,
  * with at most `maxEvents` events in all. Games are read from the league
- * tables, syncing any that never were (see getGameRecords).
+ * tables; ones not synced yet are left out and counted (see getGameRecords).
  */
 async function getActivity(
 	subject: ActivitySubject,
@@ -982,7 +982,7 @@ async function getActivity(
 		lookbackDays = LIMITS.ACTIVITY_LOOKBACK_DAYS,
 		maxEvents = LIMITS.ACTIVITY_EVENTS,
 	}: {kinds?: ActivityKind[]; lookbackDays?: number; maxEvents?: number} = {},
-): Promise<ActivityRow[]> {
+): Promise<{rows: ActivityRow[]; pendingGames: number}> {
 	const {games, by} = await getActivitySubject(subject)
 	const wanted = new Set(kinds)
 
@@ -999,7 +999,9 @@ async function getActivity(
 		: 0
 	const recent = finals.filter((game) => Date.parse(game.startsAt) >= since)
 
-	const records = await getGameRecords(recent.map((game) => game.id!))
+	const {records, pendingGames} = await getGameRecords(
+		recent.map((game) => game.id!),
+	)
 	const gameIds = [...records.keys()]
 	const eventsByGame = new Map<string, ActivityEvent[]>()
 	for (const {gameId, event} of db.league.getGameEvents(gameIds, by)) {
@@ -1049,7 +1051,7 @@ async function getActivity(
 		count += events.length
 		rows.push({game: record, side: game.homeAway, attendance, events})
 	}
-	return rows
+	return {rows, pendingGames}
 }
 
 /**
@@ -1090,38 +1092,53 @@ async function getActivitySubject(subject: ActivitySubject): Promise<{
 }
 
 /**
- * Games from the games tables, processing any that aren't there yet, or were
- * processed before their summary or lineups were posted, from their pages.
- * A game whose pages fail to load is left out.
+ * Games from the league tables. A game that never was synced is left out and
+ * counted in `pendingGames`, and the sync loop is asked for it next, rather
+ * than fetched here: a season of games is minutes of fetches at the visitor
+ * rate. Without a running loop (dev, or offline mode) nothing would sync
+ * them, so they're synced here instead. A game whose pages are failing is
+ * left out. The syncer keeps each game fresh, looking again until its
+ * summary and lineups are posted.
  */
-/**
- * Games from the league tables, syncing any that never were. A game whose
- * pages fail to load is left out. The syncer keeps each game fresh, looking
- * again until its summary and lineups are posted.
- */
-async function getGameRecords(
-	gameIds: string[],
-): Promise<Map<string, GameRecord>> {
+async function getGameRecords(gameIds: string[]): Promise<{
+	records: Map<string, GameRecord>
+	pendingGames: number
+}> {
+	const pages = gameIds.map((gameId): SyncPage => ({kind: "game", gameId}))
+	if (SYNC_LOOP && !isOfflineMode()) {
+		const pending = syncer.requestSync(pages)
+		if (pending.length > 0) {
+			jobs.runNow(SYNC_JOB_ID)
+		}
+		return {
+			records: db.league.getGames(gameIds),
+			pendingGames: pending.length,
+		}
+	}
 	await Promise.all(
-		gameIds.map(async (gameId) => {
+		pages.map(async (page) => {
 			try {
 				// A game that's failing is left out
-				await syncer.ensureSynced({kind: "game", gameId})
+				await syncer.ensureSynced(page)
 			} catch (error) {
 				logger.warn("getGameRecords", "game pages unavailable", {
-					gameId,
+					page,
 					error,
 				})
 			}
 		}),
 	)
-	return db.league.getGames(gameIds)
+	return {records: db.league.getGames(gameIds), pendingGames: 0}
 }
 
 /** Activity rows as the API returns them, with replay and player links */
-async function toActivityResponse(
-	rows: ActivityRow[],
-): Promise<ActivityResponse> {
+async function toActivityResponse({
+	rows,
+	pendingGames,
+}: {
+	rows: ActivityRow[]
+	pendingGames: number
+}): Promise<ActivityResponse> {
 	const surfacesByArena = await getSurfacesByArena(
 		rows.map((r) => r.game.arenaId),
 	)
@@ -1167,7 +1184,7 @@ async function toActivityResponse(
 			events,
 		}
 	})
-	return {games, playerIds: Object.fromEntries(playerIds)}
+	return {games, playerIds: Object.fromEntries(playerIds), pendingGames}
 }
 
 /** When an activity event happened on the scoresheet */

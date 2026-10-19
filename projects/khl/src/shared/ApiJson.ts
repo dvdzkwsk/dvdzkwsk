@@ -417,11 +417,17 @@ export interface ActivityResponse {
 	games: ActivityGame[]
 	/** Our player UUID for each KHL player id named in `games` */
 	playerIds: Record<string, string>
+	/**
+	 * Games left out of `games` because they're still being loaded from the
+	 * KHL site for the first time; ask again shortly to get them
+	 */
+	pendingGames: number
 }
 
 export const ActivityResponseSchema = z.object({
 	games: z.array(ActivityGameSchema),
 	playerIds: z.record(z.string(), z.uuid()),
+	pendingGames: z.number().int().nonnegative(),
 }) satisfies z.ZodType<ActivityResponse>
 
 export interface PlayerResponse {
@@ -560,7 +566,7 @@ export const GET_PLAYER_ACTIVITY_ENDPOINT = {
 	uri: "/api/players/:playerId/activity",
 	name: "Get player activity",
 	description:
-		"A player's latest goals, assists, and penalties, or the games they played or skipped, newest first. Slow on a cold cache, since it reads each game's scoresheet.",
+		"A player's latest goals, assists, and penalties, or the games they played or skipped, newest first. Games whose scoresheets haven't been loaded yet are left out and counted in `pendingGames`; ask again shortly to get them.",
 	exampleRequest: {
 		playerId: "1f4d54d9-8b87-4b49-8880-04cd9497ef92",
 		kinds: ["goal", "assist"],
@@ -952,7 +958,7 @@ export const GET_TEAM_ACTIVITY_ENDPOINT = {
 	uri: "/api/teams/:teamId/activity",
 	name: "Get team activity",
 	description:
-		"A team's latest goals and penalties in a season, newest first. Slow on a cold cache, since it reads each game's scoresheet.",
+		"A team's latest goals and penalties in a season, newest first. Games whose scoresheets haven't been loaded yet are left out and counted in `pendingGames`; ask again shortly to get them.",
 	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: GetTeamActivityRequestSchema,
 	responseSchema: ActivityResponseSchema,

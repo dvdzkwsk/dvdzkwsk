@@ -547,6 +547,36 @@ describe("KHLSyncer", () => {
 		expect(league.takeFetches()).toEqual([page.schedule("11", "100")])
 	})
 
+	test("a visitor's request puts unsynced pages first, without fetching them", async () => {
+		setSystemTime(START)
+		const league = createLeague()
+		league.seed()
+		const game: SyncPage = {kind: "game", gameId: "2"}
+		expect(league.syncer.requestSync([game])).toEqual([game])
+		expect(league.takeFetches()).toEqual([])
+
+		// Ahead of the teams page, though the game is from a past season
+		expect(await league.syncer.syncNext()).toBe(true)
+		expect(league.takeFetches()).toEqual([page.game("2")])
+		expect(league.db.league.getGames(["2"]).has("2")).toBe(true)
+		expect(league.syncer.requestSync([game])).toEqual([])
+
+		// Once synced, it's back in its place
+		await league.syncer.syncNext()
+		expect(league.takeFetches()).toEqual([page.teams(null)])
+	})
+
+	test("a visitor's request doesn't bring forward a page that's failing", async () => {
+		setSystemTime(START)
+		const league = createLeague()
+		const game: SyncPage = {kind: "game", gameId: "2"}
+		league.failing.add(page.game("2"))
+		expect(league.syncer.requestSync([game])).toEqual([game])
+		expect(await league.syncer.syncNext()).toBe(true)
+		expect(league.syncer.requestSync([game])).toEqual([])
+		expect(await league.syncer.syncNext()).toBe(false)
+	})
+
 	test("pages an older processing built are processed again, without fetching", async () => {
 		setSystemTime(START)
 		const league = createLeague()

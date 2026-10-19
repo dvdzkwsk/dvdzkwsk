@@ -3851,6 +3851,12 @@ table {
 	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
 }
 
+.Activity-pending {
+	margin: 0 0 calc(var(--spacing) * 3);
+	font-size: var(--text-sm);
+	color: var(--muted-fg);
+}
+
 .Activity-events {
 	list-style: none;
 	margin: 0;

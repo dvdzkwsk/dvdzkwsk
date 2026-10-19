@@ -126,6 +126,7 @@ describe("getEndpointDocs", () => {
 				"interface ActivityResponse {",
 				"  games: ActivityGame[]",
 				"  playerIds: Record<string, string>",
+				"  pendingGames: number",
 				"}",
 			].join("\n"),
 		})

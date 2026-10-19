@@ -350,6 +350,13 @@ const MIGRATIONS = [
 	ALTER TABLE registrations DROP COLUMN team_name;
 	ALTER TABLE registrations DROP COLUMN team_logo_url;
 	`,
+	`
+	-- A page a visitor is waiting on goes ahead of the rest of the queue
+	-- until it's synced (or fails), whatever its season
+	ALTER TABLE fetch_queue ADD COLUMN requested INTEGER NOT NULL DEFAULT 0;
+	DROP INDEX fetch_queue_due;
+	CREATE INDEX fetch_queue_due ON fetch_queue (requested DESC, priority, next_at);
+	`,
 ]
 
 export function openDatabase(filepath: string) {

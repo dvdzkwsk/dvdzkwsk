@@ -122,7 +122,10 @@ function readForSync<T>(fetch: boolean, load: () => Promise<T>): Promise<T> {
  * and whatever follows from it:
  *
  * - The default teams page queues every season's teams page.
- * - A teams page queues each team's schedule and stats.
+ * - A teams page queues each team's stats, and for the current season its
+ *   schedule. A past season's schedule (and so its games) feeds no stats,
+ *   only a player's or team's game list and activity, so it's synced when
+ *   a visitor asks for it.
  * - A schedule queues each game for when it should have settled, and is
  *   due again when its next game settles.
  * - A team's stats queue each rostered player's page (as of their latest
@@ -333,7 +336,9 @@ export class KHLSyncer {
 		}
 		for (const team of page.teams) {
 			const ids = {teamId: team.id, seasonId: team.seasonId}
-			this.enqueue({kind: "schedule", ...ids}, 0)
+			if (this.isCurrentSeason(team.seasonId)) {
+				this.enqueue({kind: "schedule", ...ids}, 0)
+			}
 			this.enqueue({kind: "team-stats", ...ids}, 0)
 		}
 		return this.refreshAt("teams", page.season.id)

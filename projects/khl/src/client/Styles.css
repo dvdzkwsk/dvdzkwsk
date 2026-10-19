@@ -5554,9 +5554,16 @@ a.Compare-chip:hover {
 	color: var(--subtle-fg);
 }
 
-/* Over, but the league hasn't posted the score yet */
+/* Over, but the league hasn't posted the score yet; hovering or tapping
+   explains */
 .GameTable-score-pending {
+	appearance: none;
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
 	font-size: var(--text-xs);
+	cursor: help;
 	font-style: italic;
 	color: var(--muted-fg);
 	white-space: nowrap;

@@ -11,6 +11,7 @@ import {
 	CityDot,
 	Hint,
 	HomeAwayBadge,
+	InfoPopover,
 	Link,
 	LIVEBARN_TITLES,
 	LiveBarnBadge,
@@ -1474,11 +1475,19 @@ export const GameTable = ({
 								<GameTableScore row={row} />
 							) : (
 								isAwaitingScore(row, now) && (
-									<Hint label="Over; waiting on the league to post the score">
-										<span className="GameTable-score-pending">
-											Score pending
-										</span>
-									</Hint>
+									<InfoPopover
+										trigger={
+											<button
+												type="button"
+												className="GameTable-score-pending"
+											>
+												Score pending
+											</button>
+										}
+									>
+										Over; waiting on the league to post
+										the score
+									</InfoPopover>
 								)
 							),
 					},

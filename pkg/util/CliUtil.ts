@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import * as url from "url"
+import crossSpawn from "cross-spawn"
 import {
 	ConsoleTransport,
 	Logger,
@@ -91,4 +92,24 @@ export function getEnvVar(name: string, required = true): string {
 		}
 	}
 	return value ?? ""
+}
+
+/** Runs a command to completion, throwing if it fails. */
+export function runCommand(
+	command: string,
+	args: string[],
+	options: {cwd?: string; env?: Record<string, string>} = {},
+) {
+	const result = crossSpawn.sync(command, args, {
+		stdio: "inherit",
+		cwd: options.cwd,
+		env: {...process.env, ...options.env},
+	})
+	if (result.error || result.status !== 0) {
+		throw logger.newError("runCommand", "command failed", {
+			command: [command, ...args].join(" "),
+			status: result.status,
+			error: result.error,
+		})
+	}
 }

@@ -7,6 +7,7 @@ import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import compression from "compression"
 import express from "express"
+import {z} from "zod"
 import {
 	ArenaMapping,
 	getArenaName,
@@ -39,9 +40,11 @@ import {KHLSyncer} from "./KHLSyncer.js"
 import {GameRecord, GameRecordTeam, RosterStatRow} from "./LeagueDatabase.js"
 import {getLivebarnVenues} from "./LiveBarn.js"
 import {
+	isOfflineMode,
 	openPageStore,
 	PageLoad,
 	PageLoadSource,
+	setOfflineMode,
 	setPageStore,
 	withPageLoadLog,
 } from "./PageStore.js"
@@ -56,10 +59,14 @@ import {
 	CacheCheckResponse,
 	CHECK_CACHE_ENDPOINT,
 	DEFAULT_ACTIVITY_KINDS,
+	DevSettings,
+	DevSettingsResponse,
+	DevSettingsSchema,
 	FeedGame,
 	GameResponse,
 	GamesResponse,
 	GET_CACHE_ENTRY_ENDPOINT,
+	GET_DEV_SETTINGS_ENDPOINT,
 	GET_GAME_ENDPOINT,
 	GET_MATCHUP_ENDPOINT,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
@@ -114,6 +121,7 @@ import {
 	TeamsResponse,
 	toRecentGame,
 	UnavailableSchedule,
+	UPDATE_DEV_SETTINGS_ENDPOINT,
 	UpcomingGame,
 } from "../shared/ApiJson.js"
 import {getCity} from "../shared/Cities.js"
@@ -181,6 +189,13 @@ const app = express()
 const cache = new KHLCache()
 // Keeps the league's tables in sync with the KHL; endpoints read the tables
 const syncer = new KHLSyncer(db)
+// The background loop crawls the whole league, so dev runs it only when
+// asked (KHL_SYNC=1). Without it, a page still syncs when it's first viewed.
+const SYNC_LOOP =
+	process.env.NODE_ENV === "production" || process.env.KHL_SYNC === "1"
+// Dev settings toggled from /admin, in a file so they survive the restart
+// `bun --watch` makes on every edit
+const DEV_SETTINGS_PATH = path.join(PROJECT_DIR, "data/dev-settings.json")
 
 // The league-wide players list is ~700kb of JSON, ~150kb gzipped
 app.use(compression())
@@ -216,9 +231,28 @@ app.get("/api/health", (_req, res) => {
 
 registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db))
 
-// Dev only: drives headless Chrome, which the deployed image doesn't have.
-// Imported by path at request time so puppeteer stays out of the bundle.
 if (process.env.NODE_ENV !== "production") {
+	setOfflineMode(readDevSettings().offline)
+	const toDevSettingsResponse = (): DevSettingsResponse => ({
+		offline: isOfflineMode(),
+		syncLoop: SYNC_LOOP,
+	})
+	registerEndpoint(app, GET_DEV_SETTINGS_ENDPOINT, async () =>
+		toDevSettingsResponse(),
+	)
+	registerEndpoint(app, UPDATE_DEV_SETTINGS_ENDPOINT, async (settings) => {
+		fs.mkdirSync(path.dirname(DEV_SETTINGS_PATH), {recursive: true})
+		fs.writeFileSync(
+			DEV_SETTINGS_PATH,
+			JSON.stringify(settings, null, "\t"),
+		)
+		setOfflineMode(settings.offline)
+		logger.info("updateDevSettings", "updated dev settings", settings)
+		return toDevSettingsResponse()
+	})
+
+	// Drives headless Chrome, which the deployed image doesn't have.
+	// Imported by path at request time so puppeteer stays out of the bundle.
 	let benchmarkRunning = false
 	registerEndpoint(app, RUN_BENCHMARK_ENDPOINT, async ({names}) => {
 		if (benchmarkRunning) {
@@ -1665,8 +1699,34 @@ app.listen(PORT, () => {
 		commit: DEPLOY_INFO.commit,
 	})
 	startStatusChecks(db)
-	syncer.start()
+	if (SYNC_LOOP) {
+		syncer.start()
+	}
 })
+
+/** The settings in DEV_SETTINGS_PATH; all off if there's no file */
+function readDevSettings(): DevSettings {
+	if (!fs.existsSync(DEV_SETTINGS_PATH)) {
+		return {offline: false}
+	}
+	let json: unknown
+	try {
+		json = JSON.parse(fs.readFileSync(DEV_SETTINGS_PATH, "utf8"))
+	} catch (error) {
+		throw logger.newError("readDevSettings", "couldn't read dev settings", {
+			path: DEV_SETTINGS_PATH,
+			error,
+		})
+	}
+	const result = DevSettingsSchema.safeParse(json)
+	if (!result.success) {
+		throw logger.newError("readDevSettings", "unexpected dev settings", {
+			path: DEV_SETTINGS_PATH,
+			issues: z.prettifyError(result.error),
+		})
+	}
+	return result.data
+}
 
 const PAGE_LOAD_LABELS: Record<PageLoadSource, string> = {
 	memory: "from memory",

@@ -5,7 +5,7 @@ import crossSpawn from "cross-spawn"
 import {z} from "zod"
 import {Cloudflare} from "./Cloudflare.js"
 import {Logger} from "../pkg/logger/Logger.js"
-import {createCliTool, getEnvVar} from "../pkg/util/CliUtil.js"
+import {createCliTool, getEnvVar, runCommand} from "../pkg/util/CliUtil.js"
 import {getGitRevision} from "../pkg/util/GitUtil.js"
 import {matchFn, matchField} from "../pkg/util/MatchUtil.js"
 
@@ -126,7 +126,7 @@ function devWebApp(project: Project) {
 function buildWebApp(project: Project): string {
 	const outdir = path.join(project.path, "dist/website")
 	fs.rmSync(outdir, {recursive: true, force: true})
-	run("vite", [
+	runCommand("vite", [
 		"build",
 		"--config",
 		path.join(project.path, "vite.config.js"),
@@ -163,7 +163,7 @@ function deployToNetlify(project: Project, siteIdEnvVar: string) {
 	const siteId = getEnvVar(siteIdEnvVar)
 	const outdir = buildWebApp(project)
 	fs.writeFileSync(path.join(outdir, "_redirects"), "/*  /index.html  200\n")
-	run(
+	runCommand(
 		"netlify",
 		["deploy", "--dir", outdir, "--site", siteId, "--no-build", "--prod"],
 		{env: {NETLIFY_AUTH_TOKEN: authToken}},
@@ -186,7 +186,7 @@ async function deployToFly(project: Project, domain?: string) {
 	ensureFlyResources(config)
 
 	buildWebApp(project)
-	run(
+	runCommand(
 		"bun",
 		[
 			"build",
@@ -206,7 +206,7 @@ async function deployToFly(project: Project, domain?: string) {
 			project: project.path,
 		})
 	}
-	run(
+	runCommand(
 		"fly",
 		[
 			"deploy",
@@ -251,7 +251,7 @@ async function ensureFlyDomain(config: FlyConfig, domain: string) {
 		) ?? []
 	if (!certs.some((c) => c.hostname === domain)) {
 		logger.info("ensureFlyDomain", "adding Fly certificate", {domain})
-		run("fly", ["certs", "add", domain, "--app", config.app])
+		runCommand("fly", ["certs", "add", domain, "--app", config.app])
 	}
 	const cert = readFlyCert(config, domain)
 	const {a, aaaa, acme_challenge} = cert.dns_requirements
@@ -377,7 +377,7 @@ function ensureFlyResources(config: FlyConfig) {
 		captureJson("fly", ["apps", "list", "--json"], NamedListSchema) ?? []
 	if (!apps.some((a) => nameOf(a) === config.app)) {
 		logger.info("ensureFlyResources", "creating Fly app", {app: config.app})
-		run("fly", ["apps", "create", config.app, "--org", "personal"])
+		runCommand("fly", ["apps", "create", config.app, "--org", "personal"])
 	}
 
 	if (config.volume) {
@@ -398,7 +398,7 @@ function ensureFlyResources(config: FlyConfig) {
 				fromGb: existing.size_gb,
 				toGb: config.volume.sizeGb,
 			})
-			run("fly", [
+			runCommand("fly", [
 				"volumes",
 				"extend",
 				existing.id,
@@ -414,7 +414,7 @@ function ensureFlyResources(config: FlyConfig) {
 				app: config.app,
 				...config.volume,
 			})
-			run("fly", [
+			runCommand("fly", [
 				"volumes",
 				"create",
 				config.volume.name,
@@ -472,26 +472,6 @@ function captureJson<T>(
 		})
 	}
 	return result.data
-}
-
-/** Runs a command to completion, throwing if it fails. */
-function run(
-	command: string,
-	args: string[],
-	options: {cwd?: string; env?: Record<string, string>} = {},
-) {
-	const result = crossSpawn.sync(command, args, {
-		stdio: "inherit",
-		cwd: options.cwd,
-		env: {...process.env, ...options.env},
-	})
-	if (result.error || result.status !== 0) {
-		throw logger.newError("run", "command failed", {
-			command: [command, ...args].join(" "),
-			status: result.status,
-			error: result.error,
-		})
-	}
 }
 
 createCliTool(import.meta, main)

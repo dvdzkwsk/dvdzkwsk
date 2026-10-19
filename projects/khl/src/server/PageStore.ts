@@ -2,6 +2,7 @@ import {AsyncLocalStorage} from "async_hooks"
 import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
+import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {Database as SQLiteDatabase} from "bun:sqlite"
 
 const logger = new Logger("PageStore")
@@ -222,6 +223,33 @@ export function getPageLastFetchedAt(
 	return pageStore?.getLastFetchedAt(source, url) ?? null
 }
 
+let offline = false
+
+/**
+ * In offline mode nothing is fetched: a read gets the stored copy however
+ * old it is, and fails with an OfflineError if there isn't one. For dev, so
+ * working on the site doesn't load the KHL.
+ */
+export function setOfflineMode(value: boolean) {
+	offline = value
+}
+
+export function isOfflineMode(): boolean {
+	return offline
+}
+
+/**
+ * A read in offline mode of a page that isn't stored. A FetchError, so it's
+ * handled like the site being down (a 502, or an extra left out), though the
+ * syncer doesn't count it as a failure (see KHLSyncer.syncPage).
+ */
+export class OfflineError extends FetchError {
+	constructor(url: string) {
+		super("offline mode: page isn't stored", "GET", url, null)
+		this.name = "OfflineError"
+	}
+}
+
 /** How a read uses stored pages */
 export interface PageReadPolicy {
 	/** Read a stored page up to this old instead of fetching it */
@@ -348,6 +376,14 @@ export async function readPage<T>(
 		}
 	}
 	const info = pages?.getInfo(source, url) ?? null
+	if (offline) {
+		const stored = readStored()
+		if (!stored) {
+			throw new OfflineError(url)
+		}
+		recordPageLoad({source: "stored", key: url, ms: 0, hash: stored.hash})
+		return stored.value
+	}
 	if (pages && info && Date.now() - info.fetchedAt < policy.maxAgeMs) {
 		const stored = readStored()
 		if (stored) {

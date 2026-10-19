@@ -10,9 +10,13 @@ import {
 	BenchmarkSummary,
 	BenchmarkTiming,
 	DEFAULT_BENCHMARK_NAMES,
+	DevSettingsResponse,
+	GET_DEV_SETTINGS_ENDPOINT,
 	RUN_BENCHMARK_ENDPOINT,
+	UPDATE_DEV_SETTINGS_ENDPOINT,
 } from "../../shared/ApiJson.js"
 import {
+	AsyncContent,
 	Card,
 	ErrorState,
 	Hint,
@@ -30,6 +34,7 @@ import {
 	Route,
 	SIMULATED_LOADING_DELAY_MS,
 	SimulatedLoading,
+	useAsync,
 	writeSimulatedLoading,
 } from "../Util.js"
 
@@ -40,11 +45,74 @@ const AdminPage = () => {
 		<PageShell>
 			<div className="Admin">
 				<h1>Admin</h1>
+				<KHLAccessCard />
 				<StatesDemo />
 				<SimulatedLoadingPicker />
 				<BenchmarkRunner />
 			</div>
 		</PageShell>
+	)
+}
+
+type KHLAccess = "online" | "offline"
+
+const KHL_ACCESS_OPTIONS: {value: KHLAccess; label: string}[] = [
+	{value: "online", label: "Online"},
+	{value: "offline", label: "Offline"},
+]
+
+/** Offline mode, and whether the background sync loop runs */
+const KHLAccessCard = () => {
+	const state = useAsync(() => doRequest(GET_DEV_SETTINGS_ENDPOINT, {}), [])
+	return (
+		<Card title="KHL access">
+			<AsyncContent
+				state={state}
+				size="inline"
+				errorTitle="Couldn't load dev settings"
+			>
+				{(settings) => <KHLAccessPicker initial={settings} />}
+			</AsyncContent>
+		</Card>
+	)
+}
+
+const KHLAccessPicker = ({initial}: {initial: DevSettingsResponse}) => {
+	const [settings, setSettings] = React.useState(initial)
+	const [error, setError] = React.useState<Error | null>(null)
+	const update = (access: KHLAccess) => {
+		setError(null)
+		doRequest(UPDATE_DEV_SETTINGS_ENDPOINT, {
+			offline: matchValue(access, {online: false, offline: true}),
+		}).then(setSettings, (cause) => setError(toError(cause)))
+	}
+	return (
+		<>
+			<p className="Admin-note">
+				Offline, the server never fetches from the KHL or LiveBarn: it
+				serves pages it has stored, and a page it hasn't comes back as
+				unavailable. Kept across restarts. Pull production's data with{" "}
+				<code>bun tools/PullProdData.ts</code>.
+			</p>
+			<p className="Admin-note">
+				{settings.syncLoop
+					? "The background sync loop is running (KHL_SYNC=1). It pauses while offline."
+					: "The background sync loop is off; set KHL_SYNC=1 to run it. Pages still sync when they're first viewed."}
+			</p>
+			<SegmentedControl<KHLAccess>
+				label="KHL access"
+				options={KHL_ACCESS_OPTIONS}
+				value={settings.offline ? "offline" : "online"}
+				onChange={update}
+			/>
+			{error && (
+				<ErrorState
+					title="Couldn't update dev settings"
+					error={error}
+					size="inline"
+				/>
+			)}
+		</>
 	)
 }
 

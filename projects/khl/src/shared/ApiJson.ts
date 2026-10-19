@@ -1780,6 +1780,55 @@ export const RUN_BENCHMARK_ENDPOINT = {
 	responseSchema: BenchmarkResponseSchema,
 } satisfies ApiEndpoint<RunBenchmarkRequest, BenchmarkResponse>
 
+export interface DevSettings {
+	offline: boolean
+}
+
+export const DevSettingsSchema = z.object({
+	offline: z
+		.boolean()
+		.describe(
+			"Never fetch from the KHL or LiveBarn; serve only stored pages",
+		),
+}) satisfies z.ZodType<DevSettings>
+
+export interface DevSettingsResponse extends DevSettings {
+	/** Whether the background sync loop runs (KHL_SYNC; always in production) */
+	syncLoop: boolean
+}
+
+export const DevSettingsResponseSchema = DevSettingsSchema.extend({
+	syncLoop: z.boolean(),
+}) satisfies z.ZodType<DevSettingsResponse>
+
+export type GetDevSettingsRequest = Record<string, never>
+
+export const GetDevSettingsRequestSchema = z.object(
+	{},
+) satisfies z.ZodType<GetDevSettingsRequest>
+
+export const GET_DEV_SETTINGS_ENDPOINT = {
+	method: "GET",
+	uri: "/api/admin/settings",
+	name: "Get dev settings",
+	description:
+		"Dev only: whether the server is in offline mode, and whether the background sync loop runs.",
+	exampleRequest: {},
+	requestSchema: GetDevSettingsRequestSchema,
+	responseSchema: DevSettingsResponseSchema,
+} satisfies ApiEndpoint<GetDevSettingsRequest, DevSettingsResponse>
+
+export const UPDATE_DEV_SETTINGS_ENDPOINT = {
+	method: "PUT",
+	uri: "/api/admin/settings",
+	name: "Update dev settings",
+	description:
+		"Dev only: turns offline mode on or off. Kept in data/dev-settings.json, so it survives restarts.",
+	exampleRequest: {offline: true},
+	requestSchema: DevSettingsSchema,
+	responseSchema: DevSettingsResponseSchema,
+} satisfies ApiEndpoint<DevSettings, DevSettingsResponse>
+
 export interface ApiDocsSection {
 	title: string
 	endpoints: ApiEndpoint<ApiRequest, unknown>[]

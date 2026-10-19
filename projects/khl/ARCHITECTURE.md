@@ -97,13 +97,13 @@ sequenceDiagram
     Req->>Reg: GET /api/teams/:teamId?season=…
     Reg->>Reg: requestSchema.safeParse → 400 on failure
     Reg->>H: typed request
-    H-->>Reg: TeamResponse
+    H-->>Reg: GetTeamResponse
     Reg->>Reg: responseSchema.safeParse → throws (500) on drift
     Reg-->>Req: JSON
     Req-->>Page: typed data → AsyncContent
 ```
 
-Both sides import the same `*_ENDPOINT` object, so a route, its parameters, and its response type can't drift silently: the server validates the request on the way in and its own response on the way out. To add an API, define the endpoint in `ApiJson.ts`, register it in `Server.ts`, and call it with `doRequest` inside `useAsync`. Every endpoint also needs a `name`, a `description`, and an `exampleRequest`, and its request fields need `.describe()`. The `/api` docs page renders all of that, plus TypeScript types generated from the zod schemas, for each endpoint in `API_DOCS_SECTIONS`. `ApiDocs.test.ts` fails if an endpoint is in neither that list nor its internal list.
+Both sides import the same `*_ENDPOINT` object, so a route, its parameters, and its response type can't drift silently: the server validates the request on the way in and its own response on the way out. To add an API, define the endpoint in `ApiJson.ts`, register it in `Server.ts`, and call it with `doRequest` inside `useAsync`. Every endpoint also needs a `name`, a `description`, and an `exampleRequest`, and its request fields need `.describe()`. The `/api` docs page renders all of that, plus TypeScript types generated from the zod schemas, for each endpoint in `API_DOCS_SECTIONS`. An endpoint left out of that list is internal and stays off the page. Names follow the endpoint: `LIST_TEAMS_ENDPOINT` takes a `ListTeamsRequest` and returns a `ListTeamsResponse`, and its `name` ("List teams") starts with the same verb. When endpoints share a shape (`ActivityResult`, `IntegrityReport`), each still gets its own `*Request`/`*Response` schema, a `.extend({})` copy, since the docs name a type after its schema.
 
 In dev, Vite serves the client on `:3000` and proxies `/api` to the server on `:3001`. In production, one process serves both: `express.static(dist/website)` with an `index.html` fallback for client routes.
 
@@ -175,7 +175,7 @@ flowchart LR
 
 ### 5. League time: `LeagueTime.ts`
 
-The schedule lists local dates and times with no zone. `toLeagueInstant` converts them to ISO instants at parse time, `getLeagueDayKey` buckets instants into league days (used for `/api/games?date=` and status history), and `getGameEndsAt` / `isGameInProgress` apply `LEAGUE.GAME_DURATION_MINUTES`. Both the server and the client import these functions, so "today" and "live now" mean the same thing on both sides.
+The schedule lists local dates and times with no zone. `toLeagueInstant` converts them to ISO instants at parse time, `getLeagueDayKey` buckets instants into league days (used for `/api/games?from=` and status history), and `getGameEndsAt` / `isGameInProgress` apply `LEAGUE.GAME_DURATION_MINUTES`. Both the server and the client import these functions, so "today" and "live now" mean the same thing on both sides.
 
 ### 6. Failure handling across the stack
 

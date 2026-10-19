@@ -8,7 +8,7 @@ import {LIVEBARN_VENUES_URL} from "./LiveBarn.js"
 import {
 	DeployInfo,
 	StatusCheck,
-	StatusResponse,
+	GetStatusResponse,
 	SyncStatus,
 } from "../shared/ApiJson.js"
 import {STATUS_HISTORY, STRINGS, URLS} from "../shared/KHLConfig.js"
@@ -163,7 +163,7 @@ export function createStatusCheckJob(
 	}
 }
 
-export function getStatus(db: KHLDatabase, jobs: JobRunner): StatusResponse {
+export function getStatus(db: KHLDatabase, jobs: JobRunner): GetStatusResponse {
 	const historyBuckets = getHistoryBuckets(new Date())
 	const latest = db.getLatestStatusChecks()
 	const buckets = db.getStatusBuckets(historyBuckets[0]!, BUCKET_MINUTES)

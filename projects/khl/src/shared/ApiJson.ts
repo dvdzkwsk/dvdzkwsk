@@ -412,7 +412,7 @@ export const ActivityGameSchema = z.object({
  * days before their latest game, and at most the requested number of events
  * (see ActivityOptions)
  */
-export interface ActivityResponse {
+export interface ActivityResult {
 	/** Newest first */
 	games: ActivityGame[]
 	/** Our player UUID for each KHL player id named in `games` */
@@ -424,13 +424,28 @@ export interface ActivityResponse {
 	pendingGames: number
 }
 
-export const ActivityResponseSchema = z.object({
+export const ActivityResultSchema = z.object({
 	games: z.array(ActivityGameSchema),
 	playerIds: z.record(z.string(), z.uuid()),
 	pendingGames: z.number().int().nonnegative(),
-}) satisfies z.ZodType<ActivityResponse>
+}) satisfies z.ZodType<ActivityResult>
 
-export interface PlayerResponse {
+// Each endpoint gets its own copy of a shared shape (`.extend({})`), so the
+// /api page names its response after it, as with every other endpoint.
+
+export type GetPlayerActivityResponse = ActivityResult
+
+export const GetPlayerActivityResponseSchema = ActivityResultSchema.extend(
+	{},
+) satisfies z.ZodType<GetPlayerActivityResponse>
+
+export type GetTeamActivityResponse = ActivityResult
+
+export const GetTeamActivityResponseSchema = ActivityResultSchema.extend(
+	{},
+) satisfies z.ZodType<GetTeamActivityResponse>
+
+export interface GetPlayerResponse {
 	/** Our player UUID */
 	playerId: string
 	name: string
@@ -445,7 +460,7 @@ export interface PlayerResponse {
 	upcoming: UpcomingGame[]
 }
 
-export const PlayerResponseSchema = z.object({
+export const GetPlayerResponseSchema = z.object({
 	playerId: z.uuid(),
 	name: z.string(),
 	currentSeason: KHLSeasonSchema,
@@ -453,9 +468,9 @@ export const PlayerResponseSchema = z.object({
 	games: z.array(FeedGameSchema),
 	unavailableSchedules: z.array(UnavailableScheduleSchema),
 	upcoming: z.array(UpcomingGameSchema),
-}) satisfies z.ZodType<PlayerResponse>
+}) satisfies z.ZodType<GetPlayerResponse>
 
-export interface TeamResponse {
+export interface GetTeamResponse {
 	team: KHLTeam
 	divisionName: string
 	/** The season being shown */
@@ -469,7 +484,7 @@ export interface TeamResponse {
 	roster: TeamRoster
 }
 
-export const TeamResponseSchema = z.object({
+export const GetTeamResponseSchema = z.object({
 	team: KHLTeamSchema,
 	divisionName: z.string(),
 	season: KHLSeasonSchema,
@@ -477,7 +492,7 @@ export const TeamResponseSchema = z.object({
 	games: z.array(FeedGameSchema),
 	upcoming: z.array(UpcomingGameSchema),
 	roster: TeamRosterSchema,
-}) satisfies z.ZodType<TeamResponse>
+}) satisfies z.ZodType<GetTeamResponse>
 
 export interface SearchRequest {
 	q: string
@@ -516,8 +531,8 @@ export const GET_PLAYER_ENDPOINT = {
 		"A player's profile and every game they've played, across all of their teams and seasons, plus upcoming games for their current teams. The KHL issues a new player id each time a player registers, and one id can carry on across several teams, so a person has many KHL ids; `playerId` is KHL+'s own id for the person, from search results and rosters.",
 	exampleRequest: {playerId: "1f4d54d9-8b87-4b49-8880-04cd9497ef92"},
 	requestSchema: GetPlayerRequestSchema,
-	responseSchema: PlayerResponseSchema,
-} satisfies ApiEndpoint<GetPlayerRequest, PlayerResponse>
+	responseSchema: GetPlayerResponseSchema,
+} satisfies ApiEndpoint<GetPlayerRequest, GetPlayerResponse>
 
 /** What a player's or team's activity request asks for */
 export interface ActivityOptions {
@@ -572,8 +587,8 @@ export const GET_PLAYER_ACTIVITY_ENDPOINT = {
 		kinds: ["goal", "assist"],
 	},
 	requestSchema: GetPlayerActivityRequestSchema,
-	responseSchema: ActivityResponseSchema,
-} satisfies ApiEndpoint<GetPlayerActivityRequest, ActivityResponse>
+	responseSchema: GetPlayerActivityResponseSchema,
+} satisfies ApiEndpoint<GetPlayerActivityRequest, GetPlayerActivityResponse>
 
 /**
  * The cached KHL resources behind a player's page. Each is keyed by what it
@@ -763,7 +778,7 @@ export const IntegrityUnlinkedSchema = z.object({
 }) satisfies z.ZodType<IntegrityUnlinked>
 
 /** How our stored profile compares with the KHL's pages for it */
-export interface PlayerIntegrityResponse {
+export interface IntegrityReport {
 	playerId: string
 	name: string
 	/** When the profile was first recorded */
@@ -780,7 +795,7 @@ export interface PlayerIntegrityResponse {
 	searchError: string | null
 }
 
-export const PlayerIntegrityResponseSchema = z.object({
+export const IntegrityReportSchema = z.object({
 	playerId: z.uuid(),
 	name: z.string(),
 	createdAt: z.iso.datetime(),
@@ -790,19 +805,31 @@ export const PlayerIntegrityResponseSchema = z.object({
 	unlinked: z.array(IntegrityUnlinkedSchema),
 	searchUrl: z.url(),
 	searchError: z.string().nullable(),
-}) satisfies z.ZodType<PlayerIntegrityResponse>
+}) satisfies z.ZodType<IntegrityReport>
+
+export type GetPlayerIntegrityRequest = GetPlayerRequest
+
+export const GetPlayerIntegrityRequestSchema = GetPlayerRequestSchema.extend(
+	{},
+) satisfies z.ZodType<GetPlayerIntegrityRequest>
+
+export type GetPlayerIntegrityResponse = IntegrityReport
+
+export const GetPlayerIntegrityResponseSchema = IntegrityReportSchema.extend(
+	{},
+) satisfies z.ZodType<GetPlayerIntegrityResponse>
 
 /** Compares the stored profile with the KHL's pages; at /players/:id?integrity */
 export const GET_PLAYER_INTEGRITY_ENDPOINT = {
 	method: "GET",
 	uri: "/api/players/:playerId/integrity",
-	name: "Check a player's integrity",
+	name: "Get player integrity",
 	description:
 		"Compares what KHL+ has stored for a player with the KHL's search and player pages, and lists the cached pages behind it. Read-only.",
 	exampleRequest: GET_PLAYER_ENDPOINT.exampleRequest,
-	requestSchema: GetPlayerRequestSchema,
-	responseSchema: PlayerIntegrityResponseSchema,
-} satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
+	requestSchema: GetPlayerIntegrityRequestSchema,
+	responseSchema: GetPlayerIntegrityResponseSchema,
+} satisfies ApiEndpoint<GetPlayerIntegrityRequest, GetPlayerIntegrityResponse>
 
 export interface CheckCacheRequest {
 	/** An IntegrityCacheEntry key */
@@ -822,7 +849,7 @@ export const CheckCacheRequestSchema = z.object({
  */
 export type CacheCheckStatus = "match" | "differs" | "not-cached" | "failed"
 
-export interface CacheCheckResponse {
+export interface CheckCacheResponse {
 	key: string
 	status: CacheCheckStatus
 	checkedAt: string
@@ -834,7 +861,7 @@ export interface CacheCheckResponse {
 	error: string | null
 }
 
-export const CacheCheckResponseSchema = z.object({
+export const CheckCacheResponseSchema = z.object({
 	key: z.string(),
 	status: z.enum(["match", "differs", "not-cached", "failed"]),
 	checkedAt: z.iso.datetime(),
@@ -842,10 +869,10 @@ export const CacheCheckResponseSchema = z.object({
 	differenceCount: z.number().int().nonnegative(),
 	khl: JsonValueSchema.nullable(),
 	error: z.string().nullable(),
-}) satisfies z.ZodType<CacheCheckResponse>
+}) satisfies z.ZodType<CheckCacheResponse>
 
 /** What a cache entry holds, for inspecting it */
-export interface CacheEntryResponse {
+export interface GetCacheEntryResponse {
 	key: string
 	/** Null if it isn't cached (or is still loading) */
 	cachedAt: string | null
@@ -853,12 +880,18 @@ export interface CacheEntryResponse {
 	value: JsonValue | null
 }
 
-export const CacheEntryResponseSchema = z.object({
+export const GetCacheEntryResponseSchema = z.object({
 	key: z.string(),
 	cachedAt: z.iso.datetime().nullable(),
 	expiresAt: z.iso.datetime().nullable(),
 	value: JsonValueSchema.nullable(),
-}) satisfies z.ZodType<CacheEntryResponse>
+}) satisfies z.ZodType<GetCacheEntryResponse>
+
+export type GetCacheEntryRequest = CheckCacheRequest
+
+export const GetCacheEntryRequestSchema = CheckCacheRequestSchema.extend(
+	{},
+) satisfies z.ZodType<GetCacheEntryRequest>
 
 /** A cache entry's contents; only for the kinds an integrity report lists */
 export const GET_CACHE_ENTRY_ENDPOINT = {
@@ -868,9 +901,9 @@ export const GET_CACHE_ENTRY_ENDPOINT = {
 	description:
 		"What one cached KHL page holds, by the key an integrity report lists.",
 	exampleRequest: {key: "history:brandon smith"},
-	requestSchema: CheckCacheRequestSchema,
-	responseSchema: CacheEntryResponseSchema,
-} satisfies ApiEndpoint<CheckCacheRequest, CacheEntryResponse>
+	requestSchema: GetCacheEntryRequestSchema,
+	responseSchema: GetCacheEntryResponseSchema,
+} satisfies ApiEndpoint<GetCacheEntryRequest, GetCacheEntryResponse>
 
 /**
  * Loads a cached page from the KHL again and compares it with the cached
@@ -884,8 +917,20 @@ export const CHECK_CACHE_ENDPOINT = {
 		"Loads a cached KHL page again and compares it with the cached copy, which it leaves in place.",
 	exampleRequest: {key: "history:brandon smith"},
 	requestSchema: CheckCacheRequestSchema,
-	responseSchema: CacheCheckResponseSchema,
-} satisfies ApiEndpoint<CheckCacheRequest, CacheCheckResponse>
+	responseSchema: CheckCacheResponseSchema,
+} satisfies ApiEndpoint<CheckCacheRequest, CheckCacheResponse>
+
+export type ReloadPlayerIntegrityRequest = GetPlayerRequest
+
+export const ReloadPlayerIntegrityRequestSchema = GetPlayerRequestSchema.extend(
+	{},
+) satisfies z.ZodType<ReloadPlayerIntegrityRequest>
+
+export type ReloadPlayerIntegrityResponse = IntegrityReport
+
+export const ReloadPlayerIntegrityResponseSchema = IntegrityReportSchema.extend(
+	{},
+) satisfies z.ZodType<ReloadPlayerIntegrityResponse>
 
 /**
  * Drops the cached KHL search and player pages behind the report, then
@@ -894,13 +939,28 @@ export const CHECK_CACHE_ENDPOINT = {
 export const RELOAD_PLAYER_INTEGRITY_ENDPOINT = {
 	method: "POST",
 	uri: "/api/players/:playerId/integrity/reload",
-	name: "Reload a player's integrity check",
+	name: "Reload player integrity",
 	description:
 		"Drops the cached KHL pages behind a player's integrity report, then reports again.",
 	exampleRequest: GET_PLAYER_ENDPOINT.exampleRequest,
-	requestSchema: GetPlayerRequestSchema,
-	responseSchema: PlayerIntegrityResponseSchema,
-} satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
+	requestSchema: ReloadPlayerIntegrityRequestSchema,
+	responseSchema: ReloadPlayerIntegrityResponseSchema,
+} satisfies ApiEndpoint<
+	ReloadPlayerIntegrityRequest,
+	ReloadPlayerIntegrityResponse
+>
+
+export type ResyncPlayerRequest = GetPlayerRequest
+
+export const ResyncPlayerRequestSchema = GetPlayerRequestSchema.extend(
+	{},
+) satisfies z.ZodType<ResyncPlayerRequest>
+
+export type ResyncPlayerResponse = IntegrityReport
+
+export const ResyncPlayerResponseSchema = IntegrityReportSchema.extend(
+	{},
+) satisfies z.ZodType<ResyncPlayerResponse>
 
 /**
  * Applies the report's pending changes: records new KHL ids and seasons from
@@ -914,9 +974,9 @@ export const RESYNC_PLAYER_ENDPOINT = {
 	description:
 		"Stores a player's registrations as the KHL has them, then returns the integrity report.",
 	exampleRequest: GET_PLAYER_ENDPOINT.exampleRequest,
-	requestSchema: GetPlayerRequestSchema,
-	responseSchema: PlayerIntegrityResponseSchema,
-} satisfies ApiEndpoint<GetPlayerRequest, PlayerIntegrityResponse>
+	requestSchema: ResyncPlayerRequestSchema,
+	responseSchema: ResyncPlayerResponseSchema,
+} satisfies ApiEndpoint<ResyncPlayerRequest, ResyncPlayerResponse>
 
 export interface GetTeamRequest {
 	teamId: string
@@ -943,8 +1003,8 @@ export const GET_TEAM_ENDPOINT = {
 		"A team's season: its games with LiveBarn links, upcoming games, and roster with season stats.",
 	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: GetTeamRequestSchema,
-	responseSchema: TeamResponseSchema,
-} satisfies ApiEndpoint<GetTeamRequest, TeamResponse>
+	responseSchema: GetTeamResponseSchema,
+} satisfies ApiEndpoint<GetTeamRequest, GetTeamResponse>
 
 export interface GetTeamActivityRequest
 	extends GetTeamRequest, ActivityOptions {}
@@ -961,8 +1021,8 @@ export const GET_TEAM_ACTIVITY_ENDPOINT = {
 		"A team's latest goals and penalties in a season, newest first. Games whose scoresheets haven't been loaded yet are left out and counted in `pendingGames`; ask again shortly to get them.",
 	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: GetTeamActivityRequestSchema,
-	responseSchema: ActivityResponseSchema,
-} satisfies ApiEndpoint<GetTeamActivityRequest, ActivityResponse>
+	responseSchema: GetTeamActivityResponseSchema,
+} satisfies ApiEndpoint<GetTeamActivityRequest, GetTeamActivityResponse>
 
 /** An earlier game between the same two teams. */
 export interface HeadToHeadGame {
@@ -990,7 +1050,7 @@ export const HeadToHeadGameSchema = z.object({
 	livebarn: z.array(LiveBarnLinkSchema),
 }) satisfies z.ZodType<HeadToHeadGame>
 
-export interface GameResponse {
+export interface GetGameResponse {
 	boxScore: KHLBoxScore
 	/** From the league's preview page; null if it failed */
 	previewStats: KHLGamePreviewStats | null
@@ -1014,7 +1074,7 @@ export interface GameResponse {
 	currentSeason: KHLSeason
 }
 
-export const GameResponseSchema = z.object({
+export const GetGameResponseSchema = z.object({
 	boxScore: KHLBoxScoreSchema,
 	previewStats: KHLGamePreviewStatsSchema.nullable(),
 	score: z.object({away: z.number(), home: z.number()}).nullable(),
@@ -1032,7 +1092,7 @@ export const GameResponseSchema = z.object({
 		home: z.lazy(() => SeasonSummarySchema).nullable(),
 	}),
 	currentSeason: KHLSeasonSchema,
-}) satisfies z.ZodType<GameResponse>
+}) satisfies z.ZodType<GetGameResponse>
 
 export interface GetGameRequest {
 	gameId: string
@@ -1050,8 +1110,8 @@ export const GET_GAME_ENDPOINT = {
 		"A game's box score (goals and shots by period, scoring, and penalties), with lineups, rosters, each team's form going in, earlier meetings between the teams, and LiveBarn links.",
 	exampleRequest: {gameId: "57050"},
 	requestSchema: GetGameRequestSchema,
-	responseSchema: GameResponseSchema,
-} satisfies ApiEndpoint<GetGameRequest, GameResponse>
+	responseSchema: GetGameResponseSchema,
+} satisfies ApiEndpoint<GetGameRequest, GetGameResponse>
 
 export interface TeamsDivision {
 	name: string
@@ -1064,7 +1124,7 @@ export const TeamsDivisionSchema = z.object({
 	teams: z.array(KHLTeamSchema),
 }) satisfies z.ZodType<TeamsDivision>
 
-export interface TeamsResponse {
+export interface ListTeamsResponse {
 	/** The season being listed */
 	season: KHLSeason
 	/** Every league season, newest first */
@@ -1073,11 +1133,11 @@ export interface TeamsResponse {
 	divisions: TeamsDivision[]
 }
 
-export const TeamsResponseSchema = z.object({
+export const ListTeamsResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	seasons: z.array(KHLSeasonSchema),
 	divisions: z.array(TeamsDivisionSchema),
-}) satisfies z.ZodType<TeamsResponse>
+}) satisfies z.ZodType<ListTeamsResponse>
 
 export interface ListTeamsRequest {
 	season?: string
@@ -1094,17 +1154,17 @@ export const LIST_TEAMS_ENDPOINT = {
 	description: "Every team in a season, grouped by division.",
 	exampleRequest: {},
 	requestSchema: ListTeamsRequestSchema,
-	responseSchema: TeamsResponseSchema,
-} satisfies ApiEndpoint<ListTeamsRequest, TeamsResponse>
+	responseSchema: ListTeamsResponseSchema,
+} satisfies ApiEndpoint<ListTeamsRequest, ListTeamsResponse>
 
-export interface TeamSeasonsResponse {
+export interface ListTeamSeasonsResponse {
 	/** Every season the team played, newest first */
 	seasons: KHLSeason[]
 }
 
-export const TeamSeasonsResponseSchema = z.object({
+export const ListTeamSeasonsResponseSchema = z.object({
 	seasons: z.array(KHLSeasonSchema),
-}) satisfies z.ZodType<TeamSeasonsResponse>
+}) satisfies z.ZodType<ListTeamSeasonsResponse>
 
 export interface ListTeamSeasonsRequest {
 	teamId: string
@@ -1128,10 +1188,10 @@ export const LIST_TEAM_SEASONS_ENDPOINT = {
 	description: "Every season a team has played, newest first.",
 	exampleRequest: {teamId: "20868", season: "2143"},
 	requestSchema: ListTeamSeasonsRequestSchema,
-	responseSchema: TeamSeasonsResponseSchema,
-} satisfies ApiEndpoint<ListTeamSeasonsRequest, TeamSeasonsResponse>
+	responseSchema: ListTeamSeasonsResponseSchema,
+} satisfies ApiEndpoint<ListTeamSeasonsRequest, ListTeamSeasonsResponse>
 
-export interface StandingsResponse {
+export interface GetStandingsResponse {
 	/** The season being shown */
 	season: KHLSeason
 	/** Every league season, newest first */
@@ -1140,11 +1200,11 @@ export interface StandingsResponse {
 	divisions: KHLStandingsDivision[]
 }
 
-export const StandingsResponseSchema = z.object({
+export const GetStandingsResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	seasons: z.array(KHLSeasonSchema),
 	divisions: z.array(KHLStandingsDivisionSchema),
-}) satisfies z.ZodType<StandingsResponse>
+}) satisfies z.ZodType<GetStandingsResponse>
 
 export interface GetStandingsRequest {
 	season?: string
@@ -1161,8 +1221,8 @@ export const GET_STANDINGS_ENDPOINT = {
 	description: "Every division's standings for a season.",
 	exampleRequest: {},
 	requestSchema: GetStandingsRequestSchema,
-	responseSchema: StandingsResponseSchema,
-} satisfies ApiEndpoint<GetStandingsRequest, StandingsResponse>
+	responseSchema: GetStandingsResponseSchema,
+} satisfies ApiEndpoint<GetStandingsRequest, GetStandingsResponse>
 
 export interface PlayersTeam {
 	team: KHLTeam
@@ -1183,7 +1243,7 @@ export const LeaguePlayerSchema = RosterPlayerSchema.extend({
 	teamId: z.string(),
 }) satisfies z.ZodType<LeaguePlayer>
 
-export interface PlayersResponse {
+export interface ListPlayersResponse {
 	/** The season being shown */
 	season: KHLSeason
 	/** Every league season, newest first */
@@ -1207,7 +1267,7 @@ export interface PlayersResponse {
 	isSyncing: boolean
 }
 
-export const PlayersResponseSchema = z.object({
+export const ListPlayersResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	seasons: z.array(KHLSeasonSchema),
 	teams: z.array(PlayersTeamSchema),
@@ -1216,7 +1276,7 @@ export const PlayersResponseSchema = z.object({
 	unavailableTeams: z.array(KHLTeamSchema),
 	unsyncedTeams: z.array(KHLTeamSchema),
 	isSyncing: z.boolean(),
-}) satisfies z.ZodType<PlayersResponse>
+}) satisfies z.ZodType<ListPlayersResponse>
 
 export interface ListPlayersRequest {
 	season?: string
@@ -1234,8 +1294,8 @@ export const LIST_PLAYERS_ENDPOINT = {
 		"Every player in a season with their stats, from each team's roster. One row per team registration, so a player on two teams is listed twice. Large: about 700 KB of JSON for a full season.",
 	exampleRequest: {},
 	requestSchema: ListPlayersRequestSchema,
-	responseSchema: PlayersResponseSchema,
-} satisfies ApiEndpoint<ListPlayersRequest, PlayersResponse>
+	responseSchema: ListPlayersResponseSchema,
+} satisfies ApiEndpoint<ListPlayersRequest, ListPlayersResponse>
 
 /** One of a team's finished games, from its side */
 export interface RecentGame {
@@ -1328,7 +1388,7 @@ export const MatchupTeamSchema = SeasonSummarySchema.extend({
 	roster: TeamRosterSchema,
 }) satisfies z.ZodType<MatchupTeam>
 
-export interface MatchupResponse {
+export interface GetMatchupResponse {
 	currentSeason: KHLSeason
 	a: MatchupTeam
 	b: MatchupTeam
@@ -1343,14 +1403,14 @@ export interface MatchupResponse {
 	previewStats: KHLGamePreviewStats | null
 }
 
-export const MatchupResponseSchema = z.object({
+export const GetMatchupResponseSchema = z.object({
 	currentSeason: KHLSeasonSchema,
 	a: MatchupTeamSchema,
 	b: MatchupTeamSchema,
 	headToHead: z.array(HeadToHeadGameSchema),
 	upcoming: z.array(UpcomingGameSchema),
 	previewStats: KHLGamePreviewStatsSchema.nullable(),
-}) satisfies z.ZodType<MatchupResponse>
+}) satisfies z.ZodType<GetMatchupResponse>
 
 export interface GetMatchupRequest {
 	a: string
@@ -1372,22 +1432,22 @@ export const GetMatchupRequestSchema = z.object({
 export const GET_MATCHUP_ENDPOINT = {
 	method: "GET",
 	uri: "/api/matchup",
-	name: "Compare two teams",
+	name: "Get matchup",
 	description:
 		"Two teams' seasons side by side, like the league's game previews: records, recent form, rosters, special teams, and the games between them. Pass the same team twice with different seasons to compare a team with itself.",
 	exampleRequest: {a: "303", b: "684"},
 	requestSchema: GetMatchupRequestSchema,
-	responseSchema: MatchupResponseSchema,
-} satisfies ApiEndpoint<GetMatchupRequest, MatchupResponse>
+	responseSchema: GetMatchupResponseSchema,
+} satisfies ApiEndpoint<GetMatchupRequest, GetMatchupResponse>
 
-export interface HeadToHeadResponse {
+export interface GetHeadToHeadResponse {
 	/** Finished games between the two teams, newest first */
 	headToHead: HeadToHeadGame[]
 }
 
-export const HeadToHeadResponseSchema = z.object({
+export const GetHeadToHeadResponseSchema = z.object({
 	headToHead: z.array(HeadToHeadGameSchema),
-}) satisfies z.ZodType<HeadToHeadResponse>
+}) satisfies z.ZodType<GetHeadToHeadResponse>
 
 export interface GetHeadToHeadRequest {
 	a: string
@@ -1402,23 +1462,23 @@ export const GetHeadToHeadRequestSchema = z.object({
 export const GET_HEAD_TO_HEAD_ENDPOINT = {
 	method: "GET",
 	uri: "/api/head-to-head",
-	name: "Head-to-head",
+	name: "Get head-to-head",
 	description:
 		"Finished games between two current-season teams in recent seasons, newest first. The lighter half of the matchup endpoint, for game cards.",
 	exampleRequest: {a: "303", b: "684"},
 	requestSchema: GetHeadToHeadRequestSchema,
-	responseSchema: HeadToHeadResponseSchema,
-} satisfies ApiEndpoint<GetHeadToHeadRequest, HeadToHeadResponse>
+	responseSchema: GetHeadToHeadResponseSchema,
+} satisfies ApiEndpoint<GetHeadToHeadRequest, GetHeadToHeadResponse>
 
-export interface RinksResponse {
+export interface ListRinksResponse {
 	season: KHLSeason
 	rinks: Rink[]
 }
 
-export const RinksResponseSchema = z.object({
+export const ListRinksResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	rinks: z.array(RinkSchema),
-}) satisfies z.ZodType<RinksResponse>
+}) satisfies z.ZodType<ListRinksResponse>
 
 export type ListRinksRequest = Record<string, never>
 
@@ -1434,19 +1494,19 @@ export const LIST_RINKS_ENDPOINT = {
 		"Every KHL rink with its LiveBarn surfaces and today's and upcoming games.",
 	exampleRequest: {},
 	requestSchema: ListRinksRequestSchema,
-	responseSchema: RinksResponseSchema,
-} satisfies ApiEndpoint<ListRinksRequest, RinksResponse>
+	responseSchema: ListRinksResponseSchema,
+} satisfies ApiEndpoint<ListRinksRequest, ListRinksResponse>
 
-export interface GamesResponse {
+export interface ListGamesResponse {
 	season: KHLSeason
 	/** The days' games, earliest first */
 	games: UpcomingGame[]
 }
 
-export const GamesResponseSchema = z.object({
+export const ListGamesResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	games: z.array(UpcomingGameSchema),
-}) satisfies z.ZodType<GamesResponse>
+}) satisfies z.ZodType<ListGamesResponse>
 
 export interface ListGamesRequest {
 	from: string
@@ -1494,8 +1554,8 @@ export const LIST_GAMES_ENDPOINT = {
 		"Every game on the league-local days `from` through `to`, earliest first, with final scores once posted. Leave out `to` for a single day.",
 	exampleRequest: {from: "2026-10-05", to: "2026-10-11"},
 	requestSchema: ListGamesRequestSchema,
-	responseSchema: GamesResponseSchema,
-} satisfies ApiEndpoint<ListGamesRequest, GamesResponse>
+	responseSchema: ListGamesResponseSchema,
+} satisfies ApiEndpoint<ListGamesRequest, ListGamesResponse>
 
 /** A finished game at a rink, with its replay */
 export interface RecentRinkGame {
@@ -1508,7 +1568,7 @@ export const RecentRinkGameSchema = z.object({
 	livebarn: z.array(LiveBarnLinkSchema),
 }) satisfies z.ZodType<RecentRinkGame>
 
-export interface RinkResponse {
+export interface GetRinkResponse {
 	season: KHLSeason
 	rink: Rink
 	/** From the KHL arena page */
@@ -1517,12 +1577,12 @@ export interface RinkResponse {
 	recent: RecentRinkGame[]
 }
 
-export const RinkResponseSchema = z.object({
+export const GetRinkResponseSchema = z.object({
 	season: KHLSeasonSchema,
 	rink: RinkSchema,
 	address: z.string().nullable(),
 	recent: z.array(RecentRinkGameSchema),
-}) satisfies z.ZodType<RinkResponse>
+}) satisfies z.ZodType<GetRinkResponse>
 
 export interface GetRinkRequest {
 	arenaId: string
@@ -1540,8 +1600,8 @@ export const GET_RINK_ENDPOINT = {
 		"A rink's address, LiveBarn surfaces, upcoming games, and latest finished games with replay links.",
 	exampleRequest: {arenaId: "13"},
 	requestSchema: GetRinkRequestSchema,
-	responseSchema: RinkResponseSchema,
-} satisfies ApiEndpoint<GetRinkRequest, RinkResponse>
+	responseSchema: GetRinkResponseSchema,
+} satisfies ApiEndpoint<GetRinkRequest, GetRinkResponse>
 
 /** How a component is doing, worst last */
 export type StatusLevel = "operational" | "degraded" | "outage"
@@ -1755,7 +1815,7 @@ export const SyncStatusSchema = z.object({
 	failures: z.array(SyncFailureSchema),
 }) satisfies z.ZodType<SyncStatus>
 
-export interface StatusResponse {
+export interface GetStatusResponse {
 	/** When each bucket of the history starts, oldest first (ISO 8601 UTC) */
 	historyBuckets: string[]
 	/** How long each bucket covers */
@@ -1768,7 +1828,7 @@ export interface StatusResponse {
 	deploy: DeployInfo
 }
 
-export const StatusResponseSchema = z.object({
+export const GetStatusResponseSchema = z.object({
 	historyBuckets: z.array(z.string()),
 	bucketMinutes: z.number(),
 	intervalMinutes: z.number(),
@@ -1776,7 +1836,7 @@ export const StatusResponseSchema = z.object({
 	jobs: z.array(JobStatusSchema),
 	sync: SyncStatusSchema,
 	deploy: DeployInfoSchema,
-}) satisfies z.ZodType<StatusResponse>
+}) satisfies z.ZodType<GetStatusResponse>
 
 export type GetStatusRequest = Record<string, never>
 
@@ -1792,12 +1852,12 @@ export const GET_STATUS_ENDPOINT = {
 		"The site's health: each component's latest check and daily history, how far the sync with the KHL has got, and which build is running.",
 	exampleRequest: {},
 	requestSchema: GetStatusRequestSchema,
-	responseSchema: StatusResponseSchema,
-} satisfies ApiEndpoint<GetStatusRequest, StatusResponse>
+	responseSchema: GetStatusResponseSchema,
+} satisfies ApiEndpoint<GetStatusRequest, GetStatusResponse>
 
 export type ClientLogLevel = "debug" | "info" | "warn" | "error"
 
-/** One log message from the browser, as sent to LOG_ENDPOINT. */
+/** One log message from the browser, as sent to SEND_LOGS_ENDPOINT. */
 export interface ClientLog {
 	/** ISO 8601, from the browser's clock */
 	timestamp: string
@@ -1821,30 +1881,30 @@ export const ClientLogSchema = z.object({
 	url: z.string().max(2_000),
 }) satisfies z.ZodType<ClientLog>
 
-export interface LogRequest {
+export interface SendLogsRequest {
 	sessionId: string
 	userAgent: string
 	logs: ClientLog[]
 }
 
-export const LogRequestSchema = z.object({
+export const SendLogsRequestSchema = z.object({
 	sessionId: z
 		.string()
 		.max(100)
 		.describe("Random per page load, to group one visit's logs"),
 	userAgent: z.string().max(500).describe("The browser's user agent"),
 	logs: z.array(ClientLogSchema).min(1).max(100).describe("1 to 100 logs"),
-}) satisfies z.ZodType<LogRequest>
+}) satisfies z.ZodType<SendLogsRequest>
 
-export interface LogResponse {
+export interface SendLogsResponse {
 	ok: true
 }
 
-export const LogResponseSchema = z.object({
+export const SendLogsResponseSchema = z.object({
 	ok: z.literal(true),
-}) satisfies z.ZodType<LogResponse>
+}) satisfies z.ZodType<SendLogsResponse>
 
-export const LOG_ENDPOINT = {
+export const SEND_LOGS_ENDPOINT = {
 	method: "POST",
 	uri: "/api/logs",
 	name: "Send logs",
@@ -1865,9 +1925,9 @@ export const LOG_ENDPOINT = {
 			},
 		],
 	},
-	requestSchema: LogRequestSchema,
-	responseSchema: LogResponseSchema,
-} satisfies ApiEndpoint<LogRequest, LogResponse>
+	requestSchema: SendLogsRequestSchema,
+	responseSchema: SendLogsResponseSchema,
+} satisfies ApiEndpoint<SendLogsRequest, SendLogsResponse>
 
 export type BenchmarkSite = "khl-plus" | "khl"
 
@@ -1943,15 +2003,15 @@ export const RunBenchmarkRequestSchema = z.object({
 		.describe("Player names to search for, each on both sites"),
 }) satisfies z.ZodType<RunBenchmarkRequest>
 
-export interface BenchmarkResponse {
+export interface RunBenchmarkResponse {
 	runs: BenchmarkRun[]
 	summaries: BenchmarkSummary[]
 }
 
-export const BenchmarkResponseSchema = z.object({
+export const RunBenchmarkResponseSchema = z.object({
 	runs: z.array(BenchmarkRunSchema),
 	summaries: z.array(BenchmarkSummarySchema),
-}) satisfies z.ZodType<BenchmarkResponse>
+}) satisfies z.ZodType<RunBenchmarkResponse>
 
 export const RUN_BENCHMARK_ENDPOINT = {
 	method: "POST",
@@ -1961,8 +2021,8 @@ export const RUN_BENCHMARK_ENDPOINT = {
 		"Dev only: times KHL+ against the league's site in headless Chrome (see tools/Benchmark.ts). Takes several seconds per name.",
 	exampleRequest: {names: DEFAULT_BENCHMARK_NAMES.slice(0, 1)},
 	requestSchema: RunBenchmarkRequestSchema,
-	responseSchema: BenchmarkResponseSchema,
-} satisfies ApiEndpoint<RunBenchmarkRequest, BenchmarkResponse>
+	responseSchema: RunBenchmarkResponseSchema,
+} satisfies ApiEndpoint<RunBenchmarkRequest, RunBenchmarkResponse>
 
 export interface DevSettings {
 	offline: boolean
@@ -1976,14 +2036,20 @@ export const DevSettingsSchema = z.object({
 		),
 }) satisfies z.ZodType<DevSettings>
 
-export interface DevSettingsResponse extends DevSettings {
+export interface DevSettingsState extends DevSettings {
 	/** Whether the background sync loop runs (KHL_SYNC; always in production) */
 	syncLoop: boolean
 }
 
-export const DevSettingsResponseSchema = DevSettingsSchema.extend({
+export const DevSettingsStateSchema = DevSettingsSchema.extend({
 	syncLoop: z.boolean(),
-}) satisfies z.ZodType<DevSettingsResponse>
+}) satisfies z.ZodType<DevSettingsState>
+
+export type GetDevSettingsResponse = DevSettingsState
+
+export const GetDevSettingsResponseSchema = DevSettingsStateSchema.extend(
+	{},
+) satisfies z.ZodType<GetDevSettingsResponse>
 
 export type GetDevSettingsRequest = Record<string, never>
 
@@ -1999,8 +2065,20 @@ export const GET_DEV_SETTINGS_ENDPOINT = {
 		"Dev only: whether the server is in offline mode, and whether the background sync loop runs.",
 	exampleRequest: {},
 	requestSchema: GetDevSettingsRequestSchema,
-	responseSchema: DevSettingsResponseSchema,
-} satisfies ApiEndpoint<GetDevSettingsRequest, DevSettingsResponse>
+	responseSchema: GetDevSettingsResponseSchema,
+} satisfies ApiEndpoint<GetDevSettingsRequest, GetDevSettingsResponse>
+
+export type UpdateDevSettingsRequest = DevSettings
+
+export const UpdateDevSettingsRequestSchema = DevSettingsSchema.extend(
+	{},
+) satisfies z.ZodType<UpdateDevSettingsRequest>
+
+export type UpdateDevSettingsResponse = DevSettingsState
+
+export const UpdateDevSettingsResponseSchema = DevSettingsStateSchema.extend(
+	{},
+) satisfies z.ZodType<UpdateDevSettingsResponse>
 
 export const UPDATE_DEV_SETTINGS_ENDPOINT = {
 	method: "PUT",
@@ -2009,9 +2087,9 @@ export const UPDATE_DEV_SETTINGS_ENDPOINT = {
 	description:
 		"Dev only: turns offline mode on or off. Kept in data/dev-settings.json, so it survives restarts.",
 	exampleRequest: {offline: true},
-	requestSchema: DevSettingsSchema,
-	responseSchema: DevSettingsResponseSchema,
-} satisfies ApiEndpoint<DevSettings, DevSettingsResponse>
+	requestSchema: UpdateDevSettingsRequestSchema,
+	responseSchema: UpdateDevSettingsResponseSchema,
+} satisfies ApiEndpoint<UpdateDevSettingsRequest, UpdateDevSettingsResponse>
 
 export interface PullProdDataRequest {
 	sources: boolean

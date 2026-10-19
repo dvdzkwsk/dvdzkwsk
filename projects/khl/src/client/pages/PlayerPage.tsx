@@ -4,12 +4,12 @@ import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	ActivityOptions,
-	ActivityResponse,
+	ActivityResult,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
 	toRegistrationKey,
 	PlayerRegistration,
-	PlayerResponse,
+	GetPlayerResponse,
 } from "../../shared/ApiJson.js"
 import {LIMITS} from "../../shared/KHLConfig.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
@@ -102,7 +102,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 		})
 	}, [playerId])
 	useActivityRefresh(activity)
-	const feed: AsyncState<ActivityResponse> = matchField(activity, "status", {
+	const feed: AsyncState<ActivityResult> = matchField(activity, "status", {
 		loading: (s) => s,
 		error: (s) => s,
 		success: (s) => ({...s, data: toActivityFeed(s.data)}),
@@ -290,7 +290,10 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 }
 
 // KHL keeps rosters of folded teams in an "Inactive Teams" division
-function isCurrentRegistration(player: PlayerResponse, r: PlayerRegistration) {
+function isCurrentRegistration(
+	player: GetPlayerResponse,
+	r: PlayerRegistration,
+) {
 	return (
 		r.seasonIds.includes(player.currentSeason.id) &&
 		!r.profile?.teamLine?.endsWith("Inactive Teams")
@@ -375,7 +378,7 @@ const PlayerTeamPicker = ({
 	selected,
 	onSelectTeam,
 }: {
-	player: PlayerResponse
+	player: GetPlayerResponse
 	selected: PlayerRegistration | null
 	onSelectTeam: (registrationKey: string | null) => void
 }) => {
@@ -408,7 +411,7 @@ const PlayerHeader = ({
 	skipped,
 	recentPenalties,
 }: {
-	player: PlayerResponse
+	player: GetPlayerResponse
 	skipped: SkippedGames
 	recentPenalties: RecentPenalties | null
 }) => {
@@ -503,7 +506,7 @@ const PlayerAchievements = ({
 	player,
 	recentPenalties,
 }: {
-	player: PlayerResponse
+	player: GetPlayerResponse
 	recentPenalties: RecentPenalties | null
 }) => {
 	const achievements = getAchievements({
@@ -587,7 +590,7 @@ const PlayerStats = ({
 	player,
 	selected,
 }: {
-	player: PlayerResponse
+	player: GetPlayerResponse
 	selected: PlayerRegistration | null
 }) => {
 	const registrations = selected ? [selected] : player.registrations

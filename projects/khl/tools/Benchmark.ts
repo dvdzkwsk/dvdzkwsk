@@ -5,7 +5,7 @@ import {matchFn} from "@dvdzkwsk/util/MatchUtil"
 import puppeteer, {type Browser, type Page} from "puppeteer-core"
 import {
 	BENCHMARK_SITE_LABELS,
-	BenchmarkResponse,
+	RunBenchmarkResponse,
 	BenchmarkRun,
 	BenchmarkSite,
 	BenchmarkSummary,
@@ -40,7 +40,7 @@ const STEP_TIMEOUT_MS = 60_000
 /** Runs each name on both sites, one at a time so they don't compete. */
 export async function runBenchmark(
 	names: string[],
-): Promise<BenchmarkResponse> {
+): Promise<RunBenchmarkResponse> {
 	const browser = await puppeteer.launch({
 		executablePath: CHROME_PATH,
 		headless: true,

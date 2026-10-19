@@ -413,9 +413,11 @@ const Overview = ({
 						<dt>Fair use</dt>
 						<dd>
 							Data comes from{" "}
-							<Link href={URLS.KHL}>the league's site ↗</Link> and
-							is cached for a few minutes. Please cache on your
-							end too, and avoid bursts of requests.
+							<Link href={URLS.KHL}>the league's site ↗</Link>,
+							which {STRINGS.PRODUCT_NAME} keeps a synced copy of,
+							so new results can take a few minutes to show up.
+							Please cache on your end too, and avoid bursts of
+							requests.
 						</dd>
 					</div>
 					<div>

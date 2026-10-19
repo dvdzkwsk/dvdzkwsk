@@ -3,7 +3,7 @@ import {matchFn, matchField} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
 	GET_STANDINGS_ENDPOINT,
-	StandingsResponse,
+	GetStandingsResponse,
 } from "../../shared/ApiJson.js"
 import {KHLStandingsDivision, KHLStandingsRow} from "../../shared/KHLJson.js"
 import {
@@ -60,7 +60,7 @@ const TeamsPage = ({query}: RouteProps) => {
 	)
 	// The latest standings that loaded, for the filters' seasons and divisions
 	const [toolbarData, setToolbarData] =
-		React.useState<StandingsResponse | null>(null)
+		React.useState<GetStandingsResponse | null>(null)
 	React.useEffect(() => {
 		matchField(state, "status", {
 			loading: () => {},

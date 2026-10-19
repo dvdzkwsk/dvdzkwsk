@@ -56,16 +56,16 @@ import {
 	ActivityEvent,
 	ActivityGame,
 	ActivityKind,
-	ActivityResponse,
-	CacheCheckResponse,
+	ActivityResult,
+	CheckCacheResponse,
 	CHECK_CACHE_ENDPOINT,
 	DEFAULT_ACTIVITY_KINDS,
 	DevSettings,
-	DevSettingsResponse,
+	DevSettingsState,
 	DevSettingsSchema,
 	FeedGame,
-	GameResponse,
-	GamesResponse,
+	GetGameResponse,
+	ListGamesResponse,
 	GET_CACHE_ENTRY_ENDPOINT,
 	GET_DEV_SETTINGS_ENDPOINT,
 	GET_GAME_ENDPOINT,
@@ -83,7 +83,7 @@ import {
 	RegistrationKey,
 	toRegistrationKey,
 	HeadToHeadGame,
-	HeadToHeadResponse,
+	GetHeadToHeadResponse,
 	IntegrityCacheEntry,
 	IntegrityRegistration,
 	IntegrityRegistrationCacheKeys,
@@ -96,13 +96,13 @@ import {
 	LIST_TEAM_SEASONS_ENDPOINT,
 	LIST_TEAMS_ENDPOINT,
 	LiveBarnLink,
-	LOG_ENDPOINT,
-	MatchupResponse,
+	SEND_LOGS_ENDPOINT,
+	GetMatchupResponse,
 	MatchupTeam,
-	PlayerIntegrityResponse,
-	PlayerResponse,
+	IntegrityReport,
+	GetPlayerResponse,
 	PlayerSearchGroup,
-	PlayersResponse,
+	ListPlayersResponse,
 	PULL_PROD_DATA_ENDPOINT,
 	PulledDatabase,
 	RecentGame,
@@ -112,18 +112,18 @@ import {
 	Rink,
 	RinkGame,
 	RinkInfo,
-	RinkResponse,
+	GetRinkResponse,
 	RinkTeam,
 	RosterPlayer,
 	RUN_BENCHMARK_ENDPOINT,
 	SEARCH_ENDPOINT,
 	SearchResponse,
 	SeasonSummary,
-	StandingsResponse,
-	TeamResponse,
+	GetStandingsResponse,
+	GetTeamResponse,
 	TeamRoster,
-	TeamSeasonsResponse,
-	TeamsResponse,
+	ListTeamSeasonsResponse,
+	ListTeamsResponse,
 	toRecentGame,
 	UnavailableSchedule,
 	UPDATE_DEV_SETTINGS_ENDPOINT,
@@ -245,7 +245,7 @@ registerEndpoint(app, GET_STATUS_ENDPOINT, async () => getStatus(db, jobs))
 
 if (process.env.NODE_ENV !== "production") {
 	setOfflineMode(readDevSettings().offline)
-	const toDevSettingsResponse = (): DevSettingsResponse => ({
+	const toDevSettingsResponse = (): DevSettingsState => ({
 		offline: isOfflineMode(),
 		syncLoop: SYNC_LOOP,
 	})
@@ -410,7 +410,7 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 		getPlayerSchedules(registrations, teamsPage),
 	])
 
-	const response: PlayerResponse = {
+	const response: GetPlayerResponse = {
 		playerId,
 		name: player.name,
 		currentSeason,
@@ -441,7 +441,7 @@ registerEndpoint(
 	app,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	async ({playerId, kinds, days, limit}) => {
-		return toActivityResponse(
+		return toActivityResult(
 			await getActivity(
 				{kind: "player", playerId},
 				{kinds, lookbackDays: days, maxEvents: limit},
@@ -556,7 +556,7 @@ registerEndpoint(app, GET_CACHE_ENTRY_ENDPOINT, async ({key}) => {
 registerEndpoint(
 	app,
 	CHECK_CACHE_ENDPOINT,
-	async ({key}): Promise<CacheCheckResponse> => {
+	async ({key}): Promise<CheckCacheResponse> => {
 		const checkedAt = new Date().toISOString()
 		const entry = getInspectableEntry(key)
 		const stored = await entry.read()
@@ -673,7 +673,7 @@ async function syncPlayerHistory(
 async function getPlayerIntegrity(
 	player: Player,
 	{apply = false}: {apply?: boolean} = {},
-): Promise<PlayerIntegrityResponse> {
+): Promise<IntegrityReport> {
 	const checkedAt = new Date().toISOString()
 	const historyKey = getHistoryCacheKey(player)
 	// By key: two KHL ids on the same team can share a schedule
@@ -1132,13 +1132,13 @@ async function getGameRecords(gameIds: string[]): Promise<{
 }
 
 /** Activity rows as the API returns them, with replay and player links */
-async function toActivityResponse({
+async function toActivityResult({
 	rows,
 	pendingGames,
 }: {
 	rows: ActivityRow[]
 	pendingGames: number
-}): Promise<ActivityResponse> {
+}): Promise<ActivityResult> {
 	const surfacesByArena = await getSurfacesByArena(
 		rows.map((r) => r.game.arenaId),
 	)
@@ -1223,7 +1223,7 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 		getTeamStats(team.id, team.seasonId),
 		isCurrentSeason ? getUpcomingGames(new Set([team.id])) : [],
 	])
-	const response: TeamResponse = {
+	const response: GetTeamResponse = {
 		team,
 		divisionName: getDivisionName(teamsPage, team.divisionId),
 		season: teamsPage.season,
@@ -1240,7 +1240,7 @@ registerEndpoint(
 	app,
 	GET_TEAM_ACTIVITY_ENDPOINT,
 	async ({teamId, season, kinds, days, limit}) => {
-		return toActivityResponse(
+		return toActivityResult(
 			await getActivity(
 				{kind: "team", teamId, season},
 				{kinds, lookbackDays: days, maxEvents: limit},
@@ -1290,7 +1290,7 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 			// Extras for the comparison; the game shows without them
 			getPreviewStats(gameId),
 		])
-	const response: GameResponse = {
+	const response: GetGameResponse = {
 		boxScore: {...boxScore, arena: toDisplayArena(boxScore.arena)},
 		previewStats,
 		score: await getFinalScore(boxScore),
@@ -1307,7 +1307,7 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 
 registerEndpoint(app, LIST_TEAMS_ENDPOINT, async ({season}) => {
 	const teamsPage = await getTeamsPage(season)
-	const response: TeamsResponse = {
+	const response: ListTeamsResponse = {
 		season: teamsPage.season,
 		seasons: teamsPage.seasons,
 		divisions: teamsPage.divisions
@@ -1330,7 +1330,7 @@ registerEndpoint(app, GET_STANDINGS_ENDPOINT, async ({season}) => {
 			return getKHLStandings(season)
 		},
 	)
-	const response: StandingsResponse = {
+	const response: GetStandingsResponse = {
 		season: page.season,
 		seasons: page.seasons,
 		divisions: page.divisions.filter((d) => d.rows.length > 0),
@@ -1393,7 +1393,7 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 			goalies: rows.filter((r) => r.isGoalie).map(toRosterRow),
 		})
 	}
-	const response: PlayersResponse = {
+	const response: ListPlayersResponse = {
 		season: teamsPage.season,
 		seasons: teamsPage.seasons,
 		teams: loaded.map((team) => ({
@@ -1415,7 +1415,7 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 
 registerEndpoint(app, LIST_TEAM_SEASONS_ENDPOINT, async ({teamId, season}) => {
 	const stats = await getTeamStats(teamId, season)
-	const response: TeamSeasonsResponse = {seasons: stats.seasons}
+	const response: ListTeamSeasonsResponse = {seasons: stats.seasons}
 	return response
 })
 
@@ -1483,7 +1483,7 @@ registerEndpoint(
 				getSeasonPreviewStats(scheduleA),
 				getSeasonPreviewStats(scheduleB),
 			])
-		const response: MatchupResponse = {
+		const response: GetMatchupResponse = {
 			currentSeason,
 			a: matchupA,
 			b: matchupB,
@@ -1513,7 +1513,7 @@ registerEndpoint(app, GET_HEAD_TO_HEAD_ENDPOINT, async ({a, b}) => {
 		getTeamStats(teamA.id, teamA.seasonId),
 		getTeamStats(teamB.id, teamB.seasonId),
 	])
-	const response: HeadToHeadResponse = {
+	const response: GetHeadToHeadResponse = {
 		headToHead: await getHeadToHead(statsA, statsB, currentSeason.id),
 	}
 	return response
@@ -1593,25 +1593,29 @@ function combinePreviewStats(
 	}
 }
 
-registerEndpoint(app, LOG_ENDPOINT, async ({sessionId, userAgent, logs}) => {
-	for (const log of logs) {
-		// Keep the client's own context, prefixed so it's clear where it came from
-		new Logger(`client.${log.context}`)[log.level](
-			log.subcontext,
-			log.message,
-			{
-				...log.aux,
-				client: {
-					sessionId,
-					url: log.url,
-					timestamp: log.timestamp,
-					userAgent,
+registerEndpoint(
+	app,
+	SEND_LOGS_ENDPOINT,
+	async ({sessionId, userAgent, logs}) => {
+		for (const log of logs) {
+			// Keep the client's own context, prefixed so it's clear where it came from
+			new Logger(`client.${log.context}`)[log.level](
+				log.subcontext,
+				log.message,
+				{
+					...log.aux,
+					client: {
+						sessionId,
+						url: log.url,
+						timestamp: log.timestamp,
+						userAgent,
+					},
 				},
-			},
-		)
-	}
-	return {ok: true}
-})
+			)
+		}
+		return {ok: true}
+	},
+)
 
 registerEndpoint(app, LIST_RINKS_ENDPOINT, async () => {
 	const teamsPage = await getTeamsPage()
@@ -1632,7 +1636,7 @@ registerEndpoint(app, LIST_GAMES_ENDPOINT, async ({from, to = from}) => {
 	const games = await Promise.all(
 		days.map((day) => getDayGames(day, teamsPage)),
 	)
-	const response: GamesResponse = {
+	const response: ListGamesResponse = {
 		season: teamsPage.season,
 		// Each day is already in order, and the days are too
 		games: games.flat(),
@@ -1758,7 +1762,7 @@ registerEndpoint(app, GET_RINK_ENDPOINT, async ({arenaId}) => {
 		),
 		getRecentRinkGames(arenaId, teamsPage),
 	])
-	const response: RinkResponse = {
+	const response: GetRinkResponse = {
 		season: teamsPage.season,
 		rink,
 		address: arena.address,

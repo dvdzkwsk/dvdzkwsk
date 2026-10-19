@@ -19,11 +19,7 @@ import {
 	getGameHref,
 	GOAL_TYPES,
 } from "./Util.js"
-import {
-	ActivityEvent,
-	ActivityGame,
-	ActivityResponse,
-} from "../shared/ApiJson.js"
+import {ActivityEvent, ActivityGame, ActivityResult} from "../shared/ApiJson.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {KHLGoal} from "../shared/KHLJson.js"
 
@@ -49,7 +45,7 @@ export const ActivityFeed = ({
 	now,
 	pendingNote = true,
 }: {
-	state: AsyncState<ActivityResponse>
+	state: AsyncState<ActivityResult>
 	subject: ActivitySubject
 	now: Date
 	pendingNote?: boolean
@@ -118,7 +114,7 @@ export const ActivityFeed = ({
  * The feed's share of a broader activity response: its latest
  * LIMITS.ACTIVITY_EVENTS events, leaving out games without one
  */
-export function toActivityFeed(activity: ActivityResponse): ActivityResponse {
+export function toActivityFeed(activity: ActivityResult): ActivityResult {
 	let remaining = LIMITS.ACTIVITY_EVENTS
 	const games = activity.games.flatMap((game) => {
 		const events = game.events.slice(0, remaining)
@@ -139,7 +135,7 @@ const MAX_PENDING_REFRESHES = 30
  * so they appear as they're loaded. Pass the full response's state, not the
  * feed's share of it.
  */
-export function useActivityRefresh(state: AsyncState<ActivityResponse>) {
+export function useActivityRefresh(state: AsyncState<ActivityResult>) {
 	const data = matchField(state, "status", {
 		loading: () => null,
 		error: () => null,

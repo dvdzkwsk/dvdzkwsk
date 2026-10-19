@@ -152,7 +152,7 @@ const HomePage = ({query}: RouteProps) => {
 													seasonId={season.id}
 													now={now}
 													limit={3}
-													rinks={rinks}
+													showHeadToHead
 												/>
 											</Section>
 										)}

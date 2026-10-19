@@ -2,6 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import {ConsoleTransport, Logger, setLoggerTransports} from "@dvdzkwsk/logger"
 import {ApiError, registerEndpoint} from "@dvdzkwsk/util/ApiServerUtil"
+import {sleep} from "@dvdzkwsk/util/AsyncUtil"
 import {toError} from "@dvdzkwsk/util/ErrorUtil"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
@@ -1324,16 +1325,16 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 	}
 	const teamsPage =
 		seasonId === current.season.id ? current : await getTeamsPage(seasonId)
+	const before = db.league.getSeasonRosters(seasonId)
+	const synced = await syncTeamStats(
+		teamsPage.teams.filter((team) => !before.has(team.id)),
+	)
 	const rosters = db.league.getSeasonRosters(seasonId)
-	if (rosters.size === 0) {
-		throw new ApiError(
-			503,
-			"this season's players are still loading; try again in a few minutes",
-		)
-	}
-	// Teams whose stats page isn't synced yet, or failed, are left out and
+	// Teams whose stats page failed, or is still syncing, are left out and
 	// listed
-	const loaded = teamsPage.teams.filter((team) => rosters.has(team.id))
+	const loaded = teamsPage.teams.filter(
+		(team) => rosters.has(team.id) || synced.get(team.id) === "synced",
+	)
 	// Registered players who haven't played (backups, most goalies) have no
 	// stats to compare, and would be a third of the list
 	const toRows = (team: KHLTeam, players: RosterPlayer[]) => {
@@ -1366,11 +1367,48 @@ registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
 		skaters: loaded.flatMap((team) => toRows(team, rosterOf(team).skaters)),
 		goalies: loaded.flatMap((team) => toRows(team, rosterOf(team).goalies)),
 		unavailableTeams: teamsPage.teams.filter(
-			(team) => !rosters.has(team.id),
+			(team) => synced.get(team.id) === "failed",
+		),
+		loadingTeams: teamsPage.teams.filter(
+			(team) => !rosters.has(team.id) && !synced.has(team.id),
 		),
 	}
 	return response
 })
+
+/** How long the players list waits for teams' stats pages to sync */
+const PLAYERS_SYNC_WAIT_MS = 3000
+
+/**
+ * Syncs the teams' stats pages that never were, waiting up to
+ * PLAYERS_SYNC_WAIT_MS. Returns how each one that finished went; the rest
+ * keep syncing, so the list fills in on a later load.
+ */
+async function syncTeamStats(
+	teams: KHLTeam[],
+): Promise<Map<string, "synced" | "failed">> {
+	const outcomes = new Map<string, "synced" | "failed">()
+	const syncs = teams.map(async (team) => {
+		const page: SyncPage = {
+			kind: "team-stats",
+			teamId: team.id,
+			seasonId: team.seasonId,
+		}
+		try {
+			// False for a page that's failing and waiting to be retried
+			const ok = await syncer.ensureSynced(page)
+			outcomes.set(team.id, ok ? "synced" : "failed")
+		} catch (error) {
+			logger.warn("syncTeamStats", "team stats unavailable", {
+				page,
+				error,
+			})
+			outcomes.set(team.id, "failed")
+		}
+	})
+	await Promise.race([Promise.all(syncs), sleep(PLAYERS_SYNC_WAIT_MS)])
+	return outcomes
+}
 
 registerEndpoint(app, LIST_TEAM_SEASONS_ENDPOINT, async ({teamId, season}) => {
 	const stats = await getTeamStats(teamId, season)

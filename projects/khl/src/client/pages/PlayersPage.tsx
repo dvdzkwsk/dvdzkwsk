@@ -297,6 +297,29 @@ const PlayerGroups = ({
 					onRetry={onRetry}
 				/>
 			)}
+			{data.loadingTeams.length > 0 && (
+				<Warnings
+					summary={`${
+						data.loadingTeams.length === 1
+							? "A team is"
+							: `${data.loadingTeams.length} teams are`
+					} still loading, so some players are missing`}
+					detail={`${
+						data.loadingTeams.length === 1
+							? "This team's stats are"
+							: "These teams' stats are"
+					} still being loaded from the league's site. Reload in a minute to see ${
+						data.loadingTeams.length === 1 ? "its" : "their"
+					} players.`}
+					items={data.loadingTeams.map((team) => ({
+						key: team.id,
+						label: (
+							<TeamLink team={team} seasonId={team.seasonId} />
+						),
+					}))}
+					onRetry={onRetry}
+				/>
+			)}
 			{groups.length === 0 && (
 				<div className="GameList-empty">
 					{name

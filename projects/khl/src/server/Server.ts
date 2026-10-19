@@ -61,6 +61,7 @@ import {
 	GamesResponse,
 	GET_CACHE_ENTRY_ENDPOINT,
 	GET_GAME_ENDPOINT,
+	GET_HEAD_TO_HEAD_ENDPOINT,
 	GET_MATCHUP_ENDPOINT,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
@@ -74,6 +75,7 @@ import {
 	RegistrationKey,
 	toRegistrationKey,
 	HeadToHeadGame,
+	HeadToHeadResponse,
 	IntegrityCacheEntry,
 	IntegrityRegistration,
 	IntegrityRegistrationCacheKeys,
@@ -1379,6 +1381,25 @@ registerEndpoint(
 		return response
 	},
 )
+
+registerEndpoint(app, GET_HEAD_TO_HEAD_ENDPOINT, async ({a, b}) => {
+	if (a === b) {
+		throw new ApiError(400, "pick two different teams")
+	}
+	const [{team: teamA}, {team: teamB}, currentSeason] = await Promise.all([
+		getListedTeam(a, undefined),
+		getListedTeam(b, undefined),
+		getCurrentSeason(),
+	])
+	const [statsA, statsB] = await Promise.all([
+		getTeamStats(teamA.id, teamA.seasonId),
+		getTeamStats(teamB.id, teamB.seasonId),
+	])
+	const response: HeadToHeadResponse = {
+		headToHead: await getHeadToHead(statsA, statsB, currentSeason.id),
+	}
+	return response
+})
 
 /** A game's preview stats; null if the KHL site fails, as they're extras. */
 async function getPreviewStats(

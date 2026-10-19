@@ -2115,6 +2115,17 @@ table {
 	cursor: help;
 }
 
+.RinkCard-note--series {
+	display: flex;
+	gap: calc(var(--spacing) * 1);
+}
+
+.RinkCard-note-team {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 .RinkCard-note--live {
 	flex: none;
 	color: var(--live);

@@ -15,7 +15,6 @@ import {
 import {
 	GameSummary,
 	GameTableCard,
-	getFollowingGame,
 	getRinkStatus,
 	toGameTableRow,
 	toReplayLinks,
@@ -105,10 +104,7 @@ const RinkPage = ({params}: RouteProps) => {
 											game={(status.live ?? status.next)!}
 											seasonId={season.id}
 											now={now}
-											following={getFollowingGame(
-												rink,
-												(status.live ?? status.next)!,
-											)}
+											showHeadToHead
 										/>
 									) : (
 										<p className="RinkRoute-empty">

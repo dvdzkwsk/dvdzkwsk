@@ -1365,6 +1365,36 @@ export const GET_MATCHUP_ENDPOINT = {
 	responseSchema: MatchupResponseSchema,
 } satisfies ApiEndpoint<GetMatchupRequest, MatchupResponse>
 
+export interface HeadToHeadResponse {
+	/** Finished games between the two teams, newest first */
+	headToHead: HeadToHeadGame[]
+}
+
+export const HeadToHeadResponseSchema = z.object({
+	headToHead: z.array(HeadToHeadGameSchema),
+}) satisfies z.ZodType<HeadToHeadResponse>
+
+export interface GetHeadToHeadRequest {
+	a: string
+	b: string
+}
+
+export const GetHeadToHeadRequestSchema = z.object({
+	a: z.string().min(1).describe("KHL team id, from the current season"),
+	b: z.string().min(1).describe("KHL team id, from the current season"),
+}) satisfies z.ZodType<GetHeadToHeadRequest>
+
+export const GET_HEAD_TO_HEAD_ENDPOINT = {
+	method: "GET",
+	uri: "/api/head-to-head",
+	name: "Head-to-head",
+	description:
+		"Finished games between two current-season teams in recent seasons, newest first. The lighter half of the matchup endpoint, for game cards.",
+	exampleRequest: {a: "303", b: "684"},
+	requestSchema: GetHeadToHeadRequestSchema,
+	responseSchema: HeadToHeadResponseSchema,
+} satisfies ApiEndpoint<GetHeadToHeadRequest, HeadToHeadResponse>
+
 export interface RinksResponse {
 	season: KHLSeason
 	rinks: Rink[]
@@ -1797,6 +1827,7 @@ export const API_DOCS_SECTIONS: ApiDocsSection[] = [
 			LIST_GAMES_ENDPOINT,
 			GET_GAME_ENDPOINT,
 			GET_MATCHUP_ENDPOINT,
+			GET_HEAD_TO_HEAD_ENDPOINT,
 		],
 	},
 	{

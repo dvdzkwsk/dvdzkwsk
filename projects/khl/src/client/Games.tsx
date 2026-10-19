@@ -1,6 +1,7 @@
 import {Combobox} from "@base-ui/react/combobox"
 import {Popover} from "@base-ui/react/popover"
 import {PreviewCard} from "@base-ui/react/preview-card"
+import {doRequest} from "@dvdzkwsk/util/ApiUtil"
 import {matchFn, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
@@ -34,10 +35,12 @@ import {
 	formatScore,
 	getEndOfWeekDayKey,
 	getGameHref,
+	useAsync,
 	useNow,
 } from "./Util.js"
 import {
 	FeedGame,
+	GET_HEAD_TO_HEAD_ENDPOINT,
 	HeadToHeadGame,
 	LiveBarnLink,
 	RecentGame,
@@ -85,8 +88,8 @@ interface GameCardsProps {
 	now: Date
 	limit?: number
 	emptyMessage?: string
-	/** Every rink's schedule, to show what's on next at each game's rink */
-	rinks?: Rink[]
+	/** Show each game's head-to-head series; fetched per card */
+	showHeadToHead?: boolean
 }
 
 /** Cards for games that haven't finished, soonest (and live) first. */
@@ -96,7 +99,7 @@ export const GameCards = ({
 	now,
 	limit,
 	emptyMessage = "No upcoming games scheduled.",
-	rinks,
+	showHeadToHead,
 }: GameCardsProps) => {
 	const visible = games
 		.filter(({game}) => getGameEndsAt(game) > now)
@@ -113,22 +116,11 @@ export const GameCards = ({
 					game={game}
 					seasonId={seasonId}
 					now={now}
-					following={getFollowingGame(
-						rinks?.find((r) => r.arenaId === rink.arenaId),
-						game,
-					)}
+					showHeadToHead={showHeadToHead}
 				/>
 			))}
 		</div>
 	)
-}
-
-/** The next game at a rink after `game`, from its schedule (soonest first) */
-export function getFollowingGame(
-	rink: Rink | undefined,
-	game: RinkGame,
-): RinkGame | null {
-	return rink?.games.find((g) => g.startsAt > game.startsAt) ?? null
 }
 
 interface RinkCardProps {
@@ -137,8 +129,8 @@ interface RinkCardProps {
 	game: RinkGame | null
 	seasonId: string
 	now: Date
-	/** The rink's next game after this one, if known */
-	following?: RinkGame | null
+	/** Show the game's head-to-head series; fetched on render */
+	showHeadToHead?: boolean
 }
 
 /** A game at a rink: when, who, which division, and how to watch. */
@@ -147,7 +139,7 @@ export const RinkCard = ({
 	game,
 	seasonId,
 	now,
-	following,
+	showHeadToHead,
 }: RinkCardProps) => {
 	const live = game !== null && isGameInProgress(game, now)
 	return (
@@ -182,7 +174,7 @@ export const RinkCard = ({
 					game={game}
 					seasonId={seasonId}
 					now={now}
-					following={following}
+					showHeadToHead={showHeadToHead}
 				/>
 			) : (
 				<div className="RinkCard-empty">No games scheduled</div>
@@ -194,20 +186,20 @@ export const RinkCard = ({
 /**
  * A game's time (or LIVE, linking to the rink's feed), teams and their
  * divisions, and when it starts or started. Beside that, a live game's
- * estimated period, or the rink's next game after this one. The body of a
+ * estimated period, or how the teams' earlier meetings went. The body of a
  * RinkCard; also used on its own.
  */
 export const GameSummary = ({
 	game,
 	seasonId,
 	now,
-	following,
+	showHeadToHead,
 }: {
 	game: RinkGame
 	seasonId: string
 	now: Date
-	/** The rink's next game after this one, if known */
-	following?: RinkGame | null
+	/** Show the teams' head-to-head series; fetched on render */
+	showHeadToHead?: boolean
 }) => {
 	const live = isGameInProgress(game, now)
 	const phase = getGamePhase(game, now)
@@ -265,17 +257,9 @@ export const GameSummary = ({
 				}
 			>
 				{/* Live: when it started, then its estimated period. Otherwise
-				    what's on after it, then when it starts. */}
-				{!live && following && (
-					<Hint
-						label={`Next here: ${following.awayTeam.name} @ ${following.homeTeam.name}, ${formatGameDay(following.startsAt, now)} at ${formatGameTime(following.startsAt)}`}
-					>
-						<span className="RinkCard-note">
-							Next: {formatFollowingTime(following.startsAt, now)}{" "}
-							· {following.awayTeam.name} @{" "}
-							{following.homeTeam.name}
-						</span>
-					</Hint>
+				    the teams' series so far, then when it starts. */}
+				{!live && showHeadToHead && (
+					<HeadToHeadNote game={game} now={now} />
 				)}
 				{/* The card's link to the game; its hit area covers the card */}
 				<Link
@@ -313,13 +297,53 @@ const GAME_PHASE_LABELS: Record<GamePhase, string> = {
 	late: "~Wrapping up",
 }
 
-/** "10:15 PM" later today, "Tomorrow", or "Oct 22": short, so the teams fit */
-function formatFollowingTime(startsAt: string, now: Date): string {
-	const day = formatGameDay(startsAt, now)
-	if (day === "Today") {
-		return formatGameTime(startsAt)
+/**
+ * A card footer's one-line series so far, e.g. "Salish Stellers lead 3–1",
+ * with the full record and last meeting in a hint. Empty while it loads or if
+ * it fails: the card is fine without it.
+ */
+const HeadToHeadNote = ({game, now}: {game: RinkGame; now: Date}) => {
+	const {awayTeam: away, homeTeam: home} = game
+	const state = useAsync(
+		() => doRequest(GET_HEAD_TO_HEAD_ENDPOINT, {a: away.id, b: home.id}),
+		[away.id, home.id],
+	)
+	if (state.status !== "success") {
+		return null
 	}
-	return day === "Tomorrow" ? day : formatShortGameDate(startsAt, now)
+	const games = state.data.headToHead
+	if (games.length === 0) {
+		return (
+			<Hint label="No earlier games between these teams in recent seasons">
+				<span className="RinkCard-note">First meeting</span>
+			</Hint>
+		)
+	}
+	const record = getSeriesRecord(away, home, games)
+	if (!record) {
+		return null
+	}
+	const {leftWins, rightWins, ties, leader} = record
+	const last = games.find((g) => g.goals)!
+	return (
+		<Hint
+			label={`Recent seasons: ${away.name} ${leftWins}, ${home.name} ${rightWins}${ties > 0 ? `, ${ties} ${ties === 1 ? "tie" : "ties"}` : ""}. Last met ${formatGameDate(last.startsAt, now)}.`}
+		>
+			<span className={cx("RinkCard-note", "RinkCard-note--series")}>
+				{leader ? (
+					<>
+						{/* The name truncates so the score always shows */}
+						<span className="RinkCard-note-team">
+							{leader.name}
+						</span>
+						<span>lead {formatSeriesScore(record)}</span>
+					</>
+				) : (
+					`Series even at ${formatSeriesScore(record)}`
+				)}
+			</span>
+		</Hint>
+	)
 }
 
 const RinkCardTeam = ({
@@ -2042,16 +2066,20 @@ function headToHeadToRow(
 	}
 }
 
-/** Wins, ties, and losses as one bar in the teams' colors, with a legend. */
-const SeriesRecord = ({
-	left,
-	right,
-	games,
-}: {
-	left: HeadToHeadTeam
-	right: HeadToHeadTeam
-	games: HeadToHeadGame[]
-}) => {
+interface SeriesRecordCounts {
+	leftWins: number
+	rightWins: number
+	ties: number
+	/** Whoever has more wins; null when they're even */
+	leader: HeadToHeadTeam | null
+}
+
+/** Each team's wins and the ties between them; null if none were scored */
+function getSeriesRecord(
+	left: HeadToHeadTeam,
+	right: HeadToHeadTeam,
+	games: HeadToHeadGame[],
+): SeriesRecordCounts | null {
 	const scored = games.flatMap((g) => (g.goals ? [g.goals] : []))
 	if (scored.length === 0) {
 		return null
@@ -2062,9 +2090,35 @@ const SeriesRecord = ({
 	}
 	const leftWins = wins(left, right)
 	const rightWins = wins(right, left)
-	const ties = scored.length - leftWins - rightWins
-	const leader =
-		leftWins > rightWins ? left : rightWins > leftWins ? right : null
+	return {
+		leftWins,
+		rightWins,
+		ties: scored.length - leftWins - rightWins,
+		leader:
+			leftWins > rightWins ? left : rightWins > leftWins ? right : null,
+	}
+}
+
+/** "3–1", the leader's wins first */
+function formatSeriesScore({leftWins, rightWins}: SeriesRecordCounts): string {
+	return `${Math.max(leftWins, rightWins)}–${Math.min(leftWins, rightWins)}`
+}
+
+/** Wins, ties, and losses as one bar in the teams' colors, with a legend. */
+const SeriesRecord = ({
+	left,
+	right,
+	games,
+}: {
+	left: HeadToHeadTeam
+	right: HeadToHeadTeam
+	games: HeadToHeadGame[]
+}) => {
+	const record = getSeriesRecord(left, right, games)
+	if (!record) {
+		return null
+	}
+	const {leftWins, rightWins, ties, leader} = record
 	const segments: {
 		key: "left" | "tie" | "right"
 		count: number
@@ -2084,8 +2138,8 @@ const SeriesRecord = ({
 		<div className="SeriesRecord">
 			<p className="SeriesRecord-headline">
 				{leader
-					? `${leader.name} lead ${Math.max(leftWins, rightWins)}–${Math.min(leftWins, rightWins)}`
-					: `Even at ${leftWins}–${rightWins}`}
+					? `${leader.name} lead ${formatSeriesScore(record)}`
+					: `Even at ${formatSeriesScore(record)}`}
 				{ties > 0 && (
 					<span className="SeriesRecord-ties">
 						{" "}

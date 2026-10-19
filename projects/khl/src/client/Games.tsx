@@ -34,7 +34,7 @@ import {
 	isInCurrentYear,
 	formatRelative,
 	formatScore,
-	getEndOfWeekDayKey,
+	getEndOfWeekAheadDayKey,
 	getGameHref,
 	useAsync,
 	useNow,
@@ -1941,7 +1941,7 @@ function getLastDayKey(day: DayFilter, now: Date): string {
 		return matchFn(day, {
 			yesterday: () => getLeagueDayKey(addDays(now, -1)),
 			today: () => getLeagueDayKey(now),
-			week: () => getEndOfWeekDayKey(now),
+			week: () => getEndOfWeekAheadDayKey(now),
 		})
 	}
 	return getDayRange(day)?.to ?? getLeagueDayKey(now)
@@ -2000,7 +2000,7 @@ function matchesDay(game: RinkGame, day: DayFilter, now: Date): boolean {
 		return matchFn(day, {
 			yesterday: () => key === getLeagueDayKey(addDays(now, -1)),
 			today: () => key === today,
-			week: () => key <= getEndOfWeekDayKey(now),
+			week: () => key <= getEndOfWeekAheadDayKey(now),
 		})
 	}
 	const range = getDayRange(day)

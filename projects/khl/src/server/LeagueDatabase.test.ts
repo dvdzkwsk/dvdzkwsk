@@ -483,4 +483,98 @@ describe("the fetch queue", () => {
 		expect(db.league.takeOutdated(2)).toBeNull()
 		expect(db.league.isSynced(url)).toBe(true)
 	})
+
+	test("sums up how far the sync has got, overall and this season", () => {
+		const db = openDatabase(":memory:")
+		const add = (page: SyncPage, seasonId: string | null, nextAt: number) =>
+			db.league.enqueue(getSyncPageUrl(page), page, {
+				seasonId,
+				priority: 0,
+				nextAt,
+			})
+		const schedule = (seasonId: string): SyncPage => ({
+			kind: "schedule",
+			teamId: "11",
+			seasonId,
+		})
+		const teams = (seasonId: string | null): SyncPage => ({
+			kind: "teams",
+			seasonId,
+		})
+		add(teams(null), null, 0)
+		add(teams("100"), null, 0)
+		add(teams("96"), null, 0)
+		add(schedule("100"), "100", 0)
+		add(schedule("96"), "96", 500)
+		add(game("900"), "100", 50)
+		// Nothing is current until the default teams page says so
+		expect(
+			db.league.getQueueSummary(100).kinds.find((k) => k.kind === "teams")
+				?.current,
+		).toEqual({total: 0, synced: 0, failing: 0})
+
+		db.league.saveTeamsPage(
+			{
+				season: {id: "100", name: "Fall 2026"},
+				seasons: [{id: "100", name: "Fall 2026"}],
+				divisions: [],
+				teams: [],
+			},
+			true,
+		)
+		db.league.markSynced(getSyncPageUrl(teams(null)), {
+			nextAt: 1_000,
+			version: 1,
+			now: 10,
+		})
+		db.league.markSynced(getSyncPageUrl(schedule("96")), {
+			nextAt: 2_000,
+			version: 1,
+			now: 20,
+		})
+		db.league.markFailed(getSyncPageUrl(game("900")), {
+			nextAt: 300,
+			error: "HTTP 403",
+		})
+		const summary = db.league.getQueueSummary(100)
+		expect(
+			Object.fromEntries(summary.kinds.map(({kind, ...k}) => [kind, k])),
+		).toEqual({
+			// The default teams page isn't counted as the current season's,
+			// since the season's own page lists the same teams
+			teams: {
+				total: 3,
+				synced: 1,
+				failing: 0,
+				due: 2,
+				current: {total: 1, synced: 0, failing: 0},
+			},
+			schedule: {
+				total: 2,
+				synced: 1,
+				failing: 0,
+				due: 1,
+				current: {total: 1, synced: 0, failing: 0},
+			},
+			game: {
+				total: 1,
+				synced: 0,
+				failing: 1,
+				due: 0,
+				current: {total: 1, synced: 0, failing: 1},
+			},
+		})
+		expect(summary.lastSyncedAt).toBe(20)
+		expect(summary.nextDueAt).toBe(300)
+		expect(db.league.getFailingPages(5)).toEqual([
+			{
+				url: getSyncPageUrl(game("900")),
+				page: game("900"),
+				seasonId: "100",
+				attempts: 1,
+				error: "HTTP 403",
+				nextAt: 300,
+			},
+		])
+	})
 })

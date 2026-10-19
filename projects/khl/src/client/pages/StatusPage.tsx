@@ -11,6 +11,9 @@ import {
 	StatusDay,
 	StatusLevel,
 	StatusResponse,
+	SyncFailure,
+	SyncPageKind,
+	SyncStatus,
 } from "../../shared/ApiJson.js"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {MINUTE_MS} from "../../shared/LeagueTime.js"
@@ -76,6 +79,7 @@ const StatusPage = () => {
 									</ul>
 									<Legend />
 								</Card>
+								<SyncPanel sync={status.sync} now={now} />
 								<DeployPanel deploy={status.deploy} now={now} />
 							</>
 						)}
@@ -383,6 +387,231 @@ const StatusIcon = ({level, size}: {level: StatusLevel; size: number}) => {
 				outage: <path d="m5.5 5.5 5 5m0-5-5 5" />,
 			})}
 		</svg>
+	)
+}
+
+// --- Data sync
+
+/** Each kind of page, in the order it syncs */
+const SYNC_KIND_NAMES: Record<SyncPageKind, {many: string; one: string}> = {
+	teams: {many: "Team lists", one: "Team list"},
+	schedule: {many: "Schedules", one: "Schedule"},
+	"team-stats": {many: "Team stats", one: "Team stats page"},
+	player: {many: "Player pages", one: "Player page"},
+	game: {many: "Games", one: "Game"},
+}
+
+/**
+ * The kind of page that queues each kind: until every one of those has
+ * been tried, a kind's total is only what's been found so far
+ */
+const SYNC_KIND_QUEUED_BY: Record<SyncPageKind, SyncPageKind | null> = {
+	teams: null,
+	schedule: "teams",
+	"team-stats": "teams",
+	player: "team-stats",
+	game: "schedule",
+}
+
+interface SyncCounts {
+	total: number
+	synced: number
+	failing: number
+}
+
+/** Whether every page of a kind has been queued, or more may be found */
+function isFullyQueued(
+	kind: SyncPageKind,
+	getCounts: (kind: SyncPageKind) => SyncCounts | undefined,
+): boolean {
+	const source = SYNC_KIND_QUEUED_BY[kind]
+	if (source === null) {
+		return true
+	}
+	const counts = getCounts(source)
+	return (
+		!!counts &&
+		counts.total > 0 &&
+		counts.synced + counts.failing >= counts.total &&
+		isFullyQueued(source, getCounts)
+	)
+}
+
+const SyncPanel = ({sync, now}: {sync: SyncStatus; now: Date}) => {
+	const kinds = Object.keys(SYNC_KIND_NAMES) as SyncPageKind[]
+	const byKind = new Map(sync.kinds.map((k) => [k.kind, k]))
+	const sum = (count: (k: SyncStatus["kinds"][number]) => number) =>
+		sync.kinds.reduce((n, k) => n + count(k), 0)
+	const due = sum((k) => k.due)
+	const failing = sum((k) => k.failing)
+	return (
+		<Card title="Data sync">
+			<p className="StatusSync-summary">{describeSync(sync, due, now)}</p>
+			<div className="StatusSync-tableScroll">
+				<table className="StatusSync-table">
+					<thead>
+						<tr>
+							<th scope="col">Page</th>
+							<th scope="col">
+								{sync.currentSeason ? (
+									<Hint label={sync.currentSeason.name}>
+										<span>This season</span>
+									</Hint>
+								) : (
+									"This season"
+								)}
+							</th>
+							<th scope="col">All seasons</th>
+							<th scope="col">Failing</th>
+						</tr>
+					</thead>
+					<tbody>
+						{kinds.map((kind) => {
+							const k = byKind.get(kind)
+							return (
+								<tr key={kind}>
+									<th scope="row">
+										{SYNC_KIND_NAMES[kind].many}
+									</th>
+									<td>
+										<SyncProgress
+											kind={kind}
+											counts={k?.current}
+											fullyQueued={isFullyQueued(
+												kind,
+												(kind) =>
+													byKind.get(kind)?.current,
+											)}
+										/>
+									</td>
+									<td>
+										<SyncProgress
+											kind={kind}
+											counts={k}
+											fullyQueued={isFullyQueued(
+												kind,
+												(kind) => byKind.get(kind),
+											)}
+										/>
+									</td>
+									<td
+										className={cx(
+											!!k?.failing &&
+												"StatusSync-failing",
+										)}
+									>
+										{(k?.failing ?? 0).toLocaleString()}
+									</td>
+								</tr>
+							)
+						})}
+					</tbody>
+				</table>
+			</div>
+			{sync.failures.length > 0 && (
+				<>
+					<h3 className="StatusSync-failuresTitle">
+						{failing > sync.failures.length
+							? `Failing pages (${sync.failures.length} of ${failing.toLocaleString()})`
+							: "Failing pages"}
+					</h3>
+					<ul className="StatusSync-failures">
+						{sync.failures.map((failure) => (
+							<SyncFailureRow
+								key={failure.url}
+								failure={failure}
+								now={now}
+							/>
+						))}
+					</ul>
+				</>
+			)}
+		</Card>
+	)
+}
+
+function describeSync(sync: SyncStatus, due: number, now: Date): string {
+	if (sync.kinds.length === 0) {
+		return "The sync hasn't started yet."
+	}
+	const last = sync.lastSyncedAt
+		? `last page synced ${formatRelative(sync.lastSyncedAt, now)}`
+		: "no page synced yet"
+	if (due > 0) {
+		return `Catching up: ${due.toLocaleString()} ${due === 1 ? "page" : "pages"} due · ${last}`
+	}
+	const next = sync.nextDueAt
+		? ` · next page due ${formatRelative(sync.nextDueAt, now)}`
+		: ""
+	return `Up to date · ${last}${next}`
+}
+
+/**
+ * "1,204 of 1,310" over a bar of how much is synced, or "of 235 so far"
+ * while the pages that queue this kind are still syncing
+ */
+const SyncProgress = ({
+	kind,
+	counts,
+	fullyQueued,
+}: {
+	kind: SyncPageKind
+	counts: SyncCounts | undefined
+	fullyQueued: boolean
+}) => {
+	const {synced = 0, total = 0} = counts ?? {}
+	const source = SYNC_KIND_QUEUED_BY[kind]
+	const more =
+		!fullyQueued && source
+			? `more are queued as ${SYNC_KIND_NAMES[source].many.toLowerCase()} sync`
+			: null
+	if (total === 0) {
+		return (
+			<span className="StatusSync-none">
+				{more ? "None found yet" : "None queued"}
+			</span>
+		)
+	}
+	const percent = Math.floor((synced / total) * 100)
+	return (
+		<Hint label={`${percent}% synced${more ? `; ${more}` : ""}`}>
+			<span className="StatusSync-progress">
+				<span className="StatusSync-count">
+					{synced.toLocaleString()} of {total.toLocaleString()}
+					{more && " so far"}
+				</span>
+				<span className="StatusSync-bar" aria-hidden>
+					<span
+						className={cx(
+							"StatusSync-barFill",
+							synced === total && "StatusSync-barFill--done",
+						)}
+						style={{width: `${(synced / total) * 100}%`}}
+					/>
+				</span>
+			</span>
+		</Hint>
+	)
+}
+
+const SyncFailureRow = ({failure, now}: {failure: SyncFailure; now: Date}) => {
+	return (
+		<li className="StatusSync-failure">
+			<div className="StatusSync-failureHead">
+				<Hint label={failure.url}>
+					<Link className="StatusSync-failureLink" href={failure.url}>
+						{SYNC_KIND_NAMES[failure.kind].one} ↗
+					</Link>
+				</Hint>
+				<span className="StatusSync-failureMeta">
+					{plural(failure.attempts, "failure")} in a row · next try{" "}
+					{Date.parse(failure.retryAt) > now.getTime()
+						? formatRelative(failure.retryAt, now)
+						: "due now"}
+				</span>
+			</div>
+			<code className="StatusSync-error">{failure.error}</code>
+		</li>
 	)
 }
 

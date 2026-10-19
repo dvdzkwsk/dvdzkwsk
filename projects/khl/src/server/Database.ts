@@ -2,6 +2,7 @@ import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
 import {Database as SQLiteDatabase} from "bun:sqlite"
+import {replaceDatabaseContents} from "./DatabaseSnapshot.js"
 import {LeagueDatabase, TeamSource, toPlaceholders} from "./LeagueDatabase.js"
 import {
 	parseRegistrationKey,
@@ -400,6 +401,23 @@ export class KHLDatabase {
 
 	constructor(private db: SQLiteDatabase) {
 		this.league = new LeagueDatabase(db)
+	}
+
+	/**
+	 * Replaces everything with a snapshot's (e.g. production's), migrating
+	 * the snapshot first. Backs this file up to `backupPath` first, since
+	 * player identities can't be rebuilt.
+	 */
+	replaceWith(snapshotPath: string, backupPath: string) {
+		const snapshot = new SQLiteDatabase(snapshotPath, {strict: true})
+		try {
+			migrate(snapshot)
+		} finally {
+			snapshot.close()
+		}
+		fs.rmSync(backupPath, {force: true})
+		this.db.run("VACUUM INTO ?", [backupPath])
+		replaceDatabaseContents(this.db, snapshotPath)
 	}
 
 	getPlayer(id: string): Player | null {

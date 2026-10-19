@@ -1829,6 +1829,50 @@ export const UPDATE_DEV_SETTINGS_ENDPOINT = {
 	responseSchema: DevSettingsResponseSchema,
 } satisfies ApiEndpoint<DevSettings, DevSettingsResponse>
 
+export interface PullProdDataRequest {
+	sources: boolean
+}
+
+export const PullProdDataRequestSchema = z.object({
+	sources: z
+		.boolean()
+		.describe(
+			"Also pull every stored page (1.5-3 GB), to reprocess after a parser change",
+		),
+}) satisfies z.ZodType<PullProdDataRequest>
+
+export interface PulledDatabase {
+	name: "khl" | "sources"
+	/** The snapshot's size, in megabytes */
+	mb: number
+}
+
+export interface PullProdDataResponse {
+	pulled: PulledDatabase[]
+	/** Where the dev database was backed up before it was replaced */
+	backupPath: string
+	ms: number
+}
+
+export const PullProdDataResponseSchema = z.object({
+	pulled: z.array(
+		z.object({name: z.enum(["khl", "sources"]), mb: z.number()}),
+	),
+	backupPath: z.string(),
+	ms: z.number(),
+}) satisfies z.ZodType<PullProdDataResponse>
+
+export const PULL_PROD_DATA_ENDPOINT = {
+	method: "POST",
+	uri: "/api/admin/pull-prod-data",
+	name: "Pull production's data",
+	description:
+		"Dev only: replaces the dev server's league tables and player ids (and, with sources, its stored pages) with snapshots of production's. Takes a minute or more.",
+	exampleRequest: {sources: false},
+	requestSchema: PullProdDataRequestSchema,
+	responseSchema: PullProdDataResponseSchema,
+} satisfies ApiEndpoint<PullProdDataRequest, PullProdDataResponse>
+
 export interface ApiDocsSection {
 	title: string
 	endpoints: ApiEndpoint<ApiRequest, unknown>[]

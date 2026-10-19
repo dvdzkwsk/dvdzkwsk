@@ -1,21 +1,12 @@
 import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
-import {createCliTool, runCommand} from "@dvdzkwsk/util/CliUtil"
-import {doFetch} from "@dvdzkwsk/util/FetchUtil"
-import {Database} from "bun:sqlite"
+import {runCommandAsync} from "@dvdzkwsk/util/CliUtil"
 import {z} from "zod"
 
-// Copies production's databases into data/, so dev has the whole league
-// without fetching it from the KHL. Pair with offline mode (on /admin) to
-// make sure dev never fetches at all.
-//
-//   bun tools/PullProdData.ts            the league tables and player ids
-//   bun tools/PullProdData.ts --sources  also every stored page (1.5-3 GB),
-//                                        to reprocess after a parser change
-//
-// Stop the dev server first. Each local file it replaces is kept beside it
-// as *.bak. Uses your `fly auth login` session (or FLY_API_TOKEN).
+// Downloads snapshots of production's databases, for dev to replace its own
+// with (see PULL_PROD_DATA_ENDPOINT, run from /admin). Uses your
+// `fly auth login` session (or FLY_API_TOKEN).
 
 const logger = new Logger("PullProdData")
 
@@ -29,55 +20,35 @@ const FlyTomlSchema = z.object({
 	}),
 })
 
-interface Pull {
-	remotePath: string
-	/** Where the server reads it locally; see Server.ts */
-	localPath: string
-}
+/** Production's databases: the league tables and player ids, and the pages */
+export type ProdDatabase = "khl" | "sources"
 
-async function main() {
-	await assertDevServerStopped()
+/**
+ * Snapshots each database on the machine (VACUUM INTO, a consistent copy
+ * while the server keeps writing), and downloads it into `dir`. Returns the
+ * downloaded files' paths, which the caller deletes once it's done.
+ */
+export async function downloadProdSnapshots(
+	databases: ProdDatabase[],
+	dir: string,
+): Promise<Record<ProdDatabase, string | null>> {
 	const fly = readFlyToml()
-	const pulls: Pull[] = [
-		{
-			remotePath: fly.env.KHL_DB_PATH,
-			localPath:
-				process.env.KHL_DB_PATH ??
-				path.join(PROJECT_DIR, "data/khl.sqlite"),
-		},
-	]
-	if (process.argv.includes("--sources")) {
-		pulls.push({
-			remotePath: fly.env.KHL_SOURCES_DB_PATH,
-			localPath:
-				process.env.KHL_SOURCES_DB_PATH ??
-				path.join(PROJECT_DIR, "data/sources.sqlite"),
-		})
+	const remotePaths: Record<ProdDatabase, string> = {
+		khl: fly.env.KHL_DB_PATH,
+		sources: fly.env.KHL_SOURCES_DB_PATH,
 	}
-	for (const pull of pulls) {
-		pullDatabase(fly.app, pull)
+	const downloaded: Record<ProdDatabase, string | null> = {
+		khl: null,
+		sources: null,
 	}
-}
-
-/** The dev server holds the databases open, so they can't be swapped under it */
-async function assertDevServerStopped() {
-	const port = Number(process.env.KHL_API_PORT ?? 3001)
-	const running = await doFetch({
-		method: "GET",
-		url: `http://localhost:${port}/api/health`,
-		responseSchema: z.unknown(),
-		timeoutMs: 2000,
-	}).then(
-		() => true,
-		() => false,
-	)
-	if (running) {
-		throw logger.newError(
-			"assertDevServerStopped",
-			"the dev server is running; stop it first",
-			{port},
-		)
+	fs.mkdirSync(dir, {recursive: true})
+	for (const database of databases) {
+		const remotePath = remotePaths[database]
+		const downloadPath = path.join(dir, `${database}.sqlite.download`)
+		await downloadSnapshot(fly.app, remotePath, downloadPath)
+		downloaded[database] = downloadPath
 	}
+	return downloaded
 }
 
 function readFlyToml(): z.infer<typeof FlyTomlSchema> {
@@ -94,20 +65,21 @@ function readFlyToml(): z.infer<typeof FlyTomlSchema> {
 	return result.data
 }
 
-/**
- * Snapshots the database on the machine (VACUUM INTO, a consistent copy
- * while the server keeps writing), downloads it, and swaps it in
- */
-function pullDatabase(app: string, {remotePath, localPath}: Pull) {
+async function downloadSnapshot(
+	app: string,
+	remotePath: string,
+	downloadPath: string,
+) {
 	const snapshotPath = `${remotePath}.snapshot`
-	const downloadPath = `${localPath}.download`
-	logger.info("pullDatabase", "snapshotting", {app, remotePath})
-	runRemote(app, getSnapshotScript(remotePath, snapshotPath))
+	logger.info("downloadSnapshot", "snapshotting", {app, remotePath})
+	await runRemote(app, getSnapshotScript(remotePath, snapshotPath))
 	try {
 		fs.rmSync(downloadPath, {force: true})
-		fs.mkdirSync(path.dirname(localPath), {recursive: true})
-		logger.info("pullDatabase", "downloading", {snapshotPath, downloadPath})
-		runCommand("fly", [
+		logger.info("downloadSnapshot", "downloading", {
+			snapshotPath,
+			downloadPath,
+		})
+		await runCommandAsync("fly", [
 			"ssh",
 			"sftp",
 			"get",
@@ -117,18 +89,11 @@ function pullDatabase(app: string, {remotePath, localPath}: Pull) {
 			downloadPath,
 		])
 	} finally {
-		runRemote(
+		await runRemote(
 			app,
 			`require("fs").rmSync(${JSON.stringify(snapshotPath)}, {force: true})`,
 		)
 	}
-	assertIntact(downloadPath)
-	backUp(localPath)
-	fs.renameSync(downloadPath, localPath)
-	logger.info("pullDatabase", "pulled", {
-		localPath,
-		mb: Math.round(fs.statSync(localPath).size / 1e6),
-	})
 }
 
 /**
@@ -155,9 +120,9 @@ function getSnapshotScript(dbPath: string, snapshotPath: string): string {
  * Runs Bun code on the app's machine. Passed base64-encoded, so it needs no
  * quoting through `fly ssh console`.
  */
-function runRemote(app: string, script: string) {
+function runRemote(app: string, script: string): Promise<void> {
 	const encoded = Buffer.from(script).toString("base64")
-	runCommand("fly", [
+	return runCommandAsync("fly", [
 		"ssh",
 		"console",
 		"--app",
@@ -166,41 +131,3 @@ function runRemote(app: string, script: string) {
 		`bun -e 'eval(atob("${encoded}"))'`,
 	])
 }
-
-function assertIntact(filepath: string) {
-	const db = new Database(filepath, {readonly: true})
-	try {
-		const row = db
-			.query<{quick_check: string}, []>("PRAGMA quick_check")
-			.get()
-		if (row?.quick_check !== "ok") {
-			throw logger.newError("assertIntact", "snapshot is corrupt", {
-				filepath,
-				check: row?.quick_check,
-			})
-		}
-	} finally {
-		db.close()
-	}
-}
-
-/**
- * Moves the local database aside as *.bak, with its WAL and shared-memory
- * files (named for the database, so they follow it), replacing any older
- * backup
- */
-function backUp(localPath: string) {
-	if (!fs.existsSync(localPath)) {
-		return
-	}
-	const backupPath = `${localPath}.bak`
-	for (const suffix of ["", "-wal", "-shm"]) {
-		fs.rmSync(backupPath + suffix, {force: true})
-		if (fs.existsSync(localPath + suffix)) {
-			fs.renameSync(localPath + suffix, backupPath + suffix)
-		}
-	}
-	logger.info("backUp", "kept the old database", {backupPath})
-}
-
-createCliTool(import.meta, main)

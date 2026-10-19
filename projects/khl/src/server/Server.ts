@@ -100,6 +100,8 @@ import {
 	PlayerResponse,
 	PlayerSearchGroup,
 	PlayersResponse,
+	PULL_PROD_DATA_ENDPOINT,
+	PulledDatabase,
 	RecentGame,
 	RecentRinkGame,
 	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
@@ -180,7 +182,8 @@ const db = openDatabase(DB_PATH)
 const SOURCES_DB_PATH =
 	process.env.KHL_SOURCES_DB_PATH ??
 	path.join(PROJECT_DIR, "data/sources.sqlite")
-setPageStore(openPageStore(SOURCES_DB_PATH))
+const pageStore = openPageStore(SOURCES_DB_PATH)
+setPageStore(pageStore)
 
 const app = express()
 
@@ -249,6 +252,48 @@ if (process.env.NODE_ENV !== "production") {
 		setOfflineMode(settings.offline)
 		logger.info("updateDevSettings", "updated dev settings", settings)
 		return toDevSettingsResponse()
+	})
+
+	// Fly's CLI isn't in the deployed image either; imported like the
+	// benchmark below, to keep it out of the bundle
+	let pullRunning = false
+	registerEndpoint(app, PULL_PROD_DATA_ENDPOINT, async ({sources}) => {
+		if (pullRunning) {
+			throw new ApiError(409, "a pull is already running")
+		}
+		pullRunning = true
+		const start = Date.now()
+		const dir = path.join(path.dirname(DB_PATH), "prod-snapshots")
+		try {
+			const pullPath = path.join(PROJECT_DIR, "tools/PullProdData.ts")
+			const {downloadProdSnapshots} = (await import(
+				pullPath
+			)) as typeof import("../../tools/PullProdData.js")
+			const downloaded = await downloadProdSnapshots(
+				sources ? ["khl", "sources"] : ["khl"],
+				dir,
+			)
+			const pulled: PulledDatabase[] = []
+			const backupPath = `${DB_PATH}.bak`
+			if (downloaded.khl) {
+				pulled.push({name: "khl", mb: getSizeMb(downloaded.khl)})
+				db.replaceWith(downloaded.khl, backupPath)
+			}
+			if (downloaded.sources) {
+				pulled.push({
+					name: "sources",
+					mb: getSizeMb(downloaded.sources),
+				})
+				pageStore.replaceWith(downloaded.sources)
+			}
+			// Parsed from the pages just replaced
+			cache.clear()
+			logger.info("pullProdData", "pulled production's data", {pulled})
+			return {pulled, backupPath, ms: Date.now() - start}
+		} finally {
+			fs.rmSync(dir, {recursive: true, force: true})
+			pullRunning = false
+		}
 	})
 
 	// Drives headless Chrome, which the deployed image doesn't have.
@@ -1703,6 +1748,10 @@ app.listen(PORT, () => {
 		syncer.start()
 	}
 })
+
+function getSizeMb(filepath: string): number {
+	return Math.round(fs.statSync(filepath).size / 1e6)
+}
 
 /** The settings in DEV_SETTINGS_PATH; all off if there's no file */
 function readDevSettings(): DevSettings {

@@ -4,6 +4,7 @@ import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
 import {FetchError} from "@dvdzkwsk/util/FetchUtil"
 import {Database as SQLiteDatabase} from "bun:sqlite"
+import {replaceDatabaseContents} from "./DatabaseSnapshot.js"
 
 const logger = new Logger("PageStore")
 
@@ -72,6 +73,17 @@ interface PageRow {
  */
 export class PageStore {
 	constructor(private db: SQLiteDatabase) {}
+
+	/** Replaces every page with a snapshot's, migrating the snapshot first */
+	replaceWith(snapshotPath: string) {
+		const snapshot = new SQLiteDatabase(snapshotPath, {strict: true})
+		try {
+			migrate(snapshot)
+		} finally {
+			snapshot.close()
+		}
+		replaceDatabaseContents(this.db, snapshotPath)
+	}
 
 	get(source: PageSource, url: string): StoredPage | null {
 		const row = this.db
@@ -184,6 +196,11 @@ export function openPageStore(filepath: string): PageStore {
 	fs.mkdirSync(path.dirname(filepath), {recursive: true})
 	const db = new SQLiteDatabase(filepath, {create: true, strict: true})
 	db.exec("PRAGMA journal_mode = WAL")
+	migrate(db)
+	return new PageStore(db)
+}
+
+function migrate(db: SQLiteDatabase) {
 	const {user_version: version} = db
 		.query<{user_version: number}, []>("PRAGMA user_version")
 		.get()!
@@ -192,9 +209,8 @@ export function openPageStore(filepath: string): PageStore {
 			db.exec(MIGRATIONS[i]!)
 			db.exec(`PRAGMA user_version = ${i + 1}`)
 		})()
-		logger.info("openPageStore", "applied migration", {version: i + 1})
+		logger.info("migrate", "applied migration", {version: i + 1})
 	}
-	return new PageStore(db)
 }
 
 let pageStore: PageStore | null = null

@@ -295,7 +295,7 @@ describe("KHLSyncer", () => {
 		setOfflineMode(false)
 	})
 
-	test("syncs everything once, the current season first, then nothing until due", async () => {
+	test("syncs everything once, past seasons' schedules and games aside, then nothing until due", async () => {
 		setSystemTime(START)
 		const league = createLeague()
 		league.seed()
@@ -314,11 +314,8 @@ describe("KHLSyncer", () => {
 				page.player("501", "11", "100"),
 				page.player("502", "11", "100"),
 				page.player("511", "12", "100"),
-				page.schedule("22", "96"),
-				page.schedule("23", "96"),
 				page.stats("22", "96"),
 				page.stats("23", "96"),
-				page.game("2"),
 				page.player("601", "22", "96"),
 				page.player("611", "23", "96"),
 			].sort(),
@@ -337,7 +334,7 @@ describe("KHLSyncer", () => {
 		}
 		expect(order[0]).toBe(page.teams(null))
 		expect(order.indexOf(page.player("502", "11", "100"))).toBeLessThan(
-			order.indexOf(page.schedule("22", "96")),
+			order.indexOf(page.stats("22", "96")),
 		)
 	})
 
@@ -435,7 +432,7 @@ describe("KHLSyncer", () => {
 			order.push(...league.takeFetches())
 		}
 		expect(order.lastIndexOf(page.game("3"))).toBeLessThan(
-			order.indexOf(page.schedule("27", "96")),
+			order.indexOf(page.stats("27", "96")),
 		)
 	})
 
@@ -443,6 +440,12 @@ describe("KHLSyncer", () => {
 		setSystemTime(START)
 		const league = createLeague()
 		league.seed()
+		await league.syncAll()
+		await league.syncer.ensureSynced({
+			kind: "schedule",
+			teamId: "22",
+			seasonId: "96",
+		})
 		await league.syncAll()
 		league.takeFetches()
 
@@ -456,6 +459,25 @@ describe("KHLSyncer", () => {
 		setSystemTime(START + 30 * DAY_MS)
 		await league.syncAll()
 		expect(league.takeFetches()).toContain(page.schedule("22", "96"))
+	})
+
+	test("a past season's schedule is synced only when asked for, and then its games", async () => {
+		setSystemTime(START)
+		const league = createLeague()
+		league.seed()
+		await league.syncAll()
+		league.takeFetches()
+
+		await league.syncer.ensureSynced({
+			kind: "schedule",
+			teamId: "22",
+			seasonId: "96",
+		})
+		await league.syncAll()
+		expect(league.takeFetches()).toEqual([
+			page.schedule("22", "96"),
+			page.game("2"),
+		])
 	})
 
 	test("a failed fetch is retried in 30 minutes, without stopping the rest", async () => {

@@ -357,6 +357,16 @@ const MIGRATIONS = [
 	DROP INDEX fetch_queue_due;
 	CREATE INDEX fetch_queue_due ON fetch_queue (requested DESC, priority, next_at);
 	`,
+	`
+	-- Past seasons' schedules and games are synced only when a visitor asks
+	-- for them, so drop the ones the crawl queued that never were. A
+	-- requested game is queued without a season, so it's left alone.
+	DELETE FROM fetch_queue
+	WHERE processed_version IS NULL AND requested = 0
+		AND json_extract(page, '$.kind') IN ('schedule', 'game')
+		AND season_id IS NOT NULL
+		AND season_id <> (SELECT season_id FROM seasons WHERE is_current = 1);
+	`,
 ]
 
 export function openDatabase(filepath: string) {

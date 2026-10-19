@@ -1192,8 +1192,13 @@ export interface PlayersResponse {
 	goalies: LeaguePlayer[]
 	/** Teams missing from the lists because the KHL site errored */
 	unavailableTeams: KHLTeam[]
-	/** Teams missing from the lists because their stats are still syncing */
-	loadingTeams: KHLTeam[]
+	/** Teams missing from the lists because their stats haven't synced */
+	unsyncedTeams: KHLTeam[]
+	/**
+	 * Whether the server's background sync is running, so unsynced teams
+	 * will load on their own (always in production; dev runs it on request)
+	 */
+	isSyncing: boolean
 }
 
 export const PlayersResponseSchema = z.object({
@@ -1203,7 +1208,8 @@ export const PlayersResponseSchema = z.object({
 	skaters: z.array(LeaguePlayerSchema),
 	goalies: z.array(LeaguePlayerSchema),
 	unavailableTeams: z.array(KHLTeamSchema),
-	loadingTeams: z.array(KHLTeamSchema),
+	unsyncedTeams: z.array(KHLTeamSchema),
+	isSyncing: z.boolean(),
 }) satisfies z.ZodType<PlayersResponse>
 
 export interface ListPlayersRequest {

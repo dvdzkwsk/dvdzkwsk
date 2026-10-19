@@ -11,15 +11,18 @@ import {
 	StatusResponse,
 	SyncStatus,
 } from "../shared/ApiJson.js"
-import {STRINGS, URLS} from "../shared/KHLConfig.js"
-import {getLeagueDayKey, MINUTE_MS} from "../shared/LeagueTime.js"
+import {STATUS_HISTORY, STRINGS, URLS} from "../shared/KHLConfig.js"
+import {
+	getLeagueDayKey,
+	HOUR_MS,
+	MINUTE_MS,
+	toLeagueInstant,
+} from "../shared/LeagueTime.js"
 
 const logger = new Logger("Status")
 
 /** How often every component is checked */
 const CHECK_INTERVAL_MINUTES = 5
-/** How many days of history the status page shows */
-const HISTORY_DAYS = 90
 /** A check slower than this counts as degraded */
 const SLOW_MS = 5_000
 /** A check slower than this counts as down */
@@ -154,25 +157,26 @@ export function createStatusCheckJob(
 					day: getLeagueDayKey(new Date(check.checkedAt)),
 				})
 			})
-			db.pruneStatusChecks(getHistoryDays(new Date())[0]!)
+			db.pruneStatusChecks(getHistoryBuckets(new Date())[0]!)
 			return CHECK_INTERVAL_MINUTES * MINUTE_MS
 		},
 	}
 }
 
 export function getStatus(db: KHLDatabase, jobs: JobRunner): StatusResponse {
-	const historyDays = getHistoryDays(new Date())
+	const historyBuckets = getHistoryBuckets(new Date())
 	const latest = db.getLatestStatusChecks()
-	const days = db.getStatusDays(historyDays[0]!)
+	const buckets = db.getStatusBuckets(historyBuckets[0]!, BUCKET_MINUTES)
 	return {
-		historyDays,
+		historyBuckets,
+		bucketMinutes: BUCKET_MINUTES,
 		intervalMinutes: CHECK_INTERVAL_MINUTES,
 		components: getComponents(db, jobs).map(({id, name, description}) => ({
 			id,
 			name,
 			description,
 			latest: latest.get(id) ?? null,
-			days: days.get(id) ?? [],
+			buckets: buckets.get(id) ?? [],
 		})),
 		jobs: jobs.getStatuses(),
 		sync: getSyncStatus(db),
@@ -217,18 +221,22 @@ function toIsoOrNull(ms: number | null): string | null {
 	return ms === null ? null : new Date(ms).toISOString()
 }
 
-/** The last HISTORY_DAYS league-local days, oldest first, ending today */
-function getHistoryDays(now: Date): string[] {
-	const [y, m, d] = getLeagueDayKey(now).split("-").map(Number) as [
-		number,
-		number,
-		number,
-	]
-	// Calendar math in UTC, so DST changes can't skip or repeat a day
-	return Array.from({length: HISTORY_DAYS}, (_, i) => {
-		const date = new Date(Date.UTC(y, m - 1, d - (HISTORY_DAYS - 1 - i)))
-		return date.toISOString().slice(0, 10)
-	})
+const BUCKET_MINUTES = STATUS_HISTORY.BUCKET_HOURS * 60
+
+/**
+ * When each bucket of the last STATUS_HISTORY.DAYS starts, oldest first,
+ * ending with the one `now` is in. Buckets count from league-local midnight,
+ * so bars start on the same hours every day (but for a DST change).
+ */
+function getHistoryBuckets(now: Date): string[] {
+	const bucketMs = STATUS_HISTORY.BUCKET_HOURS * HOUR_MS
+	const midnight = Date.parse(toLeagueInstant(getLeagueDayKey(now), "00:00"))
+	const current =
+		midnight + Math.floor((now.getTime() - midnight) / bucketMs) * bucketMs
+	const count = (STATUS_HISTORY.DAYS * 24) / STATUS_HISTORY.BUCKET_HOURS
+	return Array.from({length: count}, (_, i) =>
+		new Date(current - (count - 1 - i) * bucketMs).toISOString(),
+	)
 }
 
 /**

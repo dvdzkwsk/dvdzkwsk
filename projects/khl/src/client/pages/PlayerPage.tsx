@@ -13,7 +13,6 @@ import {
 } from "../../shared/ApiJson.js"
 import {LIMITS} from "../../shared/KHLConfig.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
-import {ActivityFeed, toActivityFeed} from "../Activity.js"
 import {
 	AchievementHint,
 	AchievementIcon,
@@ -21,6 +20,7 @@ import {
 	RecentPenalties,
 	toRecentPenalties,
 } from "../Achievements.js"
+import {ActivityFeed, toActivityFeed} from "../Activity.js"
 import {
 	AsyncContent,
 	Card,

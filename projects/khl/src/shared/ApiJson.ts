@@ -1564,21 +1564,21 @@ export const StatusCheckSchema = z.object({
 	error: z.string().nullable(),
 }) satisfies z.ZodType<StatusCheck>
 
-/** A league-local day of a component's checks */
-export interface StatusDay {
-	/** "yyyy-MM-dd" */
-	day: string
+/** A component's checks over one bar of the history */
+export interface StatusBucket {
+	/** When the bar starts, ISO 8601 UTC; it covers `bucketMinutes` */
+	start: string
 	checks: number
 	degraded: number
 	outages: number
 }
 
-export const StatusDaySchema = z.object({
-	day: z.string(),
+export const StatusBucketSchema = z.object({
+	start: z.string(),
 	checks: z.number(),
 	degraded: z.number(),
 	outages: z.number(),
-}) satisfies z.ZodType<StatusDay>
+}) satisfies z.ZodType<StatusBucket>
 
 export interface StatusComponent {
 	id: string
@@ -1586,8 +1586,8 @@ export interface StatusComponent {
 	description: string
 	/** Null until the first check has run */
 	latest: StatusCheck | null
-	/** Days with checks, oldest first; days without any are left out */
-	days: StatusDay[]
+	/** Buckets with checks, oldest first; ones without any are left out */
+	buckets: StatusBucket[]
 }
 
 export const StatusComponentSchema = z.object({
@@ -1595,7 +1595,7 @@ export const StatusComponentSchema = z.object({
 	name: z.string(),
 	description: z.string(),
 	latest: StatusCheckSchema.nullable(),
-	days: z.array(StatusDaySchema),
+	buckets: z.array(StatusBucketSchema),
 }) satisfies z.ZodType<StatusComponent>
 
 /** Which build is running */
@@ -1750,8 +1750,10 @@ export const SyncStatusSchema = z.object({
 }) satisfies z.ZodType<SyncStatus>
 
 export interface StatusResponse {
-	/** The days the history covers, oldest first ("yyyy-MM-dd") */
-	historyDays: string[]
+	/** When each bucket of the history starts, oldest first (ISO 8601 UTC) */
+	historyBuckets: string[]
+	/** How long each bucket covers */
+	bucketMinutes: number
 	/** How often each component is checked */
 	intervalMinutes: number
 	components: StatusComponent[]
@@ -1761,7 +1763,8 @@ export interface StatusResponse {
 }
 
 export const StatusResponseSchema = z.object({
-	historyDays: z.array(z.string()),
+	historyBuckets: z.array(z.string()),
+	bucketMinutes: z.number(),
 	intervalMinutes: z.number(),
 	components: z.array(StatusComponentSchema),
 	jobs: z.array(JobStatusSchema),

@@ -94,6 +94,20 @@ export const ActivityFeed = ({
 	)
 }
 
+/**
+ * The feed's share of a broader activity response: its latest
+ * LIMITS.ACTIVITY_EVENTS events, leaving out games without one
+ */
+export function toActivityFeed(activity: ActivityResponse): ActivityResponse {
+	let remaining = LIMITS.ACTIVITY_EVENTS
+	const games = activity.games.flatMap((game) => {
+		const events = game.events.slice(0, remaining)
+		remaining -= events.length
+		return events.length > 0 ? [{...game, events}] : []
+	})
+	return {...activity, games}
+}
+
 /** How far back the feed looks, e.g. 6 */
 const LOOKBACK_MONTHS = Math.round(LIMITS.ACTIVITY_MAX_LOOKBACK_DAYS / 30.4)
 

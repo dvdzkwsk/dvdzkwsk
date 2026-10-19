@@ -355,8 +355,9 @@ function readFlyConfig(project: Project): FlyConfig {
 }
 
 /**
- * Creates the app and its volume if they don't exist, so deploying is the
- * same command the first time as every time after.
+ * Creates the app and its volume if they don't exist, and grows the volume
+ * to fly.toml's size if it's smaller, so deploying is the same command the
+ * first time as every time after. Volumes can't shrink.
  */
 function ensureFlyResources(config: FlyConfig) {
 	if (capture("fly", ["auth", "whoami"]) === null) {
@@ -380,13 +381,35 @@ function ensureFlyResources(config: FlyConfig) {
 	}
 
 	if (config.volume) {
+		const VolumeListSchema = z.array(
+			z.object({id: z.string(), name: z.string(), size_gb: z.number()}),
+		)
 		const volumes =
 			captureJson(
 				"fly",
 				["volumes", "list", "--app", config.app, "--json"],
-				NamedListSchema,
+				VolumeListSchema,
 			) ?? []
-		if (!volumes.some((v) => nameOf(v) === config.volume!.name)) {
+		const existing = volumes.find((v) => v.name === config.volume!.name)
+		if (existing && existing.size_gb < config.volume.sizeGb) {
+			logger.info("ensureFlyResources", "growing Fly volume", {
+				app: config.app,
+				volumeId: existing.id,
+				fromGb: existing.size_gb,
+				toGb: config.volume.sizeGb,
+			})
+			run("fly", [
+				"volumes",
+				"extend",
+				existing.id,
+				"--app",
+				config.app,
+				"--size",
+				String(config.volume.sizeGb),
+				"--yes",
+			])
+		}
+		if (!existing) {
 			logger.info("ensureFlyResources", "creating Fly volume", {
 				app: config.app,
 				...config.volume,

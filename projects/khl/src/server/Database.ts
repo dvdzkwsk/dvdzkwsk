@@ -2,7 +2,15 @@ import * as fs from "fs"
 import * as path from "path"
 import {Logger} from "@dvdzkwsk/logger"
 import {Database as SQLiteDatabase} from "bun:sqlite"
-import {StatusCheck, StatusDay, StatusLevel} from "../shared/ApiJson.js"
+import {LeagueDatabase, TeamSource, toPlaceholders} from "./LeagueDatabase.js"
+import {
+	parseRegistrationKey,
+	RegistrationKey,
+	StatusCheck,
+	StatusDay,
+	StatusLevel,
+	toRegistrationKey,
+} from "../shared/ApiJson.js"
 import {KHLPlayerSearchResult, normalizePlayerName} from "../shared/KHLJson.js"
 
 const logger = new Logger("Database")
@@ -113,6 +121,234 @@ const MIGRATIONS = [
 			REFERENCES registrations (khl_player_id, team_id)
 	);
 	`,
+	`
+	-- Loaded KHL and LiveBarn data (see KHLCache), so it survives restarts
+	CREATE TABLE cache_entries (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		loaded_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
+	CREATE INDEX cache_entries_expires_at ON cache_entries (expires_at);
+	`,
+	`
+	-- Fetched pages moved to their own file (PageStore). This holds what we
+	-- compute from them (see AppCache), gzipped.
+	DROP TABLE cache_entries;
+	CREATE TABLE app_cache (
+		key TEXT PRIMARY KEY,
+		value BLOB NOT NULL,
+		computed_at INTEGER NOT NULL
+	);
+	`,
+	`
+	-- The league's data, derived from fetched pages (see KHLSyncer, which
+	-- processes each page as it's stored). Rows refer to each other by id;
+	-- names come from joins. Stat columns and values, which each page
+	-- defines, are JSON, always read whole.
+	DROP TABLE app_cache;
+	CREATE TABLE seasons (
+		season_id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		-- The season the league's default teams page shows
+		is_current INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE TABLE divisions (
+		division_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		PRIMARY KEY (division_id, season_id)
+	);
+	-- A team as of one season. source says which page named it last; a
+	-- teams page outranks a schedule, a box score, a roster, and a search
+	CREATE TABLE teams (
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		name TEXT NOT NULL,
+		logo_url TEXT,
+		division_id TEXT,
+		source TEXT NOT NULL,
+		PRIMARY KEY (team_id, season_id),
+		CHECK (source IN ('teams-page', 'schedule', 'box-score', 'roster', 'search'))
+	);
+	CREATE TABLE arenas (
+		arena_id TEXT PRIMARY KEY,
+		name TEXT NOT NULL
+	);
+	-- Each team's schedule as its schedule page lists it
+	CREATE TABLE schedule_games (
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		seq INTEGER NOT NULL,
+		-- Null for a game the league never linked
+		game_id TEXT,
+		starts_at TEXT NOT NULL,
+		home_away TEXT NOT NULL,
+		opponent_id TEXT NOT NULL,
+		arena_id TEXT,
+		result TEXT,
+		score TEXT,
+		is_final INTEGER NOT NULL,
+		PRIMARY KEY (team_id, season_id, seq),
+		CHECK (home_away IN ('home', 'away'))
+	);
+	CREATE INDEX schedule_games_game_id ON schedule_games (game_id);
+	-- A team's stats page: its stat columns, and a row per player
+	CREATE TABLE team_seasons (
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		skater_columns TEXT NOT NULL,
+		goalie_columns TEXT NOT NULL,
+		PRIMARY KEY (team_id, season_id)
+	);
+	CREATE TABLE roster_stats (
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		-- Goalies are listed in both tables, with empty skater stats
+		is_goalie INTEGER NOT NULL,
+		seq INTEGER NOT NULL,
+		khl_player_id TEXT NOT NULL,
+		number TEXT,
+		stats TEXT NOT NULL,
+		PRIMARY KEY (team_id, season_id, is_goalie, khl_player_id)
+	);
+	-- A registration's player page as of one season
+	CREATE TABLE player_profiles (
+		khl_player_id TEXT NOT NULL,
+		team_id TEXT NOT NULL,
+		season_id TEXT NOT NULL,
+		number TEXT,
+		position TEXT,
+		team_line TEXT,
+		stat_sections TEXT NOT NULL,
+		season_tables TEXT NOT NULL,
+		PRIMARY KEY (khl_player_id, team_id, season_id)
+	);
+	-- A game from its box score and stats page
+	CREATE TABLE games (
+		game_id TEXT PRIMARY KEY,
+		starts_at TEXT NOT NULL,
+		arena_id TEXT,
+		-- The box score's period column headers, as JSON
+		periods TEXT NOT NULL,
+		has_summary INTEGER NOT NULL,
+		processed_at INTEGER NOT NULL,
+		-- When it was first saved with its summary and both lineups; null
+		-- until then
+		completed_at INTEGER
+	);
+	CREATE TABLE game_teams (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		side TEXT NOT NULL,
+		team_id TEXT NOT NULL,
+		-- The season the game's team links point at
+		season_id TEXT NOT NULL,
+		goals INTEGER,
+		shots INTEGER,
+		-- The stats page's columns; null if it couldn't be read
+		skater_columns TEXT,
+		goalie_columns TEXT,
+		PRIMARY KEY (game_id, side),
+		CHECK (side IN ('home', 'away'))
+	);
+	CREATE INDEX game_teams_team ON game_teams (team_id, season_id);
+	CREATE TABLE game_periods (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		side TEXT NOT NULL,
+		period INTEGER NOT NULL,
+		goals INTEGER,
+		shots INTEGER,
+		PRIMARY KEY (game_id, side, period)
+	);
+	-- Goals and penalties, in scoresheet order (seq). Columns for one kind
+	-- are null for the other.
+	CREATE TABLE game_events (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		seq INTEGER NOT NULL,
+		kind TEXT NOT NULL,
+		team_id TEXT NOT NULL,
+		period TEXT NOT NULL,
+		time TEXT NOT NULL,
+		goal_type TEXT,
+		scorer_season_goals INTEGER,
+		infraction TEXT,
+		duration TEXT,
+		PRIMARY KEY (game_id, seq),
+		CHECK (kind IN ('goal', 'penalty')),
+		CHECK (kind = 'goal' OR (goal_type IS NULL AND scorer_season_goals IS NULL)),
+		CHECK (kind = 'penalty' OR (infraction IS NULL AND duration IS NULL)),
+		CHECK (kind = 'goal' OR (infraction IS NOT NULL AND duration IS NOT NULL))
+	);
+	-- Who was in each event, by KHL player id; their names come from
+	-- registrations, by (KHL player id, the event's team). A bench penalty
+	-- has no one.
+	CREATE TABLE game_event_players (
+		game_id TEXT NOT NULL,
+		seq INTEGER NOT NULL,
+		role TEXT NOT NULL,
+		-- The assist's order on the goal; 0 for a scorer or penalized player
+		position INTEGER NOT NULL,
+		khl_player_id TEXT NOT NULL,
+		PRIMARY KEY (game_id, seq, role, position),
+		FOREIGN KEY (game_id, seq) REFERENCES game_events (game_id, seq)
+			ON DELETE CASCADE,
+		CHECK (role IN ('scorer', 'assist', 'penalized'))
+	);
+	CREATE INDEX game_event_players_player ON game_event_players (khl_player_id);
+	-- Who dressed, for which team, and their stats in the game. A team's
+	-- lineup is posted once it has rows.
+	CREATE TABLE game_lineups (
+		game_id TEXT NOT NULL REFERENCES games (game_id) ON DELETE CASCADE,
+		team_id TEXT NOT NULL,
+		is_goalie INTEGER NOT NULL,
+		seq INTEGER NOT NULL,
+		khl_player_id TEXT NOT NULL,
+		number TEXT,
+		stats TEXT NOT NULL,
+		PRIMARY KEY (game_id, team_id, is_goalie, khl_player_id)
+	);
+	CREATE INDEX game_lineups_khl_player_id ON game_lineups (khl_player_id);
+	-- Every page the syncer keeps, and when it's next due. The loop takes
+	-- the most urgent due page; processing a page schedules what follows
+	-- from it.
+	CREATE TABLE fetch_queue (
+		url TEXT PRIMARY KEY,
+		-- The SyncPage, as JSON
+		page TEXT NOT NULL,
+		season_id TEXT,
+		-- Lower is sooner: how many seasons before the current one
+		priority INTEGER NOT NULL,
+		next_at INTEGER NOT NULL,
+		attempts INTEGER NOT NULL DEFAULT 0,
+		last_error TEXT,
+		synced_at INTEGER,
+		-- Which version of the processing built its rows (see
+		-- PROCESSING_VERSION); a newer version reprocesses stored pages
+		processed_version INTEGER
+	);
+	CREATE INDEX fetch_queue_due ON fetch_queue (priority, next_at);
+	-- Each KHL id attached to an existing player only because the names
+	-- match, so those matches can be reviewed and undone
+	CREATE TABLE name_matches (
+		khl_player_id TEXT NOT NULL,
+		team_id TEXT NOT NULL,
+		player_id TEXT NOT NULL,
+		accepted INTEGER NOT NULL,
+		matched_at TEXT NOT NULL,
+		PRIMARY KEY (khl_player_id, team_id)
+	);
+	`,
+	`
+	-- A team's name and logo belong to the team, not to each registration:
+	-- keep each one's as the team's for its seasons, as a roster names it,
+	-- then drop them from registrations
+	INSERT OR IGNORE INTO teams (team_id, season_id, name, logo_url, source)
+	SELECT r.team_id, s.season_id, r.team_name, r.team_logo_url, 'roster'
+	FROM registrations r
+	JOIN registration_seasons s USING (khl_player_id, team_id);
+	ALTER TABLE registrations DROP COLUMN team_name;
+	ALTER TABLE registrations DROP COLUMN team_logo_url;
+	`,
 ]
 
 export function openDatabase(filepath: string) {
@@ -143,7 +379,8 @@ interface RegistrationRow {
 	name: string
 	position: string | null
 	team_id: string
-	team_name: string
+	/** From `teams`, as of the registration's latest season there */
+	team_name: string | null
 	team_logo_url: string | null
 	updated_at: string
 	season_ids: string | null
@@ -158,7 +395,12 @@ interface StatusCheckRow {
 }
 
 export class KHLDatabase {
-	constructor(private db: SQLiteDatabase) {}
+	/** The league's data derived from fetched pages, in the same file */
+	readonly league: LeagueDatabase
+
+	constructor(private db: SQLiteDatabase) {
+		this.league = new LeagueDatabase(db)
+	}
 
 	getPlayer(id: string): Player | null {
 		return (
@@ -170,12 +412,93 @@ export class KHLDatabase {
 		)
 	}
 
+	/** Each KHL id attached to a player only because the names match */
+	getNameMatches(): {
+		khlPlayerId: string
+		teamId: string
+		playerId: string
+		accepted: boolean
+	}[] {
+		return this.db
+			.query<
+				{
+					khl_player_id: string
+					team_id: string
+					player_id: string
+					accepted: number
+				},
+				[]
+			>(
+				"SELECT khl_player_id, team_id, player_id, accepted FROM name_matches",
+			)
+			.all()
+			.map((row) => ({
+				khlPlayerId: row.khl_player_id,
+				teamId: row.team_id,
+				playerId: row.player_id,
+				accepted: row.accepted === 1,
+			}))
+	}
+
+	/** Our player UUID for each registration we've recorded */
+	getPlayerIdsByRegistration(
+		keys: RegistrationKey[],
+	): Map<RegistrationKey, string> {
+		const ids = [
+			...new Set(keys.map((k) => parseRegistrationKey(k).khlPlayerId)),
+		]
+		const rows = this.db
+			.query<
+				{khl_player_id: string; team_id: string; player_id: string},
+				string[]
+			>(
+				`SELECT khl_player_id, team_id, player_id FROM registrations
+				WHERE khl_player_id IN (${toPlaceholders(ids)})`,
+			)
+			.all(...ids)
+		return new Map(
+			rows.map((row) => [
+				toRegistrationKey({
+					khlPlayerId: row.khl_player_id,
+					teamId: row.team_id,
+				}),
+				row.player_id,
+			]),
+		)
+	}
+
+	/**
+	 * The KHL player ids registered on a team whose latest season there is
+	 * `seasonId`: a registration's player page is read as of its latest season
+	 */
+	getTeamSeasonLatestPlayerIds(teamId: string, seasonId: string): string[] {
+		return this.db
+			.query<{khl_player_id: string}, {teamId: string; seasonId: string}>(
+				`SELECT khl_player_id FROM registration_seasons
+				WHERE team_id = $teamId
+				GROUP BY khl_player_id
+				HAVING max(CAST(season_id AS INTEGER)) = CAST($seasonId AS INTEGER)`,
+			)
+			.all({teamId, seasonId})
+			.map((row) => row.khl_player_id)
+	}
+
 	getRegistrations(playerId: string): Registration[] {
 		const rows = this.db
 			.query<RegistrationRow, {playerId: string}>(
-				`SELECT r.*, group_concat(s.season_id) AS season_ids
+				`SELECT r.*, group_concat(s.season_id) AS season_ids,
+					t.name AS team_name, t.logo_url AS team_logo_url
 				FROM registrations r
 				LEFT JOIN registration_seasons s USING (khl_player_id, team_id)
+				LEFT JOIN teams t ON t.team_id = r.team_id AND t.season_id = (
+					SELECT t2.season_id FROM teams t2
+					JOIN registration_seasons s2
+						ON s2.team_id = t2.team_id AND s2.season_id = t2.season_id
+					WHERE s2.khl_player_id = r.khl_player_id
+						AND s2.team_id = r.team_id
+					ORDER BY CAST(t2.season_id AS INTEGER) DESC
+					LIMIT 1
+				)
 				WHERE r.player_id = $playerId
 				GROUP BY r.khl_player_id, r.team_id`,
 			)
@@ -184,28 +507,31 @@ export class KHLDatabase {
 	}
 
 	/**
-	 * Records KHL search results, attaching each new KHL player id to the
-	 * player with the same normalized name (or a new player). Returns the
-	 * player UUID for each KHL player id.
+	 * Records registrations from a page that lists players (a search, a
+	 * roster, or a box score), attaching each new KHL player id to the player
+	 * with the same normalized name (see acceptNameMatch), or a new player.
+	 * Each team is recorded as `source` names it, unless a page that
+	 * outranks it already has. Returns the player UUID for each KHL player id.
 	 */
-	recordRegistrations(results: KHLPlayerSearchResult[]): Map<string, string> {
+	recordRegistrations(
+		results: KHLPlayerSearchResult[],
+		source: TeamSource,
+	): Map<string, string> {
 		const playerIds = new Map<string, string>()
 		this.db.transaction(() => {
 			const now = new Date().toISOString()
 			for (const result of results) {
 				const playerId =
 					this.findPlayerIdForRegistration(result.playerId) ??
-					this.assignPlayer(result.name, now)
+					this.assignPlayer(result, now)
 				this.db
 					.query(
 						`INSERT INTO registrations
-							(khl_player_id, player_id, name, position, team_id, team_name, team_logo_url, updated_at)
-						VALUES ($khlPlayerId, $playerId, $name, $position, $teamId, $teamName, $teamLogoUrl, $now)
+							(khl_player_id, player_id, name, position, team_id, updated_at)
+						VALUES ($khlPlayerId, $playerId, $name, $position, $teamId, $now)
 						ON CONFLICT (khl_player_id, team_id) DO UPDATE SET
 							name = excluded.name,
 							position = coalesce(excluded.position, position),
-							team_name = excluded.team_name,
-							team_logo_url = coalesce(excluded.team_logo_url, team_logo_url),
 							updated_at = excluded.updated_at`,
 					)
 					.run({
@@ -214,10 +540,18 @@ export class KHLDatabase {
 						name: result.name,
 						position: result.position,
 						teamId: result.teamId,
-						teamName: result.teamName,
-						teamLogoUrl: result.teamLogoUrl,
 						now,
 					})
+				this.league.recordTeams([
+					{
+						teamId: result.teamId,
+						seasonId: result.seasonId,
+						name: result.teamName,
+						logoUrl: result.teamLogoUrl,
+						divisionId: null,
+						source,
+					},
+				])
 				this.db
 					.query(
 						`INSERT OR IGNORE INTO registration_seasons (khl_player_id, team_id, season_id)
@@ -262,8 +596,6 @@ export class KHLDatabase {
 					`UPDATE registrations SET
 						name = $name,
 						position = $position,
-						team_name = $teamName,
-						team_logo_url = $teamLogoUrl,
 						updated_at = $now
 					WHERE khl_player_id = $khlPlayerId AND team_id = $teamId`,
 				)
@@ -271,10 +603,23 @@ export class KHLDatabase {
 					...key,
 					name: registration.name,
 					position: registration.position,
-					teamName: registration.teamName,
-					teamLogoUrl: registration.teamLogoUrl,
 					now: new Date().toISOString(),
 				})
+			// The team as the KHL's search names it, as of the registration's
+			// latest season, unless a page that outranks a search has
+			const latestSeasonId = registration.seasonIds.at(-1)
+			if (latestSeasonId) {
+				this.league.recordTeams([
+					{
+						teamId: registration.teamId,
+						seasonId: latestSeasonId,
+						name: registration.teamName,
+						logoUrl: registration.teamLogoUrl,
+						divisionId: null,
+						source: "search",
+					},
+				])
+			}
 			this.db
 				.query(
 					`DELETE FROM registration_seasons
@@ -380,7 +725,14 @@ export class KHLDatabase {
 		return row?.player_id ?? null
 	}
 
-	private assignPlayer(name: string, now: string): string {
+	/**
+	 * The player a new KHL id belongs to: the one player with the same
+	 * normalized name if the match is accepted (see acceptNameMatch), or else
+	 * a new player. Every match is recorded in name_matches, so the automatic
+	 * ones can be reviewed and undone.
+	 */
+	private assignPlayer(result: KHLPlayerSearchResult, now: string): string {
+		const {name} = result
 		const nameKey = normalizePlayerName(name)
 		const candidates = this.db
 			.query<{id: string}, {nameKey: string}>(
@@ -388,7 +740,39 @@ export class KHLDatabase {
 			)
 			.all({nameKey})
 		if (candidates.length === 1) {
-			return candidates[0]!.id
+			const candidate = candidates[0]!
+			const accepted = acceptNameMatch({
+				incoming: {
+					khlPlayerId: result.playerId,
+					teamId: result.teamId,
+					seasonId: result.seasonId,
+					name,
+				},
+				candidate: {
+					playerId: candidate.id,
+					registrations: this.getRegistrations(candidate.id),
+				},
+			})
+			this.db
+				.query(
+					`INSERT INTO name_matches
+						(khl_player_id, team_id, player_id, accepted, matched_at)
+					VALUES ($khlPlayerId, $teamId, $playerId, $accepted, $now)
+					ON CONFLICT (khl_player_id, team_id) DO UPDATE SET
+						player_id = excluded.player_id,
+						accepted = excluded.accepted,
+						matched_at = excluded.matched_at`,
+				)
+				.run({
+					khlPlayerId: result.playerId,
+					teamId: result.teamId,
+					playerId: candidate.id,
+					accepted: accepted ? 1 : 0,
+					now,
+				})
+			if (accepted) {
+				return candidate.id
+			}
 		}
 		if (candidates.length > 1) {
 			// Namesakes were split by hand; a new registration can't be placed
@@ -413,6 +797,30 @@ export class KHLDatabase {
 	}
 }
 
+/** A new KHL id with the same normalized name as one existing player */
+export interface NameMatch {
+	incoming: {
+		khlPlayerId: string
+		teamId: string
+		seasonId: string
+		name: string
+	}
+	candidate: {playerId: string; registrations: Registration[]}
+}
+
+/**
+ * Whether a new KHL id with the same name as an existing player is the same
+ * person, or a namesake who should get their own player
+ */
+export function acceptNameMatch(_match: NameMatch): boolean {
+	// TODO(david): decide when a match is the same person. With every
+	// season's rosters synced, a match can span a decade and be two people.
+	// Candidates: the candidate has a registration on the same team, or in an
+	// adjacent season. Until then every match is accepted, as before, since
+	// rejecting splits each returning player's seasons across players.
+	return true
+}
+
 function toRegistration(row: RegistrationRow): Registration {
 	return {
 		khlPlayerId: row.khl_player_id,
@@ -420,7 +828,8 @@ function toRegistration(row: RegistrationRow): Registration {
 		name: row.name,
 		position: row.position,
 		teamId: row.team_id,
-		teamName: row.team_name,
+		// The team's id if no teams page, roster, or search named it
+		teamName: row.team_name ?? row.team_id,
 		teamLogoUrl: row.team_logo_url,
 		seasonIds: (row.season_ids?.split(",") ?? []).sort(
 			(a, b) => Number(a) - Number(b),

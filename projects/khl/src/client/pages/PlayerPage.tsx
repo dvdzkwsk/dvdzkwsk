@@ -1,21 +1,24 @@
 import {Tabs} from "@base-ui/react/tabs"
 import {doRequest} from "@dvdzkwsk/util/ApiUtil"
-import {matchFn, matchField} from "@dvdzkwsk/util/MatchUtil"
+import {matchFn, matchField, matchValue} from "@dvdzkwsk/util/MatchUtil"
 import * as React from "react"
 import {
+	ActivityOptions,
+	ActivityResponse,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
 	GET_PLAYER_ENDPOINT,
-	getPlayerRegistrationKey,
+	toRegistrationKey,
 	PlayerRegistration,
 	PlayerResponse,
 } from "../../shared/ApiJson.js"
+import {LIMITS} from "../../shared/KHLConfig.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
-import {ActivityFeed} from "../Activity.js"
+import {ActivityFeed, toActivityFeed} from "../Activity.js"
 import {
 	BadgeHint,
 	BadgeIcon,
 	getBadges,
-	RECENT_PENALTIES_ACTIVITY,
+	RecentPenalties,
 	toRecentPenalties,
 } from "../Badges.js"
 import {
@@ -44,6 +47,7 @@ import {
 import {PlayerIntegrityReport} from "../Integrity.js"
 import {
 	AppContext,
+	AsyncState,
 	getBadgesHref,
 	Route,
 	RouteProps,
@@ -54,6 +58,18 @@ import {
 /** Keeps upcoming games to one row of cards */
 const MAX_UPCOMING_GAMES = 3
 const MAX_PAST_GAMES = 20
+
+/**
+ * Everything the page shows from recent scoresheets, in one request since it
+ * reads a page or two per game: the activity feed, the games the player sat
+ * out, and the badges' penalty trend, which counts every game they dressed for
+ * in its window
+ */
+const PLAYER_PAGE_ACTIVITY: ActivityOptions = {
+	kinds: ["goal", "assist", "penalty", "played", "skipped"],
+	days: LIMITS.BADGE_TREND_LOOKBACK_DAYS,
+	limit: LIMITS.ACTIVITY_MAX_EVENTS,
+}
 
 const PlayerPage = (props: RouteProps) => {
 	// ?integrity swaps the profile for a report comparing it with the KHL
@@ -78,23 +94,40 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 		[playerId],
 	)
 	// Separate from the player, since it reads a box score per recent game
-	const activity = useAsync(
-		() => doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {playerId}),
-		[playerId],
-	)
+	const activity = useAsync(() => {
+		return doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {
+			playerId,
+			...PLAYER_PAGE_ACTIVITY,
+		})
+	}, [playerId])
+	const feed: AsyncState<ActivityResponse> = matchField(activity, "status", {
+		loading: (s) => s,
+		error: (s) => s,
+		success: (s) => ({...s, data: toActivityFeed(s.data)}),
+	})
 	// The games the player sat out, from each recent game's lineup. Until
 	// they load, the lists that leave them out wait; if they fail, every
 	// team game shows.
-	const skippedState = useAsync(() => {
-		return doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {
-			playerId,
-			kinds: ["skipped"],
-		})
-	}, [playerId])
-	const skipped: SkippedGames = matchField(skippedState, "status", {
+	const skipped: SkippedGames = matchField(activity, "status", {
 		loading: () => "loading" as const,
 		error: () => new Set<string>(),
-		success: (s) => new Set(s.data.games.map((g) => g.gameId)),
+		success: (s) =>
+			new Set(
+				s.data.games
+					.filter((g) =>
+						matchValue(g.attendance, {
+							played: false,
+							skipped: true,
+						}),
+					)
+					.map((g) => g.gameId),
+			),
+	})
+	// Until they load (or if they fail), the Angel and Devil badges are left out
+	const recentPenalties = matchField(activity, "status", {
+		loading: () => null,
+		error: () => null,
+		success: (s) => toRecentPenalties(s.data),
 	})
 	const now = useNow()
 
@@ -120,7 +153,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 				{(player) => {
 					const selected =
 						player.registrations.find(
-							(r) => getPlayerRegistrationKey(r) === selectedTeam,
+							(r) => toRegistrationKey(r) === selectedTeam,
 						) ?? null
 					const games = selected
 						? player.games.filter(({game}) => {
@@ -152,7 +185,11 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 									/>
 								</div>
 							)}
-							<PlayerHeader player={player} skipped={skipped} />
+							<PlayerHeader
+								player={player}
+								skipped={skipped}
+								recentPenalties={recentPenalties}
+							/>
 							{player.unavailableSchedules.length > 0 && (
 								<Warnings
 									summary={`${
@@ -197,7 +234,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 									// Reset the list's scroll position when switching teams
 									key={
 										selected
-											? getPlayerRegistrationKey(selected)
+											? toRegistrationKey(selected)
 											: "all"
 									}
 									games={games}
@@ -211,7 +248,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 									skipped={skipped}
 								/>
 								<ActivityFeed
-									state={activity}
+									state={feed}
 									subject="player"
 									now={now}
 								/>
@@ -329,7 +366,7 @@ const PlayerTeamPicker = ({
 				{label: "Current", items: current.map(toTeamItem)},
 				{label: "Past", items: past.map(toTeamItem)},
 			].filter((group) => group.items.length > 0)}
-			value={selected ? getPlayerRegistrationKey(selected) : ALL_TEAMS}
+			value={selected ? toRegistrationKey(selected) : ALL_TEAMS}
 			onChange={(value) =>
 				onSelectTeam(value === ALL_TEAMS ? null : value)
 			}
@@ -342,9 +379,11 @@ const PlayerTeamPicker = ({
 const PlayerHeader = ({
 	player,
 	skipped,
+	recentPenalties,
 }: {
 	player: PlayerResponse
 	skipped: SkippedGames
+	recentPenalties: RecentPenalties | null
 }) => {
 	const current = player.registrations.filter((r) => {
 		return isCurrentRegistration(player, r)
@@ -382,7 +421,7 @@ const PlayerHeader = ({
 								.join(" · ")
 							return (
 								<span
-									key={getPlayerRegistrationKey(r)}
+									key={toRegistrationKey(r)}
 									className="PlayerHero-team"
 								>
 									<TeamAvatar
@@ -422,33 +461,28 @@ const PlayerHeader = ({
 					/>
 					<HeroLastResults games={player.games} skipped={skipped} />
 
-					<PlayerBadges player={player} />
+					<PlayerBadges
+						player={player}
+						recentPenalties={recentPenalties}
+					/>
 				</div>
 			</div>
 		</header>
 	)
 }
 
-/**
- * Recent penalties load separately, since they read a page per game; until
- * they arrive (or if they fail), the Angel and Devil badges are left out.
- */
-const PlayerBadges = ({player}: {player: PlayerResponse}) => {
-	const recent = useAsync(async () => {
-		const activity = await doRequest(GET_PLAYER_ACTIVITY_ENDPOINT, {
-			playerId: player.playerId,
-			...RECENT_PENALTIES_ACTIVITY,
-		})
-		return toRecentPenalties(activity)
-	}, [player.playerId])
+/** Null `recentPenalties` (still loading, or failed) leaves out the trend badges */
+const PlayerBadges = ({
+	player,
+	recentPenalties,
+}: {
+	player: PlayerResponse
+	recentPenalties: RecentPenalties | null
+}) => {
 	const badges = getBadges({
 		name: player.name,
 		gamesPlayed: sumStat(player.registrations, "Games Played", "career"),
-		recentPenalties: matchField(recent, "status", {
-			loading: () => null,
-			error: () => null,
-			success: (s) => s.data,
-		}),
+		recentPenalties,
 	})
 	if (badges.length === 0) {
 		return null
@@ -490,7 +524,7 @@ function getDivision(registration: PlayerRegistration): string {
 function toTeamItem(r: PlayerRegistration): PickerItem {
 	const seasons = `${r.seasonIds.length} ${r.seasonIds.length === 1 ? "season" : "seasons"}`
 	return {
-		value: getPlayerRegistrationKey(r),
+		value: toRegistrationKey(r),
 		label: r.teamName,
 		icon: (
 			<TeamAvatar name={r.teamName} logoUrl={r.teamLogoUrl} size={20} />
@@ -680,8 +714,7 @@ const StatsByTeam = ({
 			rowKey={(row) =>
 				matchField(row, "kind", {
 					total: () => "total",
-					registration: (r) =>
-						getPlayerRegistrationKey(r.registration),
+					registration: (r) => toRegistrationKey(r.registration),
 				})
 			}
 			rowClassName={(row) =>

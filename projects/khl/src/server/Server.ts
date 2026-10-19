@@ -14,6 +14,7 @@ import {
 	LiveBarnSurfaceMapping,
 	toDisplayArena,
 } from "./Arenas.js"
+import {KHLCache} from "./Cache.js"
 import {openDatabase, Player, Registration} from "./Database.js"
 import {
 	compareRegistration,
@@ -22,113 +23,122 @@ import {
 	toIntegrityRecord,
 } from "./Integrity.js"
 import {
-	KHL_ALL_SEASONS,
+	getKHLArena,
+	getKHLGamePreviewStats,
+	getKHLLeagueSchedule,
+	getKHLPlayer,
 	getKHLPlayerSearchUrl,
 	getKHLPlayerUrl,
-	getKHLArena,
-	getKHLBoxScore,
-	getKHLGamePreviewStats,
-	getKHLGameStats,
 	getKHLScoreboard,
-	getKHLLeagueSchedule,
-	getKHLTeamStats,
-	getKHLPlayer,
 	getKHLStandings,
 	getKHLTeamSchedule,
-	getKHLTeamsPage,
+	KHL_ALL_SEASONS,
 	searchKHLPlayers,
 } from "./KHL.js"
+import {KHLSyncer} from "./KHLSyncer.js"
+import {GameRecord, GameRecordTeam, RosterStatRow} from "./LeagueDatabase.js"
 import {getLivebarnVenues} from "./LiveBarn.js"
+import {
+	openPageStore,
+	PageLoad,
+	PageLoadSource,
+	setPageStore,
+	withPageLoadLog,
+} from "./PageStore.js"
 import {DEPLOY_INFO, getStatus, startStatusChecks} from "./Status.js"
+import {getSyncPageUrl, SyncPage} from "./SyncPages.js"
 import {
 	ActivityAttendance,
 	ActivityEvent,
 	ActivityGame,
 	ActivityKind,
 	ActivityResponse,
+	CacheCheckResponse,
+	CHECK_CACHE_ENDPOINT,
 	DEFAULT_ACTIVITY_KINDS,
 	FeedGame,
 	GameResponse,
+	GamesResponse,
+	GET_CACHE_ENTRY_ENDPOINT,
 	GET_GAME_ENDPOINT,
 	GET_MATCHUP_ENDPOINT,
-	LIST_PLAYERS_ENDPOINT,
-	LIST_TEAMS_ENDPOINT,
-	LIST_TEAM_SEASONS_ENDPOINT,
-	MatchupResponse,
-	MatchupTeam,
-	RecentGame,
-	toRecentGame,
-	TeamSeasonsResponse,
-	TeamsResponse,
-	HeadToHeadGame,
-	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_ACTIVITY_ENDPOINT,
-	CacheCheckResponse,
-	CHECK_CACHE_ENDPOINT,
-	getPlayerRegistrationKey,
-	GET_CACHE_ENTRY_ENDPOINT,
+	GET_PLAYER_ENDPOINT,
 	GET_PLAYER_INTEGRITY_ENDPOINT,
-	JsonValue,
-	JsonValueSchema,
+	GET_RINK_ENDPOINT,
+	GET_STANDINGS_ENDPOINT,
+	GET_STATUS_ENDPOINT,
+	GET_TEAM_ACTIVITY_ENDPOINT,
+	GET_TEAM_ENDPOINT,
+	parseRegistrationKey,
+	RegistrationKey,
+	toRegistrationKey,
+	HeadToHeadGame,
 	IntegrityCacheEntry,
 	IntegrityRegistration,
 	IntegrityRegistrationCacheKeys,
 	IntegrityUnlinked,
+	JsonValue,
+	JsonValueSchema,
+	LIST_GAMES_ENDPOINT,
+	LIST_PLAYERS_ENDPOINT,
+	LIST_RINKS_ENDPOINT,
+	LIST_TEAM_SEASONS_ENDPOINT,
+	LIST_TEAMS_ENDPOINT,
+	LiveBarnLink,
+	LOG_ENDPOINT,
+	MatchupResponse,
+	MatchupTeam,
 	PlayerIntegrityResponse,
+	PlayerResponse,
+	PlayerSearchGroup,
+	PlayersResponse,
+	RecentGame,
+	RecentRinkGame,
 	RELOAD_PLAYER_INTEGRITY_ENDPOINT,
 	RESYNC_PLAYER_ENDPOINT,
-	GET_TEAM_ACTIVITY_ENDPOINT,
-	GET_TEAM_ENDPOINT,
-	GET_RINK_ENDPOINT,
-	GET_STATUS_ENDPOINT,
-	GET_STANDINGS_ENDPOINT,
-	LIST_GAMES_ENDPOINT,
-	GamesResponse,
-	LIST_RINKS_ENDPOINT,
-	LOG_ENDPOINT,
-	RUN_BENCHMARK_ENDPOINT,
 	Rink,
 	RinkGame,
-	RecentRinkGame,
 	RinkInfo,
 	RinkResponse,
 	RinkTeam,
 	RosterPlayer,
-	TeamRoster,
-	UpcomingGame,
-	LiveBarnLink,
-	PlayerResponse,
-	PlayersResponse,
-	PlayerSearchGroup,
+	RUN_BENCHMARK_ENDPOINT,
 	SEARCH_ENDPOINT,
-	UnavailableSchedule,
 	SearchResponse,
 	SeasonSummary,
 	StandingsResponse,
 	TeamResponse,
+	TeamRoster,
+	TeamSeasonsResponse,
+	TeamsResponse,
+	toRecentGame,
+	UnavailableSchedule,
+	UpcomingGame,
 } from "../shared/ApiJson.js"
 import {getCity} from "../shared/Cities.js"
 import {LIMITS} from "../shared/KHLConfig.js"
 import {
 	compareGameEvents,
 	getGoalsByTeam,
-	getLineupAttendance,
 	KHLBoxScore,
 	KHLBoxScoreTeam,
 	KHLGame,
 	KHLGamePreviewStats,
 	KHLGameStats,
 	KHLGameTeamStats,
+	KHLHomeAway,
 	KHLLeagueGame,
-	KHLScoreboardGame,
-	KHLScoreboardTeam,
 	KHLLeagueTeam,
+	KHLPlayer,
 	KHLPlayerSearchResult,
 	KHLRosterRow,
+	KHLScoreboardGame,
+	KHLScoreboardTeam,
 	KHLSeason,
 	KHLTeam,
-	KHLTeamStats,
 	KHLTeamsPage,
+	KHLTeamStats,
 	normalizePlayerName,
 } from "../shared/KHLJson.js"
 import {
@@ -157,14 +167,48 @@ const DB_PATH =
 	process.env.KHL_DB_PATH ?? path.join(PROJECT_DIR, "data/khl.sqlite")
 
 const db = openDatabase(DB_PATH)
+// Fetched KHL and LiveBarn pages, in a file of their own since they can be
+// fetched again, unlike the player identities in `db`
+const SOURCES_DB_PATH =
+	process.env.KHL_SOURCES_DB_PATH ??
+	path.join(PROJECT_DIR, "data/sources.sqlite")
+setPageStore(openPageStore(SOURCES_DB_PATH))
 
 const app = express()
+
+// Parsed pages the syncer doesn't keep (standings, scoreboards, previews,
+// arenas, LiveBarn), in memory
+const cache = new KHLCache()
+// Keeps the league's tables in sync with the KHL; endpoints read the tables
+const syncer = new KHLSyncer(db)
 
 // The league-wide players list is ~700kb of JSON, ~150kb gzipped
 app.use(compression())
 
 // Client log batches with stack traces can outgrow the 100kb default
 app.use(express.json({limit: "512kb"}))
+
+// Reports where each API request's pages came from: counts in Server-Timing
+// (DevTools shows them under the request's Timing), and anything that wasn't
+// in memory in the log. The pages themselves, which name internal cache keys,
+// go in X-KHL-Pages only in dev or when the request sends X-KHL-Debug.
+app.use("/api", (req, res, next) => {
+	const log: PageLoad[] = []
+	const listPages =
+		process.env.NODE_ENV !== "production" || !!req.get("X-KHL-Debug")
+	const json = res.json.bind(res)
+	res.json = (body) => {
+		if (log.length > 0 && !res.headersSent) {
+			res.setHeader("Server-Timing", toServerTiming(log))
+			if (listPages) {
+				res.setHeader("X-KHL-Pages", toPageLoadsHeader(log))
+			}
+			logPageLoads(req.originalUrl, log)
+		}
+		return json(body)
+	}
+	withPageLoadLog(log, next)
+})
 
 app.get("/api/health", (_req, res) => {
 	res.json({ok: true, commit: DEPLOY_INFO.commit, dirty: DEPLOY_INFO.dirty})
@@ -206,12 +250,15 @@ registerEndpoint(app, SEARCH_ENDPOINT, async ({q}) => {
 		return response
 	}
 
-	const registrations = await cached(
+	const registrations = await cache.cached(
 		`search:${query.toLowerCase()}:${teamsPage.season.id}`,
 		10 * MINUTE,
 		() => searchKHLPlayers(query, teamsPage.season.id),
 	)
-	const playerIds = db.recordRegistrations(registrations)
+	// The one place a request records registrations: searches aren't stored
+	// or synced, and a player found here needs a UUID to link to. The
+	// syncer's rosters record the same players as it reaches them.
+	const playerIds = db.recordRegistrations(registrations, "search")
 	const groups = new Map<string, PlayerSearchGroup>()
 	for (const registration of registrations) {
 		const playerId = playerIds.get(registration.playerId)!
@@ -250,7 +297,7 @@ registerEndpoint(app, SEARCH_ENDPOINT, async ({q}) => {
 })
 
 registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
-	const {player, registrations} = await getPlayerRegistrations(playerId)
+	const {player, registrations} = getPlayerRegistrations(playerId)
 
 	const teamsPage = await getTeamsPage()
 	const currentSeason = teamsPage.season
@@ -261,11 +308,8 @@ registerEndpoint(app, GET_PLAYER_ENDPOINT, async ({playerId}) => {
 		Promise.all(
 			registrations.map(async (r) => {
 				try {
-					return await getPlayer(
-						r.khlPlayerId,
-						r.teamId,
-						r.seasonIds.at(-1)!,
-					)
+					const seasonId = r.seasonIds.at(-1)!
+					return await getPlayer(toRegistrationKey(r), seasonId)
 				} catch (error) {
 					logger.warn("getPlayer", "KHL player page unavailable", {
 						khlPlayerId: r.khlPlayerId,
@@ -328,16 +372,13 @@ registerEndpoint(app, RELOAD_PLAYER_INTEGRITY_ENDPOINT, async ({playerId}) => {
 	for (const r of db.getRegistrations(playerId)) {
 		const latestSeasonId = r.seasonIds.at(-1)
 		if (latestSeasonId) {
-			keys.push(
-				getPlayerCacheKey(r.khlPlayerId, r.teamId, latestSeasonId),
-			)
+			keys.push(getPlayerCacheKey(toRegistrationKey(r), latestSeasonId))
 		}
 	}
-	keys.forEach(invalidateCache)
-	logger.info("reloadIntegrity", "dropped cached KHL pages", {
-		playerId,
-		keys,
-	})
+	for (const key of keys) {
+		await getInspectableEntry(key).reload()
+	}
+	logger.info("reloadIntegrity", "reloaded KHL pages", {playerId, keys})
 	return getPlayerIntegrity(player)
 })
 
@@ -346,24 +387,81 @@ registerEndpoint(app, RESYNC_PLAYER_ENDPOINT, async ({playerId}) => {
 })
 
 /**
- * Cache keys an integrity report lists. Their loaders only fetch and parse,
- * so a check can run one again without side effects.
+ * What an integrity report lists, by its key: a player's name search (in
+ * the memory cache), or a player page or schedule (synced into the league
+ * tables)
  */
-const INSPECTABLE_CACHE_PREFIXES = ["history:", "player:", "schedule:"]
+interface InspectableEntry {
+	info: Pick<IntegrityCacheEntry, "cachedAt" | "expiresAt">
+	/** What we have; null if nothing yet */
+	read: () => Promise<unknown>
+	/** The KHL's page now, without keeping it */
+	fetchFresh: () => Promise<unknown>
+	/** Fetches the page again and keeps it */
+	reload: () => Promise<void>
+}
 
-function assertInspectableCacheKey(key: string) {
-	if (!INSPECTABLE_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
-		throw new ApiError(400, `cache key ${key} can't be inspected`)
+function getInspectableEntry(key: string): InspectableEntry {
+	const [prefix, ...ids] = key.split(":")
+	const fromSync = (
+		page: SyncPage,
+		read: () => unknown,
+		fetchFresh: () => Promise<unknown>,
+	): InspectableEntry => {
+		const queued = db.league.getQueueInfo(getSyncPageUrl(page))
+		const toIso = (at: number | null | undefined) =>
+			at ? new Date(at).toISOString() : null
+		return {
+			info: {
+				cachedAt: toIso(queued?.syncedAt),
+				expiresAt: toIso(queued?.nextAt),
+			},
+			read: async () => (queued?.syncedAt ? read() : null),
+			fetchFresh,
+			reload: () => syncer.sync(page, true),
+		}
 	}
+	if (prefix === "player" && ids.length === 3) {
+		const [khlPlayerId, teamId, seasonId] = ids as [string, string, string]
+		const registrationKey = toRegistrationKey({khlPlayerId, teamId})
+		return fromSync(
+			{kind: "player", registrationKey, seasonId},
+			() => db.league.getPlayerProfile(registrationKey, seasonId),
+			() => getKHLPlayer(registrationKey, seasonId, {store: false}),
+		)
+	}
+	if (prefix === "schedule" && ids.length === 2) {
+		const [teamId, seasonId] = ids as [string, string]
+		return fromSync(
+			{kind: "schedule", teamId, seasonId},
+			() => db.league.getSchedule(teamId, seasonId),
+			() => getKHLTeamSchedule(teamId, seasonId, {store: false}),
+		)
+	}
+	if (prefix === "history") {
+		const entry = cache.getLoadedEntry(key)
+		return {
+			info: cache.getInfo(key) ?? {cachedAt: null, expiresAt: null},
+			read: async () => (entry ? await entry.value : null),
+			fetchFresh: async () => {
+				if (!entry) {
+					throw new ApiError(400, `${key} isn't loaded`)
+				}
+				return entry.load()
+			},
+			reload: async () => cache.invalidate(key),
+		}
+	}
+	throw new ApiError(400, `cache key ${key} can't be inspected`)
 }
 
 registerEndpoint(app, GET_CACHE_ENTRY_ENDPOINT, async ({key}) => {
-	assertInspectableCacheKey(key)
-	const entry = getLoadedCacheEntry(key)
+	const entry = getInspectableEntry(key)
+	const value = await entry.read()
 	return {
 		key,
-		...toIntegrityCacheInfo(key),
-		value: entry ? JsonValueSchema.parse(await entry.value) : null,
+		...entry.info,
+		value: value === null ? null : JsonValueSchema.parse(value),
 	}
 })
 
@@ -371,10 +469,10 @@ registerEndpoint(
 	app,
 	CHECK_CACHE_ENDPOINT,
 	async ({key}): Promise<CacheCheckResponse> => {
-		assertInspectableCacheKey(key)
 		const checkedAt = new Date().toISOString()
-		const entry = getLoadedCacheEntry(key)
-		if (!entry) {
+		const entry = getInspectableEntry(key)
+		const stored = await entry.read()
+		if (stored === null) {
 			return {
 				key,
 				status: "not-cached",
@@ -385,11 +483,11 @@ registerEndpoint(
 				error: null,
 			}
 		}
-		const cachedValue = JsonValueSchema.parse(await entry.value)
+		const cachedValue = JsonValueSchema.parse(stored)
 		let khl: JsonValue
 		try {
-			// Deliberately past the cache: the point is the KHL's page now
-			khl = JsonValueSchema.parse(await entry.load())
+			// Deliberately past what's kept: the point is the KHL's page now
+			khl = JsonValueSchema.parse(await entry.fetchFresh())
 		} catch (cause) {
 			const error = toError(cause)
 			logger.warn("checkCache", "KHL page unavailable", {key, error})
@@ -424,10 +522,13 @@ function getStoredPlayer(playerId: string): Player {
 	return player
 }
 
-/** The player's registrations, most recently active first. */
-async function getPlayerRegistrations(playerId: string) {
+/**
+ * The player's registrations, most recently active first, as recorded from
+ * every roster, box score, and search. The syncer records every season's
+ * rosters, so this doesn't search the KHL.
+ */
+function getPlayerRegistrations(playerId: string) {
 	const player = getStoredPlayer(playerId)
-	await syncPlayerHistory(player)
 	const registrations = db
 		.getRegistrations(playerId)
 		.filter((r) => r.seasonIds.length > 0)
@@ -449,7 +550,7 @@ function getHistoryCacheKey(player: Player): string {
  */
 function searchPlayerHistory(player: Player): Promise<KHLPlayerSearchResult[]> {
 	const nameKey = normalizePlayerName(player.name)
-	return cached(getHistoryCacheKey(player), HOUR, async () => {
+	return cache.cached(getHistoryCacheKey(player), HOUR, async () => {
 		return (await searchKHLPlayers(player.name, KHL_ALL_SEASONS)).filter(
 			(r) => normalizePlayerName(r.name) === nameKey,
 		)
@@ -468,7 +569,7 @@ async function syncPlayerHistory(
 ): Promise<KHLPlayerSearchResult[]> {
 	const results = await searchPlayerHistory(player)
 	if (!recordedHistories.has(results)) {
-		db.recordRegistrations(results)
+		db.recordRegistrations(results, "search")
 		recordedHistories.add(results)
 	}
 	return results
@@ -540,7 +641,7 @@ async function getPlayerIntegrity(
 		await Promise.all(
 			registrations.map(async (r) => {
 				return [
-					getPlayerRegistrationKey(r),
+					toRegistrationKey(r),
 					await loadIntegrityProfile(r),
 				] as const
 			}),
@@ -559,7 +660,7 @@ async function getPlayerIntegrity(
 			const reconciled = reconcileRegistration(
 				r,
 				getOwnSearchResults(r),
-				pages.get(getPlayerRegistrationKey(r))!.profile,
+				pages.get(toRegistrationKey(r))!.profile,
 			)
 			if (reconciled) {
 				db.reconcileRegistration({
@@ -581,7 +682,7 @@ async function getPlayerIntegrity(
 
 	const integrityRegistrations = registrations.map(
 		(r): IntegrityRegistration => {
-			const page = pages.get(getPlayerRegistrationKey(r))!
+			const page = pages.get(toRegistrationKey(r))!
 			const ownSearchResults = getOwnSearchResults(r)
 			const stored = toIntegrityRecord(r)
 			const expected =
@@ -614,10 +715,10 @@ async function getPlayerIntegrity(
 	// Search rows with the player's name that aren't this player's recorded
 	// registrations: attached to another player, or not recorded at all (an
 	// id's new team is a new registration, recorded by the next resync)
-	const ownKeys = new Set(registrations.map(getPlayerRegistrationKey))
+	const ownKeys = new Set(registrations.map(toRegistrationKey))
 	const unlinked = new Map<string, IntegrityUnlinked>()
 	for (const s of searchResults ?? []) {
-		const key = getPlayerRegistrationKey({
+		const key = toRegistrationKey({
 			khlPlayerId: s.playerId,
 			teamId: s.teamId,
 		})
@@ -640,8 +741,7 @@ async function getPlayerIntegrity(
 	for (const row of unlinked.values()) {
 		row.seasonIds.sort((a, b) => Number(a) - Number(b))
 		row.khlUrl = getKHLPlayerUrl(
-			row.khlPlayerId,
-			row.teamId,
+			toRegistrationKey(row),
 			row.seasonIds.at(-1)!,
 		).toString()
 	}
@@ -673,7 +773,7 @@ function getRegistrationCacheKeys(
 	const latestSeasonId = r.seasonIds.at(-1)
 	return {
 		profile: latestSeasonId
-			? getPlayerCacheKey(r.khlPlayerId, r.teamId, latestSeasonId)
+			? getPlayerCacheKey(toRegistrationKey(r), latestSeasonId)
 			: null,
 		schedules: r.seasonIds.map((seasonId) => {
 			return getScheduleCacheKey(r.teamId, seasonId)
@@ -696,12 +796,11 @@ async function loadIntegrityProfile(
 		}
 	}
 	const profileUrl = getKHLPlayerUrl(
-		r.khlPlayerId,
-		r.teamId,
+		toRegistrationKey(r),
 		latestSeasonId,
 	).toString()
 	try {
-		const profile = await getPlayer(r.khlPlayerId, r.teamId, latestSeasonId)
+		const profile = await getPlayer(toRegistrationKey(r), latestSeasonId)
 		return {profile, profileError: null, profileUrl}
 	} catch (cause) {
 		const error = toError(cause)
@@ -716,7 +815,7 @@ async function loadIntegrityProfile(
 function toIntegrityCacheInfo(
 	key: string,
 ): Pick<IntegrityCacheEntry, "cachedAt" | "expiresAt"> {
-	return getCacheInfo(key) ?? {cachedAt: null, expiresAt: null}
+	return getInspectableEntry(key).info
 }
 
 /**
@@ -745,11 +844,7 @@ async function getPlayerSchedules(
 	const schedules = await Promise.all(
 		[...teamSeasons.values()].map(async ({teamId, teamName, seasonId}) => {
 			try {
-				return await getSchedule(
-					teamId,
-					seasonId,
-					seasonId === teamsPage.season.id,
-				)
+				return await getSchedule(teamId, seasonId)
 			} catch (error) {
 				logger.warn("getSchedule", "KHL schedule unavailable", {
 					teamId,
@@ -778,10 +873,9 @@ type ActivitySubject =
 
 /** A game in a subject's activity, before it's shaped for the API */
 interface ActivityRow {
-	game: KHLGame
-	boxScore: KHLBoxScore
-	/** The subject's side of the box score */
-	team: KHLBoxScoreTeam
+	game: GameRecord
+	/** The subject's side */
+	side: KHLHomeAway
 	attendance: ActivityAttendance
 	/** Latest first */
 	events: ActivityEvent[]
@@ -790,10 +884,8 @@ interface ActivityRow {
 /**
  * The subject's final games from the `lookbackDays` before their latest one
  * that have a requested event or attendance (see ActivityKind), newest first,
- * with at most `maxEvents` events in all. A player's team schedules include
- * games they sat out, so each game's stats page says whether they dressed
- * before its box score is read. Pages are read a batch at a time, newest game
- * first, and a game whose pages fail to load is left out.
+ * with at most `maxEvents` events in all. Games are read from the league
+ * tables, syncing any that never were (see getGameRecords).
  */
 async function getActivity(
 	subject: ActivitySubject,
@@ -803,20 +895,8 @@ async function getActivity(
 		maxEvents = LIMITS.ACTIVITY_EVENTS,
 	}: {kinds?: ActivityKind[]; lookbackDays?: number; maxEvents?: number} = {},
 ): Promise<ActivityRow[]> {
-	const {games, getEvents, getAttendance} = await getActivitySubject(subject)
+	const {games, by} = await getActivitySubject(subject)
 	const wanted = new Set(kinds)
-	const wantsEvents = kinds.some((kind) => {
-		return matchValue(kind, {
-			goal: true,
-			assist: true,
-			penalty: true,
-			played: false,
-			skipped: false,
-		})
-	})
-	// Once there are enough events, older games can only add more, unless
-	// games are wanted for their attendance alone
-	const canStopEarly = !wanted.has("played") && !wanted.has("skipped")
 
 	const finals = [
 		...new Map(
@@ -831,190 +911,174 @@ async function getActivity(
 		: 0
 	const recent = finals.filter((game) => Date.parse(game.startsAt) >= since)
 
-	const readRow = async (game: KHLGame): Promise<ActivityRow | null> => {
-		const attendance = await getAttendance(game)
-		const isWanted = matchValue(attendance, {
-			played: wantsEvents || wanted.has("played"),
-			skipped: wanted.has("skipped"),
-		})
-		if (!isWanted) {
-			return null
+	const records = await getGameRecords(recent.map((game) => game.id!))
+	const gameIds = [...records.keys()]
+	const eventsByGame = new Map<string, ActivityEvent[]>()
+	for (const {gameId, event} of db.league.getGameEvents(gameIds, by)) {
+		eventsByGame.set(gameId, [...(eventsByGame.get(gameId) ?? []), event])
+	}
+	const getAttendance = matchField(by, "kind", {
+		players: (b) => {
+			const dressed = db.league.getDressedGameIds(gameIds, b.khlPlayerIds)
+			return (
+				gameId: string,
+				side: GameRecordTeam,
+			): ActivityAttendance => {
+				// Not posted yet: count it, so a late lineup never hides goals
+				if (!side.lineupPosted || dressed.has(gameId)) {
+					return "played"
+				}
+				return "skipped"
+			}
+		},
+		team: () => (): ActivityAttendance => "played",
+	})
+
+	const rows: ActivityRow[] = []
+	let count = 0
+	for (const game of recent) {
+		const record = records.get(game.id!)
+		const side = record
+			? matchValue(game.homeAway, {home: record.home, away: record.away})
+			: null
+		// The box score and schedule disagree on the team: leave it out
+		if (!record || side?.id !== game.team.id) {
+			continue
 		}
-		const boxScore = await getBoxScore(game.id!).catch((error: unknown) => {
-			logger.warn("getActivity", "box score unavailable", {
-				gameId: game.id,
-				error,
-			})
-			return null
-		})
-		const team = [boxScore?.away, boxScore?.home].find(
-			(side) => side?.id === game.team.id,
-		)
-		if (!boxScore || !team) {
-			return null
-		}
+		const attendance = getAttendance(record.gameId, side)
 		const events = matchFn(attendance, {
 			played: () =>
-				getEvents(boxScore)
+				(eventsByGame.get(record.gameId) ?? [])
 					.filter((event) => wanted.has(event.kind))
 					.sort((a, b) =>
 						compareGameEvents(getEventAt(b), getEventAt(a)),
 					),
 			skipped: (): ActivityEvent[] => [],
-		})
-		return {game, boxScore, team, attendance, events}
-	}
-
-	const batchSize = canStopEarly ? 5 : 25
-	const rows: ActivityRow[] = []
-	let count = 0
-	for (
-		let i = 0;
-		i < recent.length && (!canStopEarly || count < maxEvents);
-		i += batchSize
-	) {
-		const batch = await Promise.all(
-			recent.slice(i, i + batchSize).map(readRow),
-		)
-		for (const row of batch) {
-			if (!row) {
-				continue
-			}
-			row.events = row.events.slice(0, Math.max(0, maxEvents - count))
-			if (row.events.length === 0 && !wanted.has(row.attendance)) {
-				continue
-			}
-			count += row.events.length
-			rows.push(row)
+		}).slice(0, Math.max(0, maxEvents - count))
+		if (events.length === 0 && !wanted.has(attendance)) {
+			continue
 		}
+		count += events.length
+		rows.push({game: record, side: game.homeAway, attendance, events})
 	}
 	return rows
 }
 
 /**
- * A subject's games, its events in a box score (in any order), and whether it
- * dressed for a game. A player can have a KHL player id per team they were on.
+ * A subject's games, and whose goals, assists, and penalties count as its
+ * own. A player can have a KHL player id per team they were on.
  */
-function getActivitySubject(subject: ActivitySubject): Promise<ActivitySource> {
+async function getActivitySubject(subject: ActivitySubject): Promise<{
+	games: KHLGame[]
+	by:
+		| {kind: "players"; khlPlayerIds: string[]}
+		| {kind: "team"; teamId: string}
+}> {
 	return matchField(subject, "kind", {
-		team: (s) => getTeamActivitySource(s.teamId, s.season),
-		player: (s) => getPlayerActivitySource(s.playerId),
+		team: async (s) => {
+			const {team} = await getListedTeam(s.teamId, s.season)
+			return {
+				games: await getSchedule(team.id, team.seasonId),
+				by: {kind: "team" as const, teamId: team.id},
+			}
+		},
+		player: async (s) => {
+			const {registrations} = getPlayerRegistrations(s.playerId)
+			const {games} = await getPlayerSchedules(
+				registrations,
+				await getTeamsPage(),
+			)
+			return {
+				games,
+				by: {
+					kind: "players" as const,
+					khlPlayerIds: [
+						...new Set(registrations.map((r) => r.khlPlayerId)),
+					],
+				},
+			}
+		},
 	})
 }
 
-interface ActivitySource {
-	games: KHLGame[]
-	getEvents: (boxScore: KHLBoxScore) => ActivityEvent[]
-	getAttendance: (game: KHLGame) => Promise<ActivityAttendance>
-}
-
-async function getTeamActivitySource(
-	teamId: string,
-	season: string | undefined,
-): Promise<ActivitySource> {
-	const {team, isCurrentSeason} = await getListedTeam(teamId, season)
-	return {
-		games: await getSchedule(team.id, team.seasonId, isCurrentSeason),
-		getEvents: (boxScore) => [
-			...boxScore.goals
-				.filter((goal) => goal.teamId === team.id)
-				.map((goal): ActivityEvent => ({kind: "goal", goal})),
-			...boxScore.penalties
-				.filter((penalty) => penalty.teamId === team.id)
-				.map((penalty): ActivityEvent => ({
-					kind: "penalty",
-					penalty,
-				})),
-		],
-		getAttendance: async () => "played",
-	}
-}
-
-async function getPlayerActivitySource(
-	playerId: string,
-): Promise<ActivitySource> {
-	const {registrations} = await getPlayerRegistrations(playerId)
-	const {games} = await getPlayerSchedules(
-		registrations,
-		await getTeamsPage(),
-	)
-	const khlPlayerIds = new Set(registrations.map((r) => r.khlPlayerId))
-	const isPlayer = (player: {id: string} | null) => {
-		return !!player && khlPlayerIds.has(player.id)
-	}
-	return {
-		games,
-		getEvents: (boxScore) => [
-			...boxScore.goals.flatMap((goal): ActivityEvent[] => {
-				if (isPlayer(goal.scorer)) {
-					return [{kind: "goal", goal}]
-				}
-				return goal.assists.some(isPlayer)
-					? [{kind: "assist", goal}]
-					: []
-			}),
-			...boxScore.penalties
-				.filter((penalty) => isPlayer(penalty.player))
-				.map((penalty): ActivityEvent => ({kind: "penalty", penalty})),
-		],
-		getAttendance: async (game) => {
+/**
+ * Games from the games tables, processing any that aren't there yet, or were
+ * processed before their summary or lineups were posted, from their pages.
+ * A game whose pages fail to load is left out.
+ */
+/**
+ * Games from the league tables, syncing any that never were. A game whose
+ * pages fail to load is left out. The syncer keeps each game fresh, looking
+ * again until its summary and lineups are posted.
+ */
+async function getGameRecords(
+	gameIds: string[],
+): Promise<Map<string, GameRecord>> {
+	await Promise.all(
+		gameIds.map(async (gameId) => {
 			try {
-				const stats = await getGameStats(game.id!)
-				// Not posted yet: count it, so a late lineup never hides goals
-				return (
-					getLineupAttendance(khlPlayerIds, stats[game.homeAway]) ??
-					"played"
-				)
+				// A game that's failing is left out
+				await syncer.ensureSynced({kind: "game", gameId})
 			} catch (error) {
-				logger.warn("getActivity", "game stats unavailable", {
-					gameId: game.id,
+				logger.warn("getGameRecords", "game pages unavailable", {
+					gameId,
 					error,
 				})
-				return "played"
 			}
-		},
-	}
+		}),
+	)
+	return db.league.getGames(gameIds)
 }
 
 /** Activity rows as the API returns them, with replay and player links */
 async function toActivityResponse(
 	rows: ActivityRow[],
 ): Promise<ActivityResponse> {
-	const surfacesByArena = await getSurfacesByArena(rows.map((r) => r.game))
-	const playerIds = new Map<string, string>()
-	const toActivityTeam = (side: KHLBoxScoreTeam) => ({
-		id: side.id,
-		name: side.name,
-		logoUrl: side.logoUrl,
-		seasonId: side.seasonId,
-		goals: side.goals,
-	})
-	const games = rows.map(
-		({boxScore, team, attendance, events}): ActivityGame => {
-			for (const [khlPlayerId, playerId] of recordBoxScorePlayers(
-				boxScore,
-			)) {
-				playerIds.set(khlPlayerId, playerId)
-			}
-			const opponent =
-				team === boxScore.home ? boxScore.away : boxScore.home
-			return {
-				gameId: boxScore.gameId,
-				startsAt: boxScore.startsAt,
-				homeAway: team === boxScore.home ? "home" : "away",
-				team: toActivityTeam(team),
-				opponent: toActivityTeam(opponent),
-				livebarn: toLiveBarnLinks(
-					boxScore.arena
-						? (surfacesByArena.get(boxScore.arena.id) ?? [])
-						: [],
-					boxScore,
-				),
-				attendance,
-				events,
-			}
-		},
+	const surfacesByArena = await getSurfacesByArena(
+		rows.map((r) => r.game.arenaId),
 	)
+	const playerIds = new Map<string, string>()
+	for (const {events} of rows) {
+		for (const event of events) {
+			const refs = matchField(event, "kind", {
+				goal: (e) => [e.goal.scorer, ...e.goal.assists],
+				assist: (e) => [e.goal.scorer, ...e.goal.assists],
+				penalty: (e) => (e.penalty.player ? [e.penalty.player] : []),
+			})
+			for (const ref of refs) {
+				const playerId = db.findPlayerIdForRegistration(ref.id)
+				if (playerId) {
+					playerIds.set(ref.id, playerId)
+				}
+			}
+		}
+	}
+	const toActivityTeam = (team: GameRecordTeam) => ({
+		id: team.id,
+		name: team.name,
+		logoUrl: team.logoUrl,
+		seasonId: team.seasonId,
+		goals: team.goals,
+	})
+	const games = rows.map(({game, side, attendance, events}): ActivityGame => {
+		const [team, opponent] = matchValue(side, {
+			home: [game.home, game.away],
+			away: [game.away, game.home],
+		})
+		return {
+			gameId: game.gameId,
+			startsAt: game.startsAt,
+			homeAway: side,
+			team: toActivityTeam(team),
+			opponent: toActivityTeam(opponent),
+			livebarn: toLiveBarnLinks(
+				game.arenaId ? (surfacesByArena.get(game.arenaId) ?? []) : [],
+				game,
+			),
+			attendance,
+			events,
+		}
+	})
 	return {games, playerIds: Object.fromEntries(playerIds)}
 }
 
@@ -1050,8 +1114,8 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 		season,
 	)
 	const [schedule, stats, upcoming] = await Promise.all([
-		getSchedule(team.id, team.seasonId, isCurrentSeason),
-		getTeamStats(team.id, team.seasonId, isCurrentSeason),
+		getSchedule(team.id, team.seasonId),
+		getTeamStats(team.id, team.seasonId),
 		isCurrentSeason ? getUpcomingGames(new Set([team.id])) : [],
 	])
 	const response: TeamResponse = {
@@ -1061,7 +1125,7 @@ registerEndpoint(app, GET_TEAM_ENDPOINT, async ({teamId, season}) => {
 		seasons: stats.seasons,
 		games: await toFeedGames(schedule, [teamsPage]),
 		upcoming,
-		roster: await getRoster(team.id, team.name, team.logoUrl, stats),
+		roster: getRoster(team.id, stats),
 	}
 	return response
 })
@@ -1088,17 +1152,14 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 	const {away, home} = boxScore
 	// Team pages are extras: if the KHL site fails on one, still show the game
 	const getStats = (team: KHLBoxScoreTeam) => {
-		const isCurrentSeason = team.seasonId === currentSeason.id
-		return getTeamStats(team.id, team.seasonId, isCurrentSeason).catch(
-			(error: unknown) => {
-				logger.warn("getGame", "KHL team stats unavailable", {
-					teamId: team.id,
-					seasonId: team.seasonId,
-					error,
-				})
-				return null
-			},
-		)
+		return getTeamStats(team.id, team.seasonId).catch((error: unknown) => {
+			logger.warn("getGame", "KHL team stats unavailable", {
+				teamId: team.id,
+				seasonId: team.seasonId,
+				error,
+			})
+			return null
+		})
 	}
 	const [surfaces, awayStats, homeStats] = await Promise.all([
 		boxScore.arena ? getVerifiedSurfaces(boxScore.arena.id) : [],
@@ -1114,13 +1175,13 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 				: [],
 			awayStats && homeStats
 				? Promise.all([
-						getRoster(away.id, away.name, away.logoUrl, awayStats),
-						getRoster(home.id, home.name, home.logoUrl, homeStats),
+						getRoster(away.id, awayStats),
+						getRoster(home.id, homeStats),
 					]).then(([away, home]) => ({away, home}))
 				: null,
 			boxScore.hasSummary ? getGameLineups(boxScore) : null,
-			getGameSeasonSummary(away, boxScore.startsAt, currentSeason.id),
-			getGameSeasonSummary(home, boxScore.startsAt, currentSeason.id),
+			getGameSeasonSummary(away, boxScore.startsAt),
+			getGameSeasonSummary(home, boxScore.startsAt),
 			// Extras for the comparison; the game shows without them
 			getPreviewStats(gameId),
 		])
@@ -1128,7 +1189,7 @@ registerEndpoint(app, GET_GAME_ENDPOINT, async ({gameId}) => {
 		boxScore: {...boxScore, arena: toDisplayArena(boxScore.arena)},
 		previewStats,
 		score: await getFinalScore(boxScore),
-		playerIds: Object.fromEntries(recordBoxScorePlayers(boxScore)),
+		playerIds: Object.fromEntries(getBoxScorePlayerIds(boxScore)),
 		livebarn: toLiveBarnLinks(surfaces, boxScore),
 		headToHead,
 		rosters,
@@ -1157,7 +1218,7 @@ registerEndpoint(app, LIST_TEAMS_ENDPOINT, async ({season}) => {
 })
 
 registerEndpoint(app, GET_STANDINGS_ENDPOINT, async ({season}) => {
-	const page = await cached(
+	const page = await cache.cached(
 		`standings:${season ?? "current"}`,
 		10 * MINUTE,
 		() => {
@@ -1172,89 +1233,68 @@ registerEndpoint(app, GET_STANDINGS_ENDPOINT, async ({season}) => {
 	return response
 })
 
+// From the league tables the syncer keeps: a request never reads a stats page
 registerEndpoint(app, LIST_PLAYERS_ENDPOINT, async ({season}) => {
-	const [teamsPage, currentSeason] = await Promise.all([
-		getTeamsPage(season),
-		getCurrentSeason(),
-	])
-	const isCurrentSeason = teamsPage.season.id === currentSeason.id
-	// Built from every team's stats page (~175 of them), so the whole list is
-	// kept longer than any one page rather than refetched every 10 minutes
-	const ttl = isCurrentSeason ? HOUR : 24 * HOUR
-	return cached(
-		`players:${teamsPage.season.id}`,
-		ttl,
-		async () => {
-			// One team's page failing leaves it out rather than failing the list
-			const unavailableTeams: KHLTeam[] = []
-			const rosters = await Promise.all(
-				teamsPage.teams.map(async (team) => {
-					try {
-						const stats = await getTeamStats(
-							team.id,
-							team.seasonId,
-							isCurrentSeason,
-						)
-						const roster = await getRoster(
-							team.id,
-							team.name,
-							team.logoUrl,
-							stats,
-						)
-						return {team, roster}
-					} catch (error) {
-						logger.warn(
-							"listPlayers",
-							"KHL team stats unavailable",
-							{
-								teamId: team.id,
-								seasonId: team.seasonId,
-								error,
-							},
-						)
-						unavailableTeams.push(team)
-						return null
-					}
-				}),
-			)
-			const loaded = rosters.filter((r) => r !== null)
-			// Registered players who haven't played (backups, most goalies) have
-			// no stats to compare, and would be a third of the list
-			const toRows = (team: KHLTeam, players: RosterPlayer[]) => {
-				return players
-					.filter((p) => Number(p.stats["GP"]) > 0)
-					.map((p) => ({...p, teamId: team.id}))
-			}
-			const response: PlayersResponse = {
-				season: teamsPage.season,
-				seasons: teamsPage.seasons,
-				teams: loaded.map(({team}) => ({
-					team,
-					divisionName: getDivisionName(teamsPage, team.divisionId),
-				})),
-				skaters: loaded.flatMap(({team, roster}) =>
-					toRows(team, roster.skaters),
-				),
-				goalies: loaded.flatMap(({team, roster}) =>
-					toRows(team, roster.goalies),
-				),
-				unavailableTeams,
-			}
-			return response
-		},
-		// Don't hold on to a partial list for the full hour
-		(response) =>
-			response.unavailableTeams.length > 0 ? 10 * MINUTE : ttl,
+	const current = await getTeamsPage()
+	const seasonId = season ?? current.season.id
+	const isListed = [current.season, ...current.seasons].some(
+		(s) => s.id === seasonId,
 	)
+	if (!isListed) {
+		throw new ApiError(404, `season ${seasonId} not found`)
+	}
+	const teamsPage =
+		seasonId === current.season.id ? current : await getTeamsPage(seasonId)
+	const rosters = db.league.getSeasonRosters(seasonId)
+	if (rosters.size === 0) {
+		throw new ApiError(
+			503,
+			"this season's players are still loading; try again in a few minutes",
+		)
+	}
+	// Teams whose stats page isn't synced yet, or failed, are left out and
+	// listed
+	const loaded = teamsPage.teams.filter((team) => rosters.has(team.id))
+	// Registered players who haven't played (backups, most goalies) have no
+	// stats to compare, and would be a third of the list
+	const toRows = (team: KHLTeam, players: RosterPlayer[]) => {
+		return players
+			.filter((p) => Number(p.stats["GP"]) > 0)
+			.map((p) => ({...p, teamId: team.id}))
+	}
+	const rosterOf = (team: KHLTeam) => {
+		const rows = rosters.get(team.id) ?? []
+		const toRosterRow = (row: RosterStatRow): KHLRosterRow => ({
+			playerId: row.khlPlayerId,
+			number: row.number,
+			name: row.name,
+			stats: row.stats,
+		})
+		return getRoster(team.id, {
+			skaterColumns: [],
+			skaters: rows.filter((r) => !r.isGoalie).map(toRosterRow),
+			goalieColumns: [],
+			goalies: rows.filter((r) => r.isGoalie).map(toRosterRow),
+		})
+	}
+	const response: PlayersResponse = {
+		season: teamsPage.season,
+		seasons: teamsPage.seasons,
+		teams: loaded.map((team) => ({
+			team,
+			divisionName: getDivisionName(teamsPage, team.divisionId),
+		})),
+		skaters: loaded.flatMap((team) => toRows(team, rosterOf(team).skaters)),
+		goalies: loaded.flatMap((team) => toRows(team, rosterOf(team).goalies)),
+		unavailableTeams: teamsPage.teams.filter(
+			(team) => !rosters.has(team.id),
+		),
+	}
+	return response
 })
 
 registerEndpoint(app, LIST_TEAM_SEASONS_ENDPOINT, async ({teamId, season}) => {
-	const currentSeason = await getCurrentSeason()
-	const stats = await getTeamStats(
-		teamId,
-		season,
-		season === currentSeason.id,
-	)
+	const stats = await getTeamStats(teamId, season)
 	const response: TeamSeasonsResponse = {seasons: stats.seasons}
 	return response
 })
@@ -1287,10 +1327,10 @@ registerEndpoint(
 		const isCurrentB = teamB.seasonId === currentSeason.id
 		const [statsA, statsB, scheduleA, scheduleB, upcoming] =
 			await Promise.all([
-				getTeamStats(teamA.id, teamA.seasonId, isCurrentA),
-				getTeamStats(teamB.id, teamB.seasonId, isCurrentB),
-				getSchedule(teamA.id, teamA.seasonId, isCurrentA),
-				getSchedule(teamB.id, teamB.seasonId, isCurrentB),
+				getTeamStats(teamA.id, teamA.seasonId),
+				getTeamStats(teamB.id, teamB.seasonId),
+				getSchedule(teamA.id, teamA.seasonId),
+				getSchedule(teamB.id, teamB.seasonId),
 				isCurrentA && isCurrentB
 					? getUpcomingGames(new Set([teamA.id]))
 					: [],
@@ -1306,12 +1346,7 @@ registerEndpoint(
 				season: teamsPage.season,
 				divisionName: getDivisionName(teamsPage, team.divisionId),
 				...getSeasonRecord(schedule),
-				roster: await getRoster(
-					team.id,
-					team.name,
-					team.logoUrl,
-					stats,
-				),
+				roster: getRoster(team.id, stats),
 			}
 		}
 		const [matchupA, matchupB, headToHead, previewA, previewB] =
@@ -1350,7 +1385,7 @@ async function getPreviewStats(
 	gameId: string,
 ): Promise<KHLGamePreviewStats | null> {
 	try {
-		return await cached(`game-preview:${gameId}`, 10 * MINUTE, () =>
+		return await cache.cached(`game-preview:${gameId}`, 10 * MINUTE, () =>
 			getKHLGamePreviewStats(gameId),
 		)
 	} catch (error) {
@@ -1579,7 +1614,9 @@ registerEndpoint(app, GET_RINK_ENDPOINT, async ({arenaId}) => {
 	const teamsPage = await getTeamsPage()
 	const [rink, arena, recent] = await Promise.all([
 		getRink(arenaId, teamsPage),
-		cached(`arena-page:${arenaId}`, 24 * HOUR, () => getKHLArena(arenaId)),
+		cache.cached(`arena-page:${arenaId}`, 24 * HOUR, () =>
+			getKHLArena(arenaId),
+		),
 		getRecentRinkGames(arenaId, teamsPage),
 	])
 	const response: RinkResponse = {
@@ -1628,68 +1665,144 @@ app.listen(PORT, () => {
 		commit: DEPLOY_INFO.commit,
 	})
 	startStatusChecks(db)
+	syncer.start()
 })
 
-function getTeamsPage(seasonId?: string): Promise<KHLTeamsPage> {
-	return cached(`teams:${seasonId ?? "current"}`, HOUR, () => {
-		return getKHLTeamsPage(seasonId)
+const PAGE_LOAD_LABELS: Record<PageLoadSource, string> = {
+	memory: "from memory",
+	stored: "from stored pages",
+	fetched: "fetched from the KHL or LiveBarn",
+	stale: "stored pages served after a failed fetch",
+}
+
+function countPageLoads(log: PageLoad[]): Record<PageLoadSource, number> {
+	const counts = {memory: 0, stored: 0, fetched: 0, stale: 0}
+	for (const load of log) {
+		counts[load.source]++
+	}
+	return counts
+}
+
+function toServerTiming(log: PageLoad[]): string {
+	const counts = countPageLoads(log)
+	const fetchMs = log.reduce((total, load) => total + load.ms, 0)
+	return (Object.keys(counts) as PageLoadSource[])
+		.map((source) => {
+			const dur = matchValue(source, {
+				memory: "",
+				stored: "",
+				fetched: `;dur=${fetchMs}`,
+				stale: "",
+			})
+			const desc = `${counts[source]} ${PAGE_LOAD_LABELS[source]}`
+			return `khl-${source}${dur};desc="${desc}"`
+		})
+		.join(", ")
+}
+
+/** "fetched <url>, memory <key>, ...", capped so the header stays small */
+function toPageLoadsHeader(log: PageLoad[]): string {
+	const MAX_PAGES = 40
+	// Header values must be printable ASCII; player names may not be
+	const items = log
+		.slice(0, MAX_PAGES)
+		.map(
+			(load) =>
+				`${load.source} ${load.key.replace(/[^\x20-\x7e]/g, "?")}`,
+		)
+	if (log.length > MAX_PAGES) {
+		items.push(`+${log.length - MAX_PAGES} more`)
+	}
+	return items.join(", ")
+}
+
+function logPageLoads(path: string, log: PageLoad[]) {
+	const counts = countPageLoads(log)
+	if (counts.stored + counts.fetched + counts.stale === 0) {
+		return
+	}
+	logger.info("pageLoads", "loaded pages", {
+		path,
+		...counts,
+		fetchMs: log.reduce((total, load) => total + load.ms, 0),
+		pages: log
+			.filter((load) =>
+				matchValue(load.source, {
+					memory: false,
+					stored: true,
+					fetched: true,
+					stale: true,
+				}),
+			)
+			.map((load) => `${load.source} ${load.key}`),
 	})
+}
+
+/**
+ * A synced page's data from the league tables, syncing the page first if it
+ * never was. A page that's failing and waiting to be retried is a 502, as a
+ * failed fetch would be, without fetching it again.
+ */
+async function readSynced<T>(page: SyncPage, read: () => T | null): Promise<T> {
+	if (!(await syncer.ensureSynced(page))) {
+		throw new ApiError(
+			502,
+			"the league's page for this couldn't be loaded; it'll be retried",
+		)
+	}
+	const value = read()
+	if (value === null) {
+		throw logger.newError("readSynced", "synced page has no records", {
+			page,
+		})
+	}
+	return value
+}
+
+/** A season's teams page (the current season's by default) */
+function getTeamsPage(seasonId?: string): Promise<KHLTeamsPage> {
+	return readSynced({kind: "teams", seasonId: seasonId ?? null}, () =>
+		db.league.getTeamsPage(seasonId ?? null),
+	)
 }
 
 async function getCurrentSeason(): Promise<KHLSeason> {
 	return (await getTeamsPage()).season
 }
 
-/** Past seasons' pages don't change, so they're kept much longer */
-function getSeasonTtl(isCurrentSeason: boolean): number {
-	return isCurrentSeason ? 10 * MINUTE : 24 * HOUR
-}
-
+/** The integrity report's key for a player's page */
 function getPlayerCacheKey(
-	playerId: string,
-	teamId: string,
+	registrationKey: RegistrationKey,
 	seasonId: string,
 ): string {
-	return `player:${playerId}:${teamId}:${seasonId}`
+	const {khlPlayerId, teamId} = parseRegistrationKey(registrationKey)
+	return `player:${khlPlayerId}:${teamId}:${seasonId}`
 }
 
-function getPlayer(playerId: string, teamId: string, seasonId: string) {
-	return cached(
-		getPlayerCacheKey(playerId, teamId, seasonId),
-		10 * MINUTE,
-		() => {
-			return getKHLPlayer(playerId, teamId, seasonId)
-		},
+/** The player's KHL page as of `seasonId` */
+function getPlayer(
+	registrationKey: RegistrationKey,
+	seasonId: string,
+): Promise<KHLPlayer> {
+	return readSynced({kind: "player", registrationKey, seasonId}, () =>
+		db.league.getPlayerProfile(registrationKey, seasonId),
 	)
 }
 
+/** The integrity report's key for a team's schedule */
 function getScheduleCacheKey(teamId: string, seasonId: string): string {
 	return `schedule:${teamId}:${seasonId}`
 }
 
-function getSchedule(
-	teamId: string,
-	seasonId: string,
-	isCurrentSeason: boolean,
-): Promise<KHLGame[]> {
-	return cached(
-		getScheduleCacheKey(teamId, seasonId),
-		getSeasonTtl(isCurrentSeason),
-		() => {
-			return getKHLTeamSchedule(teamId, seasonId)
-		},
+function getSchedule(teamId: string, seasonId: string): Promise<KHLGame[]> {
+	return readSynced({kind: "schedule", teamId, seasonId}, () =>
+		db.league.getSchedule(teamId, seasonId),
 	)
 }
 
-function getTeamStats(
-	teamId: string,
-	seasonId: string,
-	isCurrentSeason: boolean,
-): Promise<KHLTeamStats> {
-	return cached(
-		`team-stats:${teamId}:${seasonId}`,
-		getSeasonTtl(isCurrentSeason),
-		() => getKHLTeamStats(teamId, seasonId),
+function getTeamStats(teamId: string, seasonId: string): Promise<KHLTeamStats> {
+	return readSynced({kind: "team-stats", teamId, seasonId}, () =>
+		db.league.getTeamStats(teamId, seasonId),
 	)
 }
 
@@ -1721,11 +1834,7 @@ async function getHeadToHead(
 	const schedules = await Promise.all(
 		sharedSeasons.map(async (season) => {
 			try {
-				return await getSchedule(
-					awayId,
-					season.id,
-					season.id === currentSeasonId,
-				)
+				return await getSchedule(awayId, season.id)
 			} catch (error) {
 				logger.warn("getHeadToHead", "KHL schedule unavailable", {
 					teamId: awayId,
@@ -1746,7 +1855,9 @@ async function getHeadToHead(
 			)
 		})
 		.sort((a, b) => b.startsAt.localeCompare(a.startsAt))
-	const surfacesByArena = await getSurfacesByArena(games)
+	const surfacesByArena = await getSurfacesByArena(
+		games.map((g) => g.arena?.id ?? null),
+	)
 	return games.map((game) => {
 		const surfaces = game.arena
 			? (surfacesByArena.get(game.arena.id) ?? [])
@@ -1780,16 +1891,11 @@ function toHeadToHeadGame(
 async function getGameSeasonSummary(
 	team: KHLBoxScoreTeam,
 	startsAt: string,
-	currentSeasonId: string,
 ): Promise<SeasonSummary | null> {
 	try {
 		const [teamsPage, schedule] = await Promise.all([
 			getTeamsPage(team.seasonId),
-			getSchedule(
-				team.id,
-				team.seasonId,
-				team.seasonId === currentSeasonId,
-			),
+			getSchedule(team.id, team.seasonId),
 		])
 		const listed = findListedTeam(teamsPage, team.id)
 		return {
@@ -1874,72 +1980,47 @@ function getSeasonRecord(schedule: KHLGame[]): SeasonRecord {
 	return record
 }
 
+/** A game's stats page; fails if it couldn't be read */
 function getGameStats(gameId: string): Promise<KHLGameStats> {
-	// Like box scores: check again soon until the lineups are posted
-	return cached(
-		`game-stats:${gameId}`,
-		10 * MINUTE,
-		() => {
-			return getKHLGameStats(gameId)
-		},
-		(stats) => {
-			const isPosted =
-				stats.away.skaters.length + stats.home.skaters.length > 0
-			return isPosted ? 6 * HOUR : 10 * MINUTE
-		},
+	return readSynced({kind: "game", gameId}, () =>
+		db.league.getGameStats(gameId),
 	)
 }
 
 function getBoxScore(gameId: string): Promise<KHLBoxScore> {
-	// Summaries are posted (and sometimes corrected) after the game, so check
-	// again soon until there's one; after that, corrections are rare
-	return cached(
-		`box-score:${gameId}`,
-		10 * MINUTE,
-		() => {
-			return getKHLBoxScore(gameId)
-		},
-		(boxScore) => (boxScore.hasSummary ? 6 * HOUR : 10 * MINUTE),
+	return readSynced({kind: "game", gameId}, () =>
+		db.league.getBoxScore(gameId),
 	)
 }
 
 /**
- * Records everyone named in the box score so they link to player pages.
- * Returns our player UUID for each KHL player id.
+ * Our player UUID for each KHL player id the box score names, so they link
+ * to player pages. The syncer recorded everyone when it processed the game.
  */
-function recordBoxScorePlayers(boxScore: KHLBoxScore): Map<string, string> {
-	const teams = new Map<string, KHLBoxScoreTeam>(
-		[boxScore.away, boxScore.home].map((t) => [t.id, t]),
-	)
-	const entries = [
-		...boxScore.goals.flatMap((g) => {
-			return [g.scorer, ...g.assists].map((player) => ({
-				player,
-				teamId: g.teamId,
-			}))
-		}),
-		...boxScore.penalties.flatMap((p) => {
-			return p.player ? [{player: p.player, teamId: p.teamId}] : []
-		}),
+function getBoxScorePlayerIds(boxScore: KHLBoxScore): Map<string, string> {
+	const keys = [
+		...boxScore.goals.flatMap((g) =>
+			[g.scorer, ...g.assists].map((player) =>
+				toRegistrationKey({khlPlayerId: player.id, teamId: g.teamId}),
+			),
+		),
+		...boxScore.penalties.flatMap((p) =>
+			p.player
+				? [
+						toRegistrationKey({
+							khlPlayerId: p.player.id,
+							teamId: p.teamId,
+						}),
+					]
+				: [],
+		),
 	]
-	return db.recordRegistrations(
-		entries.flatMap(({player, teamId}) => {
-			const team = teams.get(teamId)
-			if (!team) {
-				return []
-			}
-			return [
-				{
-					playerId: player.id,
-					name: player.name,
-					position: null,
-					teamId: team.id,
-					teamName: team.name,
-					teamLogoUrl: team.logoUrl,
-					seasonId: team.seasonId,
-				},
-			]
-		}),
+	const playerIds = db.getPlayerIdsByRegistration(keys)
+	return new Map(
+		[...playerIds].map(([key, playerId]) => [
+			parseRegistrationKey(key).khlPlayerId,
+			playerId,
+		]),
 	)
 }
 
@@ -1968,9 +2049,9 @@ async function getRink(
 function getScoreboard(date: string): Promise<KHLScoreboardGame[]> {
 	// A finished day's scores only change when the league corrects one
 	const isPast = date < getLeagueDayKey(new Date())
-	return cached(`scoreboard:${date}`, isPast ? HOUR : 5 * MINUTE, () => {
-		return getKHLScoreboard(date)
-	})
+	return cache.cached(`scoreboard:${date}`, isPast ? HOUR : 5 * MINUTE, () =>
+		getKHLScoreboard(date),
+	)
 }
 
 /**
@@ -2056,7 +2137,7 @@ async function getRinkInfo(arenaId: string): Promise<RinkInfo> {
 
 /** League-wide upcoming games, soonest first. */
 async function getLeagueSchedule(): Promise<KHLLeagueGame[]> {
-	const games = await cached(
+	const games = await cache.cached(
 		"league-schedule",
 		5 * MINUTE,
 		getKHLLeagueSchedule,
@@ -2110,10 +2191,7 @@ async function getGameLineups(
 	try {
 		const stats = await getGameStats(boxScore.gameId)
 		const lineup = (team: KHLBoxScoreTeam, teamStats: KHLGameTeamStats) => {
-			return getRoster(team.id, team.name, team.logoUrl, {
-				...teamStats,
-				seasonId: team.seasonId,
-			})
+			return getRoster(team.id, teamStats)
 		}
 		const [away, home] = await Promise.all([
 			lineup(boxScore.away, stats.away),
@@ -2133,42 +2211,55 @@ async function getGameLineups(
  * The team's roster for a season, with each player recorded in the database
  * so they link to a player page.
  */
-async function getRoster(
+/**
+ * A team's roster as a stats page lists it, with each player's UUID. The
+ * syncer recorded everyone when it processed the page, so this only reads.
+ */
+function getRoster(
 	teamId: string,
-	teamName: string,
-	teamLogoUrl: string | null,
 	stats: Pick<
 		KHLTeamStats,
-		"seasonId" | "skaterColumns" | "skaters" | "goalieColumns" | "goalies"
+		"skaterColumns" | "skaters" | "goalieColumns" | "goalies"
 	>,
-): Promise<TeamRoster> {
+): TeamRoster {
 	const goalieIds = new Set(stats.goalies.map((g) => g.playerId))
-	const playerIds = db.recordRegistrations(
-		[...stats.skaters, ...stats.goalies].map((row) => ({
-			playerId: row.playerId,
-			name: row.name,
-			position: goalieIds.has(row.playerId) ? "Goalie" : "Skater",
-			teamId,
-			teamName,
-			teamLogoUrl,
-			seasonId: stats.seasonId,
-		})),
+	const rows = [...stats.skaters, ...stats.goalies]
+	const playerIds = db.getPlayerIdsByRegistration(
+		rows.map((row) =>
+			toRegistrationKey({khlPlayerId: row.playerId, teamId}),
+		),
 	)
-	const toRosterPlayer = (row: KHLRosterRow): RosterPlayer => ({
-		playerId: playerIds.get(row.playerId)!,
-		khlPlayerId: row.playerId,
-		number: row.number,
-		name: row.name,
-		stats: row.stats,
-	})
+	const toRosterPlayers = (rows: KHLRosterRow[]): RosterPlayer[] => {
+		return rows.flatMap((row) => {
+			const playerId = playerIds.get(
+				toRegistrationKey({khlPlayerId: row.playerId, teamId}),
+			)
+			if (!playerId) {
+				logger.warn("getRoster", "player not recorded; left out", {
+					teamId,
+					khlPlayerId: row.playerId,
+				})
+				return []
+			}
+			return [
+				{
+					playerId,
+					khlPlayerId: row.playerId,
+					number: row.number,
+					name: row.name,
+					stats: row.stats,
+				},
+			]
+		})
+	}
 	return {
 		skaterColumns: stats.skaterColumns,
 		// Goalies appear in the skater table too, with empty skater stats
-		skaters: stats.skaters
-			.filter((row) => !goalieIds.has(row.playerId))
-			.map(toRosterPlayer),
+		skaters: toRosterPlayers(
+			stats.skaters.filter((row) => !goalieIds.has(row.playerId)),
+		),
 		goalieColumns: stats.goalieColumns,
-		goalies: stats.goalies.map(toRosterPlayer),
+		goalies: toRosterPlayers(stats.goalies),
 	}
 }
 
@@ -2184,7 +2275,7 @@ interface LiveBarnSurfaceEntry {
 async function getLiveBarnSurfaces(): Promise<
 	Map<number, LiveBarnSurfaceEntry>
 > {
-	return cached("livebarn:surfaces", 24 * HOUR, async () => {
+	return cache.cached("livebarn:surfaces", 24 * HOUR, async () => {
 		const venues = await getLivebarnVenues()
 		const surfaces = new Map<number, LiveBarnSurfaceEntry>()
 		for (const venue of venues) {
@@ -2201,7 +2292,9 @@ async function toFeedGames(
 	/** For opponent logos */
 	teamsPages: KHLTeamsPage[],
 ): Promise<FeedGame[]> {
-	const surfacesByArena = await getSurfacesByArena(games)
+	const surfacesByArena = await getSurfacesByArena(
+		games.map((g) => g.arena?.id ?? null),
+	)
 	const logos = getTeamLogos(teamsPages)
 	return [...games]
 		.sort((a, b) => a.startsAt.localeCompare(b.startsAt))
@@ -2219,12 +2312,12 @@ async function toFeedGames(
 
 /** Verified LiveBarn surfaces for each arena the games were played at. */
 async function getSurfacesByArena(
-	games: KHLGame[],
+	arenaIds: (string | null)[],
 ): Promise<Map<string, LiveBarnSurfaceMapping[]>> {
-	const arenaIds = [...new Set(games.flatMap((g) => g.arena?.id ?? []))]
+	const uniqueIds = [...new Set(arenaIds.flatMap((id) => id ?? []))]
 	return new Map(
 		await Promise.all(
-			arenaIds.map(async (arenaId) => {
+			uniqueIds.map(async (arenaId) => {
 				return [arenaId, await getVerifiedSurfaces(arenaId)] as const
 			}),
 		),
@@ -2277,9 +2370,9 @@ async function getVerifiedSurfaces(
 	arenaId: string,
 ): Promise<LiveBarnSurfaceMapping[]> {
 	try {
-		return await cached(`arena:${arenaId}`, 24 * HOUR, () => {
-			return verifyArenaMapping(arenaId)
-		})
+		return await cache.cached(`arena:${arenaId}`, 24 * HOUR, () =>
+			verifyArenaMapping(arenaId),
+		)
 	} catch (error) {
 		logger.error("getVerifiedSurfaces", "could not verify arena", {
 			arenaId,
@@ -2331,85 +2424,4 @@ async function verifyArenaMapping(
 		}
 		return matches
 	})
-}
-
-interface CacheEntry {
-	expiresAt: number
-	/** When `value` resolved; null while it's loading */
-	loadedAt: number | null
-	value: Promise<unknown>
-	/** What loaded `value`, so a cache check can load it again to compare */
-	load: () => Promise<unknown>
-}
-
-const cache = new Map<string, CacheEntry>()
-
-/** A loaded, unexpired entry; null if there isn't one */
-function getLoadedCacheEntry(
-	key: string,
-): (CacheEntry & {loadedAt: number}) | null {
-	const entry = cache.get(key)
-	if (!entry?.loadedAt || entry.expiresAt <= Date.now()) {
-		return null
-	}
-	return entry as CacheEntry & {loadedAt: number}
-}
-
-/** When a loaded, unexpired entry was cached; null if there isn't one */
-function getCacheInfo(
-	key: string,
-): {cachedAt: string; expiresAt: string} | null {
-	const entry = getLoadedCacheEntry(key)
-	if (!entry) {
-		return null
-	}
-	return {
-		cachedAt: new Date(entry.loadedAt).toISOString(),
-		expiresAt: new Date(entry.expiresAt).toISOString(),
-	}
-}
-
-/** Drops an entry, so the next `cached(key, ...)` loads it again */
-function invalidateCache(key: string) {
-	cache.delete(key)
-}
-
-/**
- * Memoizes `load` for `ttlMs`. Concurrent callers share one in-flight request,
- * and failures aren't cached.
- */
-function cached<T>(
-	key: string,
-	ttlMs: number,
-	load: () => Promise<T>,
-	/** Once loaded, how long to keep this value instead of `ttlMs` */
-	getTtlMs?: (value: T) => number,
-): Promise<T> {
-	const hit = cache.get(key)
-	if (hit && hit.expiresAt > Date.now()) {
-		return hit.value as Promise<T>
-	}
-	const value = load()
-	const entry: CacheEntry = {
-		expiresAt: Date.now() + ttlMs,
-		loadedAt: null,
-		value,
-		load,
-	}
-	cache.set(key, entry)
-	void value.then(
-		(loaded) => {
-			entry.loadedAt = Date.now()
-			if (getTtlMs) {
-				entry.expiresAt = Date.now() + getTtlMs(loaded)
-			}
-		},
-		() => {},
-	)
-	value.catch(() => {
-		if (cache.get(key)?.value === value) {
-			cache.delete(key)
-		}
-	})
-	return value
 }

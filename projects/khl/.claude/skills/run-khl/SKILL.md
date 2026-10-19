@@ -20,14 +20,17 @@ the repo works).
 
 ```bash
 S=<scratchpad>
-KHL_API_PORT=3999 KHL_DB_PATH=$S/khl-test.sqlite KHL_STATIC_DIR=/nonexistent \
+KHL_API_PORT=3999 KHL_DB_PATH=$S/khl-test.sqlite KHL_SOURCES_DB_PATH=$S/sources-test.sqlite KHL_STATIC_DIR=/nonexistent \
 	bun src/server/Server.ts > $S/khl-server.log 2>&1 &
 KHL_API_PORT=3999 PORT=3998 ../../node_modules/.bin/vite --config vite.config.js --strictPort \
 	> $S/khl-vite.log 2>&1 &
 for i in $(seq 20); do curl -sf localhost:3999/api/health && curl -sf -o /dev/null localhost:3998 && break; sleep 0.5; done
 ```
 
-- `KHL_DB_PATH` keeps test runs from writing players into `data/khl.sqlite`.
+- `KHL_DB_PATH` and `KHL_SOURCES_DB_PATH` keep test runs from writing players
+  into `data/khl.sqlite` and fetched pages into `data/sources.sqlite`.
+  Reusing the same pages file across runs saves refetching from the KHL;
+  delete it to start cold.
 - `KHL_STATIC_DIR=/nonexistent` stops the API from serving a stale
   `dist/website` build; Vite serves the client.
 - The server isn't started with `--watch`: after editing `src/server` or

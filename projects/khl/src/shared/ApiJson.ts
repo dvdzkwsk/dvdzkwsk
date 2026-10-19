@@ -1617,12 +1617,96 @@ export const DeployInfoSchema = z.object({
 	startedAt: z.string(),
 }) satisfies z.ZodType<DeployInfo>
 
+/** A kind of KHL page the syncer keeps (see server/SyncPages.ts) */
+export type SyncPageKind =
+	"teams" | "schedule" | "team-stats" | "player" | "game"
+
+export const SyncPageKindSchema = z.enum([
+	"teams",
+	"schedule",
+	"team-stats",
+	"player",
+	"game",
+]) satisfies z.ZodType<SyncPageKind>
+
+/** How far the sync has got with one kind of page */
+export interface SyncKindStatus {
+	kind: SyncPageKind
+	/** Pages queued */
+	total: number
+	/** Pages synced at least once */
+	synced: number
+	/** Pages whose last sync failed, waiting to be retried */
+	failing: number
+	/** Pages due now, waiting their turn */
+	due: number
+	/** Pages queued, synced, and failing for the current season */
+	current: {total: number; synced: number; failing: number}
+}
+
+export const SyncKindStatusSchema = z.object({
+	kind: SyncPageKindSchema,
+	total: z.number(),
+	synced: z.number(),
+	failing: z.number(),
+	due: z.number(),
+	current: z.object({
+		total: z.number(),
+		synced: z.number(),
+		failing: z.number(),
+	}),
+}) satisfies z.ZodType<SyncKindStatus>
+
+/** A page whose last sync failed */
+export interface SyncFailure {
+	kind: SyncPageKind
+	/** The KHL page */
+	url: string
+	/** The last error, cut short if it's long */
+	error: string
+	/** Failures in a row */
+	attempts: number
+	/** When it's tried again, ISO 8601 */
+	retryAt: string
+}
+
+export const SyncFailureSchema = z.object({
+	kind: SyncPageKindSchema,
+	url: z.string(),
+	error: z.string(),
+	attempts: z.number(),
+	retryAt: z.string(),
+}) satisfies z.ZodType<SyncFailure>
+
+/** How the synced copy of the league is doing */
+export interface SyncStatus {
+	/** Null until the league's default teams page has synced */
+	currentSeason: {id: string; name: string} | null
+	/** Each kind of page that's queued */
+	kinds: SyncKindStatus[]
+	/** When a page last synced, ISO 8601; null if none has */
+	lastSyncedAt: string | null
+	/** When the next page that isn't due yet is, ISO 8601; null if none */
+	nextDueAt: string | null
+	/** The most urgent failing pages (all of them are counted in `kinds`) */
+	failures: SyncFailure[]
+}
+
+export const SyncStatusSchema = z.object({
+	currentSeason: z.object({id: z.string(), name: z.string()}).nullable(),
+	kinds: z.array(SyncKindStatusSchema),
+	lastSyncedAt: z.string().nullable(),
+	nextDueAt: z.string().nullable(),
+	failures: z.array(SyncFailureSchema),
+}) satisfies z.ZodType<SyncStatus>
+
 export interface StatusResponse {
 	/** The days the history covers, oldest first ("yyyy-MM-dd") */
 	historyDays: string[]
 	/** How often each component is checked */
 	intervalMinutes: number
 	components: StatusComponent[]
+	sync: SyncStatus
 	deploy: DeployInfo
 }
 
@@ -1630,6 +1714,7 @@ export const StatusResponseSchema = z.object({
 	historyDays: z.array(z.string()),
 	intervalMinutes: z.number(),
 	components: z.array(StatusComponentSchema),
+	sync: SyncStatusSchema,
 	deploy: DeployInfoSchema,
 }) satisfies z.ZodType<StatusResponse>
 
@@ -1644,7 +1729,7 @@ export const GET_STATUS_ENDPOINT = {
 	uri: "/api/status",
 	name: "Get site status",
 	description:
-		"The site's health: each component's latest check and daily history, and which build is running.",
+		"The site's health: each component's latest check and daily history, how far the sync with the KHL has got, and which build is running.",
 	exampleRequest: {},
 	requestSchema: GetStatusRequestSchema,
 	responseSchema: StatusResponseSchema,

@@ -7605,6 +7605,133 @@ a.Compare-chip:hover {
 	height: 14px;
 }
 
+.StatusSync-summary {
+	margin: 0 0 calc(var(--spacing) * 4);
+	font-size: var(--text-base);
+	color: var(--prose-fg);
+}
+
+/* Scrolls rather than widening the page on narrow screens */
+.StatusSync-tableScroll {
+	overflow-x: auto;
+}
+
+.StatusSync-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--text-base);
+	font-variant-numeric: tabular-nums;
+}
+
+.StatusSync-table th,
+.StatusSync-table td {
+	padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+	text-align: left;
+	border-top: 1px solid var(--panel-border);
+}
+
+.StatusSync-table th:first-child,
+.StatusSync-table td:first-child {
+	padding-left: 0;
+}
+
+.StatusSync-table th:last-child,
+.StatusSync-table td:last-child {
+	padding-right: 0;
+	text-align: right;
+}
+
+.StatusSync-table thead th {
+	border-top: none;
+	font-size: var(--text-sm);
+	font-weight: var(--weight-regular);
+	color: var(--muted-fg);
+}
+
+.StatusSync-table tbody th {
+	font-weight: var(--weight-medium);
+}
+
+.StatusSync-progress {
+	display: flex;
+	flex-direction: column;
+	gap: calc(var(--spacing) * 1);
+}
+
+.StatusSync-bar {
+	display: block;
+	height: calc(var(--spacing) * 1);
+	max-width: calc(var(--spacing) * 40);
+	border-radius: var(--radius-pill);
+	background: var(--panel-border);
+	overflow: hidden;
+}
+
+.StatusSync-barFill {
+	display: block;
+	height: 100%;
+	background: var(--status-slow);
+}
+
+.StatusSync-barFill--done {
+	background: var(--status-ok);
+}
+
+.StatusSync-none {
+	color: var(--muted-fg);
+}
+
+.StatusSync-failing {
+	color: var(--status-down);
+	font-weight: var(--weight-semibold);
+}
+
+.StatusSync-failuresTitle {
+	margin: calc(var(--spacing) * 6) 0 calc(var(--spacing) * 2);
+	font-size: var(--text-base);
+	font-weight: var(--weight-semibold);
+}
+
+.StatusSync-failures {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.StatusSync-failure {
+	padding: calc(var(--spacing) * 3) 0;
+	border-top: 1px solid var(--panel-border);
+}
+
+.StatusSync-failureHead {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
+	margin-bottom: calc(var(--spacing) * 1);
+	font-size: var(--text-sm);
+}
+
+.StatusSync-failureLink {
+	font-weight: var(--weight-medium);
+	color: var(--prose-link);
+}
+
+.StatusSync-failureMeta {
+	color: var(--muted-fg);
+}
+
+.StatusSync-error {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	color: var(--prose-fg);
+	overflow-wrap: anywhere;
+}
+
 .StatusDeploy-list {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));

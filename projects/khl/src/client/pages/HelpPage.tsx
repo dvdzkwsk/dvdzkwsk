@@ -1,7 +1,7 @@
 import * as React from "react"
 import {STRINGS, URLS} from "../../shared/KHLConfig.js"
 import {Link, PageShell} from "../Components.js"
-import {getBadgesHref, Route} from "../Util.js"
+import {getAchievementsHref, Route} from "../Util.js"
 
 // --- /help: a table of contents, then every FAQ answer
 
@@ -65,14 +65,14 @@ const FAQ: Question[] = [
 		),
 	},
 	{
-		id: "badges",
-		question: "What are badges, and how do I get one?",
+		id: "achievements",
+		question: "What are achievements, and how do I get one?",
 		answer: (
 			<p>
-				Badges show on player pages. Most are earned automatically from
-				career stats, like playing your first game, and a few are
+				Achievements show on player pages. Most are earned automatically
+				from career stats, like playing your first game, and a few are
 				awarded by hand. See them all, or suggest or request one, on the{" "}
-				<Link href={getBadgesHref()}>Badges page</Link>.
+				<Link href={getAchievementsHref()}>Achievements page</Link>.
 			</p>
 		),
 	},

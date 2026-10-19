@@ -2831,8 +2831,8 @@ table {
 	color: var(--muted-fg);
 }
 
-/* Earned badges, after "Last 5": icons only, named in their popovers */
-.PlayerBadges {
+/* Earned achievements, after "Last 5": icons only, named in their popovers */
+.PlayerAchievements {
 	display: flex;
 	flex-wrap: wrap;
 	gap: calc(var(--spacing) * 2);
@@ -2841,7 +2841,7 @@ table {
 	list-style: none;
 }
 
-.PlayerBadges-badge {
+.PlayerAchievements-achievement {
 	appearance: none;
 	display: flex;
 	padding: 0;
@@ -2853,19 +2853,19 @@ table {
 	cursor: help;
 }
 
-.PlayerBadges-badge:hover .BadgeIcon,
-.PlayerBadges-badge:focus-visible .BadgeIcon,
-.PlayerBadges-badge[data-popup-open] .BadgeIcon {
+.PlayerAchievements-achievement:hover .AchievementIcon,
+.PlayerAchievements-achievement:focus-visible .AchievementIcon,
+.PlayerAchievements-achievement[data-popup-open] .AchievementIcon {
 	border-color: var(--card-hover-border);
 	background: var(--card-hover-bg);
 }
 
-.PlayerBadges-link {
+.PlayerAchievements-link {
 	color: inherit;
 	text-decoration: none;
 }
 
-.PlayerBadges-link:hover {
+.PlayerAchievements-link:hover {
 	color: var(--site-fg);
 }
 
@@ -6215,10 +6215,10 @@ a.Compare-chip:hover {
 	font-size: 16px;
 }
 
-/* === Badges === */
+/* === Achievements === */
 
-/* A badge's emoji in a rounded tile */
-.BadgeIcon {
+/* An achievement's emoji in a rounded tile */
+.AchievementIcon {
 	position: relative;
 	display: grid;
 	place-items: center;
@@ -6232,8 +6232,8 @@ a.Compare-chip:hover {
 	line-height: 1;
 }
 
-/* "×2" on the corner, for a badge earned more than once */
-.BadgeIcon-count {
+/* "×2" on the corner, for an achievement earned more than once */
+.AchievementIcon-count {
 	position: absolute;
 	top: calc(var(--spacing) * -1.5);
 	right: calc(var(--spacing) * -1.5);
@@ -6250,19 +6250,19 @@ a.Compare-chip:hover {
 }
 
 /* About an emoji's width, at the flag's 3:2 */
-.BadgeIcon-flag {
+.AchievementIcon-flag {
 	width: 1.2em;
 	height: 0.8em;
 }
 
-.BadgeHint {
+.AchievementHint {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 0.5);
 	color: var(--muted-fg);
 }
 
-.BadgeHint-label {
+.AchievementHint-label {
 	font-weight: var(--weight-semibold);
 	color: var(--site-fg);
 }
@@ -6373,21 +6373,21 @@ a.Compare-chip:hover {
 	text-overflow: ellipsis;
 }
 
-/* === BadgesPage === */
+/* === AchievementsPage === */
 
 /* Sized like the help page, so the two read as a set */
-.BadgesPage {
+.AchievementsPage {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 8);
 	max-width: 760px;
 }
 
-.BadgesPage-hero {
+.AchievementsPage-hero {
 	margin-top: calc(var(--spacing) * 6);
 }
 
-.BadgesPage-title {
+.AchievementsPage-title {
 	margin: 0;
 	font-size: clamp(2rem, 5vw, 3rem);
 	font-weight: var(--weight-heavy);
@@ -6395,43 +6395,43 @@ a.Compare-chip:hover {
 	letter-spacing: -0.025em;
 }
 
-.BadgesPage-lede {
+.AchievementsPage-lede {
 	margin: calc(var(--spacing) * 4) 0 0;
 	font-size: var(--text-xl);
 	line-height: 1.5;
 	color: var(--prose-fg);
 }
 
-.BadgesPage-list {
+.AchievementsPage-list {
 	margin: 0;
 	padding: 0;
 	list-style: none;
 }
 
-.BadgesPage-badge {
+.AchievementsPage-achievement {
 	display: flex;
 	align-items: center;
 	gap: calc(var(--spacing) * 4);
 	padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5);
 }
 
-.BadgesPage-badge + .BadgesPage-badge {
+.AchievementsPage-achievement + .AchievementsPage-achievement {
 	border-top: 1px solid var(--panel-border);
 }
 
-.BadgesPage-text {
+.AchievementsPage-text {
 	display: flex;
 	flex-direction: column;
 	gap: calc(var(--spacing) * 0.5);
 	min-width: 0;
 }
 
-.BadgesPage-label {
+.AchievementsPage-label {
 	font-size: var(--text-md);
 	font-weight: var(--weight-semibold);
 }
 
-.BadgesPage-description,
+.AchievementsPage-description,
 
 /* === HelpPage === */
 

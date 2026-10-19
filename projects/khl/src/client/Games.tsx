@@ -1485,8 +1485,8 @@ export const GameTable = ({
 											</button>
 										}
 									>
-										Over; waiting on the league to post
-										the score
+										Over; waiting on the league to post the
+										score
 									</InfoPopover>
 								)
 							),

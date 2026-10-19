@@ -15,12 +15,12 @@ import {LIMITS} from "../../shared/KHLConfig.js"
 import {KHLSeasonStatsRow} from "../../shared/KHLJson.js"
 import {ActivityFeed, toActivityFeed} from "../Activity.js"
 import {
-	BadgeHint,
-	BadgeIcon,
-	getBadges,
+	AchievementHint,
+	AchievementIcon,
+	getAchievements,
 	RecentPenalties,
 	toRecentPenalties,
-} from "../Badges.js"
+} from "../Achievements.js"
 import {
 	AsyncContent,
 	Card,
@@ -48,7 +48,7 @@ import {PlayerIntegrityReport} from "../Integrity.js"
 import {
 	AppContext,
 	AsyncState,
-	getBadgesHref,
+	getAchievementsHref,
 	Route,
 	RouteProps,
 	useAsync,
@@ -62,12 +62,12 @@ const MAX_PAST_GAMES = 20
 /**
  * Everything the page shows from recent scoresheets, in one request since it
  * reads a page or two per game: the activity feed, the games the player sat
- * out, and the badges' penalty trend, which counts every game they dressed for
+ * out, and the achievements' penalty trend, which counts every game they dressed for
  * in its window
  */
 const PLAYER_PAGE_ACTIVITY: ActivityOptions = {
 	kinds: ["goal", "assist", "penalty", "played", "skipped"],
-	days: LIMITS.BADGE_TREND_LOOKBACK_DAYS,
+	days: LIMITS.ACHIEVEMENT_TREND_LOOKBACK_DAYS,
 	limit: LIMITS.ACTIVITY_MAX_EVENTS,
 }
 
@@ -123,7 +123,7 @@ const PlayerProfile = ({params, query}: RouteProps) => {
 					.map((g) => g.gameId),
 			),
 	})
-	// Until they load (or if they fail), the Angel and Devil badges are left out
+	// Until they load (or if they fail), the Angel and Devil achievements are left out
 	const recentPenalties = matchField(activity, "status", {
 		loading: () => null,
 		error: () => null,
@@ -461,7 +461,7 @@ const PlayerHeader = ({
 					/>
 					<HeroLastResults games={player.games} skipped={skipped} />
 
-					<PlayerBadges
+					<PlayerAchievements
 						player={player}
 						recentPenalties={recentPenalties}
 					/>
@@ -471,46 +471,55 @@ const PlayerHeader = ({
 	)
 }
 
-/** Null `recentPenalties` (still loading, or failed) leaves out the trend badges */
-const PlayerBadges = ({
+/** Null `recentPenalties` (still loading, or failed) leaves out the trend achievements */
+const PlayerAchievements = ({
 	player,
 	recentPenalties,
 }: {
 	player: PlayerResponse
 	recentPenalties: RecentPenalties | null
 }) => {
-	const badges = getBadges({
+	const achievements = getAchievements({
 		name: player.name,
 		gamesPlayed: sumStat(player.registrations, "Games Played", "career"),
 		recentPenalties,
 	})
-	if (badges.length === 0) {
+	if (achievements.length === 0) {
 		return null
 	}
 	return (
-		<section className="PlayerHero-group" aria-label="Badges">
+		<section className="PlayerHero-group" aria-label="Achievements">
 			<h2 className="PlayerHero-group-label">
-				<Link href={getBadgesHref()} className="PlayerBadges-link">
-					Badges
+				<Link
+					href={getAchievementsHref()}
+					className="PlayerAchievements-link"
+				>
+					Achievements
 				</Link>
 			</h2>
-			<ul className="PlayerBadges">
+			<ul className="PlayerAchievements">
 				{/* A popover rather than a Hint, so a tap explains the icon on
 				    phones, where there's no hover */}
-				{badges.map(({badge, count}) => (
-					<li key={badge.id}>
+				{achievements.map(({achievement, count}) => (
+					<li key={achievement.id}>
 						<InfoPopover
 							trigger={
 								<button
 									type="button"
-									className="PlayerBadges-badge"
-									aria-label={`${badge.label}${count > 1 ? ` ×${count}` : ""}: ${badge.description}`}
+									className="PlayerAchievements-achievement"
+									aria-label={`${achievement.label}${count > 1 ? ` ×${count}` : ""}: ${achievement.description}`}
 								>
-									<BadgeIcon badge={badge} count={count} />
+									<AchievementIcon
+										achievement={achievement}
+										count={count}
+									/>
 								</button>
 							}
 						>
-							<BadgeHint badge={badge} count={count} />
+							<AchievementHint
+								achievement={achievement}
+								count={count}
+							/>
 						</InfoPopover>
 					</li>
 				))}

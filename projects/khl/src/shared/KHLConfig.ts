@@ -76,11 +76,11 @@ export const LIMITS = {
 	MATCHUP_HEAD_TO_HEAD_GAMES: 5,
 	/**
 	 * How many days of a player's games, back from their latest, the Angel and
-	 * Devil badges judge
+	 * Devil achievements judge
 	 */
-	BADGE_TREND_LOOKBACK_DAYS: 365,
-	/** The fewest games in that window for the Angel or Devil badge */
-	BADGE_TREND_MIN_GAMES: 10,
+	ACHIEVEMENT_TREND_LOOKBACK_DAYS: 365,
+	/** The fewest games in that window for the Angel or Devil achievement */
+	ACHIEVEMENT_TREND_MIN_GAMES: 10,
 	/**
 	 * How many goals, assists, and penalties an activity request returns by
 	 * default (what the feed shows), and the most it can ask for

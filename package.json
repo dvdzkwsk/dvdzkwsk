@@ -39,7 +39,6 @@
 		"express": "^5.3.0",
 		"globals": "^17.5.0",
 		"history": "^5.3.0",
-		"netlify-cli": "^24.0.1",
 		"node-html-parser": "^9.0.4",
 		"prettier": "^3.4.2",
 		"puppeteer-core": "^25.14.0",

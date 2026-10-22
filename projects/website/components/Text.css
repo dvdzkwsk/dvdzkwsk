@@ -1,3 +1,0 @@
-.Text {
-	line-height: calc(var(--spacing) * var(--leading, 8));
-}

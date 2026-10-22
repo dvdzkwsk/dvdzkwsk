@@ -21,6 +21,7 @@
 		"zod": "^4.3.6"
 	},
 	"dependencies": {
+		"@dvdzkwsk/logger": "workspace:*",
 		"@dvdzkwsk/util": "workspace:*"
 	}
 }

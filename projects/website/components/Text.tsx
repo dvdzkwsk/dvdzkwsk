@@ -1,4 +1,3 @@
-import "./Text.css"
 import {cx} from "@dvdzkwsk/util/ReactUtil"
 import * as React from "react"
 
@@ -53,7 +52,6 @@ export const Text = ({
 	if (mono) {
 		style.fontFamily = FONT_MONO
 	}
-	style["--leading"] = 5
 	return React.createElement(
 		as || (inline ? "span" : "p"),
 		{className: cx("Text", className), style},

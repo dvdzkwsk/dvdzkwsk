@@ -17,33 +17,41 @@ const PROJECTS: Project[] = [
 	{
 		path: path.join(REPO_ROOT, "projects/website"),
 		type: "webapp",
-		deploy: {type: "netlify", siteIdEnvVar: "WEBSITE_NETLIFY_PROJECT_ID"},
+		// Only serves the built site, so dev needs just Vite
+		server: {entry: "server/Server.ts", dev: false},
+		deploy: {type: "fly", domains: ["dvdzkwsk.com", "www.dvdzkwsk.com"]},
 	},
 	{
 		path: path.join(REPO_ROOT, "projects/khl"),
 		type: "webapp",
-		server: "src/server/Server.ts",
 		// The server serves the app and /api from one process (see fly.toml)
-		deploy: {type: "fly", domain: "khl.dvdzkwsk.com"},
+		server: {entry: "src/server/Server.ts", dev: true},
+		deploy: {type: "fly", domains: ["khl.dvdzkwsk.com"]},
 	},
 ]
 
 interface Project {
 	path: string
 	type: "webapp"
-	/** API server entry, relative to `path`. Run with --watch in dev. */
-	server?: string
+	server?: {
+		/** Entry file, relative to `path` */
+		entry: string
+		/**
+		 * Whether --dev runs it (with --watch) beside Vite: an API server must,
+		 * while one that only serves the build has nothing to serve in dev.
+		 */
+		dev: boolean
+	}
 	deploy: DeployTarget
 }
 
 type DeployTarget =
-	/** Static hosting; `siteIdEnvVar` names the env var with the site id */
-	| {type: "netlify"; siteIdEnvVar: string}
 	/**
 	 * A container running `server`, configured by the project's fly.toml.
-	 * `domain` is served through the Cloudflare proxy (see ensureFlyDomain).
+	 * Each of `domains` is served through the Cloudflare proxy (see
+	 * ensureFlyDomain).
 	 */
-	| {type: "fly"; domain?: string}
+	{type: "fly"; domains: string[]}
 
 /** Run with --dev to start dev servers, --deploy to build and publish. */
 async function main() {
@@ -93,10 +101,10 @@ function devWebApp(project: Project) {
 			},
 		),
 	]
-	if (project.server) {
+	if (project.server?.dev) {
 		// Restarts the server whenever it or anything it imports changes.
 		children.push(
-			crossSpawn("bun", ["--watch", project.server], {
+			crossSpawn("bun", ["--watch", project.server.entry], {
 				cwd: project.path,
 				stdio: "inherit",
 			}),
@@ -141,33 +149,8 @@ function buildWebApp(project: Project): string {
 
 function deployWebApp(project: Project) {
 	return matchField(project.deploy, "type", {
-		netlify: (deploy) => deployToNetlify(project, deploy.siteIdEnvVar),
-		fly: (deploy) => deployToFly(project, deploy.domain),
+		fly: (deploy) => deployToFly(project, deploy.domains),
 	})
-}
-
-/**
- * Publishes the static build. Netlify only serves files, so client-side
- * routes (e.g. /players/:id) fall back to index.html.
- */
-function deployToNetlify(project: Project, siteIdEnvVar: string) {
-	if (project.server) {
-		throw logger.newError(
-			"deployToNetlify",
-			"Netlify can't run this project's server; deploy it to Fly instead",
-			{project: project.path},
-		)
-	}
-	// Read config up front so a missing variable fails before the build
-	const authToken = getEnvVar("NETLIFY_AUTH_TOKEN")
-	const siteId = getEnvVar(siteIdEnvVar)
-	const outdir = buildWebApp(project)
-	fs.writeFileSync(path.join(outdir, "_redirects"), "/*  /index.html  200\n")
-	runCommand(
-		"netlify",
-		["deploy", "--dir", outdir, "--site", siteId, "--no-build", "--prod"],
-		{env: {NETLIFY_AUTH_TOKEN: authToken}},
-	)
 }
 
 /**
@@ -175,7 +158,7 @@ function deployToNetlify(project: Project, siteIdEnvVar: string) {
  * dist/server.js, and ships both in the image described by the project's
  * Dockerfile. Uses your `fly auth login` session, or FLY_API_TOKEN if set.
  */
-async function deployToFly(project: Project, domain?: string) {
+async function deployToFly(project: Project, domains: string[]) {
 	if (!project.server) {
 		throw logger.newError("deployToFly", "project has no server to run", {
 			project: project.path,
@@ -190,7 +173,7 @@ async function deployToFly(project: Project, domain?: string) {
 		"bun",
 		[
 			"build",
-			project.server,
+			project.server.entry,
 			"--target",
 			"bun",
 			"--outfile",
@@ -222,7 +205,7 @@ async function deployToFly(project: Project, domain?: string) {
 		{cwd: project.path},
 	)
 	// After the deploy, since a new app has no IP addresses until then
-	if (domain) {
+	for (const domain of domains) {
 		await ensureFlyDomain(config, domain)
 	}
 }

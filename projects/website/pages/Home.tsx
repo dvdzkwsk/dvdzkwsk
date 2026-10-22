@@ -6,19 +6,27 @@ import {Link, definePage} from "../RouterJson.js"
 const HomePage: React.FC = () => {
 	return (
 		<>
-			<Text headingLevel={1}>Hello!</Text>
 			<Text>
-				My name is David Zukowski. I'm a software engineer based out of
-				Washington state. I currently work at{" "}
-				<Link href="https://microsoft.com">Microsoft</Link> where I help
-				build design systems that support Microsoft Teams, OneDrive, and
-				more.
+				Hey! I'm David Zukowski, a software engineer living in
+				Washington state.
 			</Text>
 			<Text>
-				Prior to that I worked at{" "}
+				I lead an engineering team in{" "}
+				<Link href="https://microsoft.com">Microsoft</Link>'s AI
+				Experiences division. We build tools and systems that support
+				internal design and engineering teams.
+			</Text>
+			<Text>
+				Before that, I was an early member of the platform team at{" "}
 				<Link href="https://material.security/">Material Security</Link>
-				, where we did some cool stuff to secure Google Workspace and
-				Microsoft 365 environments.
+				. Material introduced a novel approach to email security, and
+				today their platform is used by companies including OpenAI,
+				Anthropic, and more.
+			</Text>
+			<Text>
+				Outside of work, I play hockey and tennis, and mountain bike
+				whenever I can. I'm a proud dad to the most adorable corgi in
+				the world, Kona. And once upon a time I flew airplanes for fun.
 			</Text>
 		</>
 	)

@@ -4,7 +4,6 @@ node_modules
 .rpt2_cache
 .logs
 .env
-.netlify
 secrets
 .claude/*.local.json
 config/claude/skills/synced

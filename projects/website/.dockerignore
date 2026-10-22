@@ -1,0 +1,4 @@
+# Only the build output goes into the image (see Dockerfile)
+*
+!dist/website
+!dist/server.js

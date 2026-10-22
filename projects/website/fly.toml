@@ -1,0 +1,32 @@
+# Fly.io config for projects/website. Deploy with `pnpm run deploy`, which
+# also creates the app below if it doesn't exist yet. Requires a
+# `fly auth login` session (or FLY_API_TOKEN).
+app = "dvdzkwsk-website"
+primary_region = "sjc"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+WEBSITE_PORT = "8080"
+WEBSITE_STATIC_DIR = "/app/website"
+
+[http_service]
+internal_port = 8080
+force_https = true
+# The site is static, so stopping idle machines is safe; keep one running so
+# the first visitor doesn't wait on a cold start
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 1
+
+[[http_service.checks]]
+grace_period = "5s"
+interval = "30s"
+method = "GET"
+path = "/health"
+timeout = "5s"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"

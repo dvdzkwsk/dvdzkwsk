@@ -4,6 +4,7 @@ import {Helmet} from "react-helmet"
 import {AppContext} from "./App.js"
 import HomePage from "./pages/Home.js"
 import NotFoundPage from "./pages/NotFound.js"
+import ProjectsPage from "./pages/Projects.js"
 import {PageSchema} from "./RouterJson.js"
 
 const WEBSITE_DOMAIN = "dvdzkwsk.com"
@@ -12,6 +13,7 @@ export const ROUTE_MAP: {
 	[uri: string]: PageSchema
 } = {
 	"/": HomePage,
+	"/projects": ProjectsPage,
 	"/404": NotFoundPage,
 }
 

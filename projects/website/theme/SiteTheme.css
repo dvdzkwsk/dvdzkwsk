@@ -2,12 +2,42 @@
 
 :root {
 	--spacing: 0.25rem;
-	--site-bg: #f5f4ed;
-	/* --site-bg: #faf9f5; */
-	--site-fg: hsl(60 2.6% 7.6%);
+	--font-sans:
+		Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+		"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+	--font-serif:
+		"Source Serif 4", Georgia, ui-serif, Cambria, "Times New Roman", Times,
+		serif;
+
+	/* Warm off-white paper with near-black ink. */
+	--site-bg: #faf9f5;
+	--site-fg: #1f1e1b;
+	--fg-body: #3d3b36;
+	--fg-heading: #1f1e1b;
+	--fg-muted: #8c897f;
+	--fg-nav: #6b6860;
+	/* Terracotta, for links and the current-page marker. */
+	--accent: #b4462b;
+	--accent-hover: #8f3720;
+	--accent-dot: #b4462b;
+}
+
+html,
+body {
+	background: var(--site-bg);
 }
 
 body {
-	background: var(--site-bg);
 	color: var(--site-fg);
+	font-family: var(--font-sans);
+	line-height: 1.5;
+	text-rendering: optimizeLegibility;
+	font-kerning: normal;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
 }

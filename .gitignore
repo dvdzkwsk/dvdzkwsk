@@ -7,6 +7,7 @@ node_modules
 secrets
 .claude/*.local.json
 config/claude/skills/synced
+config/claude/settings.json
 
 # generated files
 .cache
